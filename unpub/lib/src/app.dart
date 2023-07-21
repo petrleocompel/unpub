@@ -101,6 +101,12 @@ class App {
     if (authHeader == null) throw 'missing authorization header';
 
     var token = authHeader.split(' ').last;
+    if (Platform.environment.containsKey('UPLOAD_TOKEN') &&
+        Platform.environment.containsKey('UPLOAD_EMAIL') &&
+        token.startsWith(bearerPrefix) &&
+        token.endsWith(Platform.environment['UPLOAD_TOKEN']!)) {
+      return Platform.environment['UPLOAD_EMAIL']!;
+    }
 
     if (_googleapisClient == null) {
       if (googleapisProxy != null) {
