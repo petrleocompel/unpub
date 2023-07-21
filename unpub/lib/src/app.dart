@@ -24,6 +24,7 @@ part 'app.g.dart';
 
 class App {
   static const proxyOriginHeader = "proxy-origin";
+  static const bearerPrefix = "Bearer";
 
   /// meta information store
   final MetaStore metaStore;
@@ -118,10 +119,34 @@ class App {
   }
 
   Future<HttpServer> serve([String host = '0.0.0.0', int port = 4000]) async {
-    var handler = const shelf.Pipeline()
+    var pipline = const shelf.Pipeline()
         .addMiddleware(corsHeaders())
-        .addMiddleware(shelf.logRequests())
-        .addHandler((req) async {
+        .addMiddleware(shelf.logRequests());
+
+    if (Platform.environment.containsKey('ALLOWED_TOKENS')) {
+      pipline = pipline.addMiddleware((innerHandler) => (request) async {
+            if (!request.headers.containsKey(HttpHeaders.authorizationHeader) ||
+                request.headers[HttpHeaders.authorizationHeader] == null ||
+                request.headers[HttpHeaders.authorizationHeader]!.isEmpty) {
+              return shelf.Response(HttpStatus.unauthorized);
+            }
+            final authHeader =
+                request.headers[HttpHeaders.authorizationHeader]!;
+            if (!authHeader.startsWith(bearerPrefix) ||
+                authHeader.split(" ").length != 2) {
+              return shelf.Response(HttpStatus.unauthorized);
+            }
+            final token = authHeader.split(" ")[1];
+            final allowedTokens =
+                (Platform.environment['ALLOWED_TOKENS'] ?? '').split(',');
+            if (!allowedTokens.contains(token)) {
+              return shelf.Response(HttpStatus.unauthorized);
+            }
+            return innerHandler(request);
+          });
+    }
+
+    var handler = pipline.addHandler((req) async {
       // Return 404 by default
       // https://github.com/google/dart-neats/issues/1
       var res = await router.call(req);
@@ -135,7 +160,8 @@ class App {
     var name = item.pubspec['name'] as String;
     var version = item.version;
     return {
-      'archive_url': _resolveUrl(req, '/packages/$name/versions/$version.tar.gz'),
+      'archive_url':
+          _resolveUrl(req, '/packages/$name/versions/$version.tar.gz'),
       'pubspec': item.pubspec,
       'version': version,
     };
@@ -163,9 +189,8 @@ class App {
           semver.Version.parse(a.version), semver.Version.parse(b.version));
     });
 
-    var versionMaps = package.versions
-        .map((item) => _versionToJson(item, req))
-        .toList();
+    var versionMaps =
+        package.versions.map((item) => _versionToJson(item, req)).toList();
 
     return _okWithJson({
       'name': name,
@@ -228,8 +253,7 @@ class App {
   @Route.get('/api/packages/versions/new')
   Future<shelf.Response> getUploadUrl(shelf.Request req) async {
     return _okWithJson({
-      'url': _resolveUrl(req, '/api/packages/versions/newUpload')
-          .toString(),
+      'url': _resolveUrl(req, '/api/packages/versions/newUpload').toString(),
       'fields': {},
     });
   }
@@ -342,9 +366,11 @@ class App {
       await metaStore.addVersion(name, unpubVersion);
 
       // TODO: Upload docs
-      return shelf.Response.found(_resolveUrl(req, '/api/packages/versions/newUploadFinish'));
+      return shelf.Response.found(
+          _resolveUrl(req, '/api/packages/versions/newUploadFinish'));
     } catch (err) {
-      return shelf.Response.found(_resolveUrl(req, '/api/packages/versions/newUploadFinish?error=$err'));
+      return shelf.Response.found(_resolveUrl(
+          req, '/api/packages/versions/newUploadFinish?error=$err'));
     }
   }
 
