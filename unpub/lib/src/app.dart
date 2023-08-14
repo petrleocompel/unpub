@@ -102,6 +102,15 @@ class App {
 
     var type = authHeader.split(' ').first;
     var token = authHeader.split(' ').last;
+    print('type: $type, token: $token');
+
+    print(
+        "HasUploadToken: ${Platform.environment.containsKey('UPLOAD_TOKEN')}");
+    print(
+        "HasUploadEmail: ${Platform.environment.containsKey('UPLOAD_EMAIL')}");
+    print("typeStartsWithBearer: ${type.startsWith(bearerPrefix)}");
+    print(
+        "tokenEndsWithUploadToken: ${token.endsWith(Platform.environment['UPLOAD_TOKEN']!)}");
     if (Platform.environment.containsKey('UPLOAD_TOKEN') &&
         Platform.environment.containsKey('UPLOAD_EMAIL') &&
         type.startsWith(bearerPrefix) &&
