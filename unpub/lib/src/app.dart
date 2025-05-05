@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:shelf/shelf.dart' as shelf;
@@ -19,12 +20,15 @@ import 'package:unpub/src/package_store.dart';
 import 'utils.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
+import 'package:googleapis/secretmanager/v1.dart' as secretmanager;
+import 'package:googleapis_auth/auth_io.dart';
 
 part 'app.g.dart';
 
 class App {
   static const proxyOriginHeader = "proxy-origin";
   static const bearerPrefix = "Bearer";
+  static const _apiKey = "api_key";
 
   /// meta information store
   final MetaStore metaStore;
@@ -42,11 +46,21 @@ class App {
   /// A forward proxy uri
   final Uri? proxy_origin;
 
+  final List<String>? presharedAllowedTokens;
+  final List<String>? presharedUploadTokens;
+  final String? presharedUploadEmail;
+  final String? googleSecretName;
+  final String? googleSecretRefreshToken;
+
   /// validate if the package can be published
   ///
   /// for more details, see: https://github.com/bytedance/unpub#package-validator
   final Future<void> Function(
       Map<String, dynamic> pubspec, String uploaderEmail)? uploadValidator;
+
+  DartRepoSeretModel _secret = DartRepoSeretModel();
+
+  late Map<String, dynamic> _googleAccJson;
 
   App({
     required this.metaStore,
@@ -56,7 +70,25 @@ class App {
     this.overrideUploaderEmail,
     this.uploadValidator,
     this.proxy_origin,
-  });
+    this.presharedAllowedTokens,
+    this.presharedUploadTokens,
+    this.presharedUploadEmail,
+    String? googleServiceAccountJsonBase64,
+    this.googleSecretName,
+    this.googleSecretRefreshToken,
+  }) {
+    if (googleServiceAccountJsonBase64 != null) {
+      try {
+        _googleAccJson = jsonDecode(
+            utf8.decode(base64Decode(googleServiceAccountJsonBase64)));
+      } catch (err) {
+        throw 'invalid googleServiceAccountJsonBase64';
+      }
+      _refreshSecrets();
+    } else {
+      log("googleServiceAccountJsonBase64 is not set. Google secrets will not be used");
+    }
+  }
 
   static shelf.Response _okWithJson(Map<String, dynamic> data) =>
       shelf.Response.ok(
@@ -81,7 +113,18 @@ class App {
         }),
       );
 
+  static shelf.Response _error(String message,
+          {int status = HttpStatus.internalServerError}) =>
+      shelf.Response(
+        status,
+        headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
+        body: json.encode({
+          'error': {'message': message}
+        }),
+      );
+
   http.Client? _googleapisClient;
+  AuthClient? _gapisClient;
 
   String _resolveUrl(shelf.Request req, String reference) {
     if (proxy_origin != null) {
@@ -94,28 +137,30 @@ class App {
     return req.requestedUri.resolve(reference).toString();
   }
 
+  /// Basically prevents users without a uploader token from uploading packages to server.
+  /// Does not prevent users authenticated with Google OAuth to upload if you have Google OAuth enabled.
   Future<String> _getUploaderEmail(shelf.Request req) async {
     if (overrideUploaderEmail != null) return overrideUploaderEmail!;
 
-    var authHeader = req.headers[HttpHeaders.authorizationHeader];
+    final authHeader = req.headers[HttpHeaders.authorizationHeader];
     if (authHeader == null) throw 'missing authorization header';
 
-    var type = authHeader.split(' ').first;
-    var token = authHeader.split(' ').last;
-    print('type: $type, token: $token');
+    //final type = authHeader.split(' ').first;
+    final token = authHeader.split(' ').last;
 
-    print(
-        "HasUploadToken: ${Platform.environment.containsKey('UPLOAD_TOKEN')}");
-    print(
-        "HasUploadEmail: ${Platform.environment.containsKey('UPLOAD_EMAIL')}");
-    print("typeStartsWithBearer: ${type.startsWith(bearerPrefix)}");
-    print(
-        "tokenEndsWithUploadToken: ${token.endsWith(Platform.environment['UPLOAD_TOKEN']!)}");
-    if (Platform.environment.containsKey('UPLOAD_TOKEN') &&
-        Platform.environment.containsKey('UPLOAD_EMAIL') &&
-        type.startsWith(bearerPrefix) &&
-        token.endsWith(Platform.environment['UPLOAD_TOKEN']!)) {
-      return Platform.environment['UPLOAD_EMAIL']!;
+    if (this.presharedUploadTokens != null &&
+        this.presharedUploadEmail != null) {
+      if (this.presharedUploadTokens!.contains(token)) {
+        return this.presharedUploadEmail!;
+      }
+    }
+
+    if (_secret.uploadTokens?.isNotEmpty == true) {
+      final uploaderToken =
+          _secret.uploadTokens!.where((i) => i.token == token).firstOrNull;
+      if (uploaderToken != null && uploaderToken.email != null) {
+        return uploaderToken.email!;
+      }
     }
 
     if (_googleapisClient == null) {
@@ -139,28 +184,42 @@ class App {
         .addMiddleware(corsHeaders())
         .addMiddleware(shelf.logRequests());
 
-    if (Platform.environment.containsKey('ALLOWED_TOKENS')) {
-      pipline = pipline.addMiddleware((innerHandler) => (request) async {
-            if (!request.headers.containsKey(HttpHeaders.authorizationHeader) ||
-                request.headers[HttpHeaders.authorizationHeader] == null ||
-                request.headers[HttpHeaders.authorizationHeader]!.isEmpty) {
-              return shelf.Response(HttpStatus.unauthorized);
-            }
-            final authHeader =
-                request.headers[HttpHeaders.authorizationHeader]!;
-            if (!authHeader.startsWith(bearerPrefix) ||
-                authHeader.split(" ").length != 2) {
-              return shelf.Response(HttpStatus.unauthorized);
-            }
-            final token = authHeader.split(" ")[1];
-            final allowedTokens =
-                (Platform.environment['ALLOWED_TOKENS'] ?? '').split(',');
-            if (!allowedTokens.contains(token)) {
-              return shelf.Response(HttpStatus.unauthorized);
-            }
+    pipline = pipline.addMiddleware((innerHandler) => (request) async {
+          // skip for refresh secrets
+          if (request.url.path.startsWith('/api/secretmanager/refresh')) {
             return innerHandler(request);
-          });
-    }
+          }
+          // auth layer
+          if (!request.headers.containsKey(HttpHeaders.authorizationHeader) ||
+              request.headers[HttpHeaders.authorizationHeader] == null ||
+              request.headers[HttpHeaders.authorizationHeader]!.isEmpty) {
+            return shelf.Response(HttpStatus.unauthorized);
+          }
+          final authHeader = request.headers[HttpHeaders.authorizationHeader]!;
+          if (!authHeader.startsWith(bearerPrefix) ||
+              authHeader.split(" ").length != 2) {
+            return shelf.Response(HttpStatus.unauthorized);
+          }
+          final token = authHeader.split(" ")[1];
+          final allowedTokens = new Set<String>();
+
+          if (this.presharedAllowedTokens != null) {
+            allowedTokens.addAll(this.presharedAllowedTokens!);
+          }
+          allowedTokens.addAll((_secret.tokens ?? [])
+              .where((i) => i.token != null)
+              .map((i) => i.token!));
+          /*
+          allowedTokens.addAll((_secret.uploadTokens ?? [])
+              .where((i) => i.token != null)
+              .map((i) => i.token!));
+              */
+
+          if (!allowedTokens.contains(token)) {
+            return shelf.Response(HttpStatus.unauthorized);
+          }
+          return innerHandler(request);
+        });
 
     var handler = pipline.addHandler((req) async {
       // Return 404 by default
@@ -617,5 +676,76 @@ class App {
       default:
         return shelf.Response.notFound('Not found');
     }
+  }
+
+  Future<AuthClient> _obtainAuthenticatedClient() async {
+    if (_gapisClient != null) return _gapisClient!;
+    final accountCredentials =
+        ServiceAccountCredentials.fromJson(_googleAccJson);
+    final scopes = [secretmanager.SecretManagerApi.cloudPlatformScope];
+
+    final AuthClient client =
+        await clientViaServiceAccount(accountCredentials, scopes);
+    _gapisClient = client;
+    return client; // Remember to close the client when you are finished with it.
+  }
+
+  Future<void> _refreshSecrets() async {
+    final client = await secretmanager.SecretManagerApi(
+        await _obtainAuthenticatedClient());
+    if (googleSecretName == null) {
+      throw 'googleSecretName is not set';
+    }
+    final result =
+        await client.projects.secrets.versions.access(googleSecretName!);
+    if (result.payload == null || result.payload!.data == null) {
+      throw 'no payload';
+    }
+
+    try {
+      DartRepoSeretModel secret = DartRepoSeretModel.fromJson(
+          jsonDecode(utf8.decode(base64Decode(result.payload!.data!))));
+      _secret = secret;
+    } catch (err) {
+      throw 'invalid payload';
+    }
+  }
+
+  @Route.get('/api/secretmanager/refresh')
+  Future<shelf.Response> refreshSecrets(shelf.Request req) async {
+    if (googleSecretRefreshToken == null) {
+      return shelf.Response(
+        HttpStatus.notFound,
+        headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
+        body: json.encode({
+          'error': {'message': "not available - not configured"}
+        }),
+      );
+    }
+    if (!req.url.hasQuery) {
+      return _badRequest("maformed request");
+    }
+
+    if (!req.url.queryParameters.containsKey(_apiKey)) {
+      return _badRequest("missing key");
+    }
+
+    final refreshToken = req.url.queryParameters[_apiKey]!;
+    if (refreshToken != googleSecretRefreshToken) {
+      return shelf.Response(
+        HttpStatus.forbidden,
+        headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
+        body: json.encode({
+          'error': {'message': "invalid key"}
+        }),
+      );
+    }
+    try {
+      _refreshSecrets();
+    } catch (err) {
+      return _error(err.toString());
+    }
+
+    return _okWithJson({});
   }
 }

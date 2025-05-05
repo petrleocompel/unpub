@@ -71,3 +71,30 @@ class UnpubQueryResult {
   factory UnpubQueryResult.fromJson(Map<String, dynamic> map) =>
       _$UnpubQueryResultFromJson(map);
 }
+
+@JsonSerializable(explicitToJson: true)
+class DartRepoSeretModel {
+  List<Tokens>? tokens;
+  List<Tokens>? uploadTokens;
+
+  DartRepoSeretModel({this.tokens, this.uploadTokens});
+
+  factory DartRepoSeretModel.fromJson(Map<String, dynamic> map) =>
+      _$DartRepoSeretModelFromJson(map);
+
+  Map<String, dynamic> toJson() => _$DartRepoSeretModelToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true)
+class Tokens {
+  String? name;
+  String? email;
+  String? organization;
+  String? token;
+
+  Tokens({this.name, this.email, this.token});
+
+  factory Tokens.fromJson(Map<String, dynamic> map) => _$TokensFromJson(map);
+
+  Map<String, dynamic> toJson() => _$TokensToJson(this);
+}

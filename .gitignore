@@ -7,3 +7,11 @@
 
 # pubspec.lock
 */pubspec.lock
+
+# MacOS Specific
+.DS_Store
+
+# Windows Specific
+Thumbs.db
+
+
