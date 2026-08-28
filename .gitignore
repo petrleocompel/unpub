@@ -14,4 +14,7 @@
 # Windows Specific
 Thumbs.db
 
+# Local authentication/token material
+/unpub/tokens.json
+/unpub/un-identified tokens.txt
 
