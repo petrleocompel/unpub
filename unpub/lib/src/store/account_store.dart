@@ -1,3 +1,4 @@
+import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
 import '../auth/accounts.dart';
@@ -6,6 +7,15 @@ import 'mongo_indexes.dart';
 final userCollection = 'users';
 final tokenCollection = 'tokens';
 final sessionCollection = 'sessions';
+final lockCollection = 'locks';
+
+final _log = Logger('unpub.accounts');
+
+const _adminGuardLock = 'admin_guard';
+
+/// How long the holder of a lock keeps it if it never releases it, because
+/// the process died. Far longer than the few writes a lock protects.
+const _lockLease = Duration(seconds: 10);
 
 const _duplicateKeyCode = 11000;
 
@@ -15,6 +25,11 @@ const lastUsedInterval = Duration(minutes: 1);
 /// Raised when a user with the same email already exists.
 class DuplicateEmailException implements Exception {
   const DuplicateEmailException();
+}
+
+/// Raised when a lock is still held after waiting for it.
+class LockUnavailableException implements Exception {
+  const LockUnavailableException();
 }
 
 /// The fields of a new user.
@@ -55,11 +70,16 @@ class NewToken {
 class AccountStore {
   final Db db;
 
-  AccountStore(this.db);
+  /// How long to wait for a lock. Longer than a lease, so that a process that
+  /// died holding the lock does not fail the next caller.
+  final Duration lockWait;
+
+  AccountStore(this.db, {this.lockWait = const Duration(seconds: 15)});
 
   DbCollection get _users => db.collection(userCollection);
   DbCollection get _tokens => db.collection(tokenCollection);
   DbCollection get _sessions => db.collection(sessionCollection);
+  DbCollection get _locks => db.collection(lockCollection);
 
   /// Creates the indexes the collections rely on. Safe to call repeatedly.
   Future<void> ensureIndexes() async {
@@ -180,6 +200,87 @@ class AccountStore {
 
   Future<int> countEnabledAdmins() =>
       _users.count(where.eq('role', Role.admin.name).ne('disabled', true));
+
+  /// Runs [action] while no other server or command line process is inside
+  /// this method, or throws [LockUnavailableException].
+  ///
+  /// Standalone MongoDB has no multi-document transactions, so this is what
+  /// makes a check over several users and the update depending on it atomic.
+  Future<T> withAdminGuard<T>(Future<T> Function() action) async {
+    final owner = ObjectId().oid;
+    await _acquireLock(_adminGuardLock, owner);
+    try {
+      return await action();
+    } finally {
+      await _releaseLock(_adminGuardLock, owner);
+    }
+  }
+
+  Future<void> _acquireLock(String name, String owner) async {
+    final deadline = DateTime.now().add(lockWait);
+    var pause = const Duration(milliseconds: 10);
+    while (!await _tryLock(name, owner)) {
+      if (!DateTime.now().isBefore(deadline)) {
+        throw const LockUnavailableException();
+      }
+      await Future<void>.delayed(pause);
+      if (pause < const Duration(milliseconds: 500)) pause *= 2;
+    }
+  }
+
+  /// Takes the lock if it is absent or its lease is over.
+  ///
+  /// One atomic update, compared with the clock of the database so that the
+  /// server and a command line on another host agree on when a lease ends.
+  Future<bool> _tryLock(String name, String owner) async {
+    final free = {
+      r'$lte': [
+        {
+          r'$ifNull': [
+            r'$expiresAt',
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          ],
+        },
+        r'$$NOW',
+      ],
+    };
+    final result = await _locks.modernFindAndModify(
+      query: {'_id': name},
+      update: [
+        {
+          r'$set': {
+            'owner': {
+              r'$cond': [free, owner, r'$owner'],
+            },
+            'expiresAt': {
+              r'$cond': [
+                free,
+                {
+                  r'$add': [r'$$NOW', _lockLease.inMilliseconds],
+                },
+                r'$expiresAt',
+              ],
+            },
+          },
+        },
+      ],
+      upsert: true,
+      returnNew: true,
+    );
+    // Without a document, a concurrent first insert won the race.
+    return result.value?['owner'] == owner;
+  }
+
+  /// Gives the lock back unless its lease ended and someone else took it. A
+  /// failure must not replace the outcome of the work the lock protected, and
+  /// the lease ends anyway.
+  Future<void> _releaseLock(String name, String owner) async {
+    try {
+      await _locks.deleteOne({'_id': name, 'owner': owner});
+    } catch (error) {
+      _log.warning('cannot release the lock $name', error);
+    }
+  }
 
   Future<void> updateUser(
     String id,

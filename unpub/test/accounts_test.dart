@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show max;
 
 import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
@@ -45,6 +46,7 @@ void main() {
       userCollection,
       tokenCollection,
       sessionCollection,
+      lockCollection,
       auditCollection,
       packageCollection,
       statsCollection,
@@ -1572,6 +1574,148 @@ void main() {
                   body: {'email': 'q@b.c', 'password': 'set-by-admin'}))
               .status,
           HttpStatus.ok);
+    });
+  });
+
+  group('last administrator guard', () {
+    Future<int> statusOf(Future<User> Function() change) async {
+      try {
+        await change();
+        return HttpStatus.ok;
+      } on AccountException catch (error) {
+        return error.statusCode;
+      }
+    }
+
+    Future<Map<String, dynamic>?> lock() =>
+        db.collection(lockCollection).findOne(where.eq('_id', 'admin_guard'));
+
+    Future<void> holdLock(DateTime expiresAt) =>
+        db.collection(lockCollection).insertOne(
+            {'_id': 'admin_guard', 'owner': 'other', 'expiresAt': expiresAt});
+
+    for (final (name, change)
+        in <(String, Future<User> Function(AccountService, User))>[
+      (
+        'demotions',
+        (service, target) => service.updateUser(target, role: Role.reader)
+      ),
+      (
+        'disablings',
+        (service, target) => service.updateUser(target, disabled: true)
+      ),
+    ]) {
+      test('concurrent $name always leave an enabled administrator', () async {
+        // As the server and the command line would, on their own connections.
+        final otherDb = Db(testMongoUri);
+        await otherDb.open();
+        addTearDown(otherDb.close);
+        final otherProcess = AccountService(AccountStore(otherDb));
+
+        for (var round = 0; round < 10; round++) {
+          await db.collection(userCollection).deleteMany(<String, Object>{});
+          final first = await user('first@b.c', Role.admin);
+          final second = await user('second@b.c', Role.admin);
+
+          final outcomes = await Future.wait([
+            statusOf(() => change(accounts, first)),
+            statusOf(() => change(otherProcess, second)),
+          ]);
+
+          expect(
+              outcomes, unorderedEquals([HttpStatus.ok, HttpStatus.conflict]),
+              reason: 'round $round');
+          expect(await store.countEnabledAdmins(), 1, reason: 'round $round');
+        }
+      });
+    }
+
+    test('the state is read again once the guard is held', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final stale = await user('p@b.c', Role.publisher);
+      await store.updateUser(stale.id, DateTime.now(), role: Role.admin);
+      await store.updateUser(admin.id, DateTime.now(), role: Role.reader);
+
+      expect(
+          await statusOf(() => accounts.updateUser(stale, role: Role.reader)),
+          HttpStatus.conflict);
+      expect((await store.findUserById(stale.id))!.role, Role.admin);
+    });
+
+    test('the guard is free again after a refused change', () async {
+      final admin = await user('a@b.c', Role.admin);
+      expect(
+          await statusOf(() => accounts.updateUser(admin, role: Role.reader)),
+          HttpStatus.conflict);
+      expect(await lock(), isNull);
+    });
+
+    test('a change of a non-admin is not refused by the guard', () async {
+      await user('a@b.c', Role.admin);
+      final other = await user('o@b.c', Role.publisher);
+      await accounts.updateUser(other, role: Role.reader);
+      expect((await store.findUserById(other.id))!.role, Role.reader);
+      expect(await lock(), isNull);
+    });
+
+    test('waits for a process holding the guard', () async {
+      final admin = await user('a@b.c', Role.admin);
+      await user('b@b.c', Role.admin);
+      final release = Completer<void>();
+      final holder = store.withAdminGuard(() => release.future);
+
+      final waiting = accounts.updateUser(admin, role: Role.reader);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect((await store.findUserById(admin.id))!.role, Role.admin);
+
+      release.complete();
+      await holder;
+      expect((await waiting).role, Role.reader);
+    });
+
+    test('takes over a guard whose lease is over', () async {
+      final admin = await user('a@b.c', Role.admin);
+      await user('b@b.c', Role.admin);
+      await holdLock(DateTime.now().subtract(const Duration(seconds: 1)));
+      await accounts.updateUser(admin, role: Role.reader);
+      expect((await store.findUserById(admin.id))!.role, Role.reader);
+      expect(await lock(), isNull);
+    });
+
+    test('gives up on a guard that stays held and changes nothing', () async {
+      final admin = await user('a@b.c', Role.admin);
+      await user('b@b.c', Role.admin);
+      await holdLock(DateTime.now().add(const Duration(hours: 1)));
+      final impatient = AccountService(
+          AccountStore(db, lockWait: const Duration(milliseconds: 50)));
+
+      expect(
+          await statusOf(() => impatient.updateUser(admin, role: Role.reader)),
+          HttpStatus.serviceUnavailable);
+      expect((await store.findUserById(admin.id))!.role, Role.admin);
+      expect((await lock())!['owner'], 'other');
+    });
+
+    test('does not release a guard that someone else took over', () async {
+      await store.withAdminGuard(() async {
+        await db.collection(lockCollection).updateOne(
+            where.eq('_id', 'admin_guard'), modify.set('owner', 'x'));
+      });
+      expect((await lock())!['owner'], 'x');
+    });
+
+    test('many first acquisitions do not collide', () async {
+      var inside = 0;
+      var most = 0;
+      await Future.wait([
+        for (var i = 0; i < 8; i++)
+          store.withAdminGuard(() async {
+            most = max(most, ++inside);
+            await Future<void>.delayed(const Duration(milliseconds: 2));
+            inside--;
+          }),
+      ]);
+      expect(most, 1);
     });
   });
 

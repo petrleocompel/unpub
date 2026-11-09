@@ -229,6 +229,10 @@ class AccountException implements Exception {
       : statusCode = 409,
         code = 'conflict';
 
+  const AccountException.unavailable(this.message)
+      : statusCode = 503,
+        code = 'unavailable';
+
   @override
   String toString() => message;
 }

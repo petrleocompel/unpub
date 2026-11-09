@@ -124,9 +124,9 @@ class AccountService {
 
   /// Applies the changes that differ from the current state of [user].
   ///
-  /// Refuses to leave the registry without an enabled administrator. Two
-  /// concurrent demotions could still do so, since standalone MongoDB has no
-  /// multi-document transactions; `unpub admin` repairs that.
+  /// Refuses to leave the registry without an enabled administrator. Anything
+  /// that can take that role away is serialized across servers and the command
+  /// line, and looks at the user again once it is its turn.
   Future<User> updateUser(
     User user, {
     String? displayName,
@@ -138,26 +138,47 @@ class AccountService {
     if (newName != null && newName.isEmpty) {
       throw const AccountException.invalid('displayName must not be empty');
     }
+    Future<User> apply(User current) => _applyChanges(current,
+        displayName: newName, role: role, disabled: disabled, by: by);
+
+    final canRemoveAdmin =
+        (role != null && role != Role.admin) || disabled == true;
+    if (!canRemoveAdmin) return apply(user);
+    try {
+      return await store.withAdminGuard(() async {
+        final current = await requireUserById(user.id);
+        final isEnabledAdmin = current.role == Role.admin && !current.disabled;
+        if (isEnabledAdmin && await store.countEnabledAdmins() <= 1) {
+          throw const AccountException.conflict(
+              'this is the last enabled administrator');
+        }
+        return apply(current);
+      });
+    } on LockUnavailableException {
+      throw const AccountException.unavailable(
+          'another change to an administrator is in progress, try again');
+    }
+  }
+
+  Future<User> _applyChanges(
+    User user, {
+    required String? displayName,
+    required Role? role,
+    required bool? disabled,
+    required AuditContext by,
+  }) async {
     final changes = <String, Object?>{
-      if (newName != null && newName != user.displayName)
-        'displayName': newName,
+      if (displayName != null && displayName != user.displayName)
+        'displayName': displayName,
       if (role != null && role != user.role) 'role': role.name,
       if (disabled != null && disabled != user.disabled) 'disabled': disabled,
     };
     if (changes.isEmpty) return user;
 
-    final losesAdmin = user.role == Role.admin &&
-        !user.disabled &&
-        ((role != null && role != Role.admin) || disabled == true);
-    if (losesAdmin && await store.countEnabledAdmins() <= 1) {
-      throw const AccountException.conflict(
-          'this is the last enabled administrator');
-    }
-
     await store.updateUser(
       user.id,
       clock(),
-      displayName: changes.containsKey('displayName') ? newName : null,
+      displayName: changes.containsKey('displayName') ? displayName : null,
       role: changes.containsKey('role') ? role : null,
       disabled: changes.containsKey('disabled') ? disabled : null,
     );
