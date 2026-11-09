@@ -369,6 +369,18 @@ logging:
       expect(s3.useSSL, isTrue);
     });
 
+    test('a session token needs explicit keys', () {
+      expect(
+          () => parse(
+                  'storage:\n  type: s3\n  s3:\n    bucket: x\n    region: y\n'
+                  '    sessionToken: z\n',
+                  env: {
+                    'AWS_ACCESS_KEY_ID': 'a',
+                    'AWS_SECRET_ACCESS_KEY': 'b',
+                  }),
+          problemsContaining([contains('sessionToken')]));
+    });
+
     test('is ignored unless selected', () {
       expect(parse('storage:\n  s3:\n    bucket: x\n').storage.s3, isNull);
     });

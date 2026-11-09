@@ -35,6 +35,57 @@ void main() {
       expect(credentials.secretAccessKey, 'specialSecret');
     });
 
+    test('explicit keys ignore an ambient session token', () async {
+      var credentials = await AwsCredentials.resolve(
+        accessKeyId: 'specialKey',
+        secretAccessKey: 'specialSecret',
+        environment: {'AWS_SESSION_TOKEN': 'unrelated-session'},
+      );
+      expect(credentials.sessionToken, isNull);
+    });
+
+    test('explicit keys keep their own session token', () async {
+      var credentials = await AwsCredentials.resolve(
+        accessKeyId: 'specialKey',
+        secretAccessKey: 'specialSecret',
+        sessionToken: 'own-session',
+        environment: {'AWS_SESSION_TOKEN': 'unrelated-session'},
+      );
+      expect(credentials.sessionToken, 'own-session');
+    });
+
+    for (var arguments in const [
+      ('key', null, null),
+      (null, 'secret', null),
+      (null, null, 'token'),
+    ]) {
+      test('$arguments is incomplete and borrows nothing', () {
+        expect(
+          AwsCredentials.resolve(
+            accessKeyId: arguments.$1,
+            secretAccessKey: arguments.$2,
+            sessionToken: arguments.$3,
+            environment: {
+              'AWS_ACCESS_KEY_ID': 'env-key',
+              'AWS_SECRET_ACCESS_KEY': 'env-secret',
+            },
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
+      });
+    }
+
+    test('empty environment values count as missing', () {
+      expect(
+        AwsCredentials.resolve(environment: {
+          'AWS_ACCESS_KEY_ID': '',
+          'AWS_SECRET_ACCESS_KEY': '',
+          'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI': '',
+        }),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
     test('read from the environment', () async {
       var credentials = await AwsCredentials.resolve(environment: {
         'AWS_ACCESS_KEY_ID': 'special-key-id',

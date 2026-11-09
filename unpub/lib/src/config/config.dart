@@ -577,6 +577,10 @@ class _ConfigReader {
           'storage.s3.secretKey, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, '
           'or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI');
     }
+    if (sessionToken != null && accessKey == null) {
+      _problems.add('storage.s3.sessionToken needs storage.s3.accessKey and '
+          'storage.s3.secretKey; AWS_SESSION_TOKEN goes with environment keys');
+    }
 
     return S3StorageConfig(
       bucket: bucket ?? '',

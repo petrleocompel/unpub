@@ -91,7 +91,7 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `storage.s3.pathStyle` | `UNPUB_STORAGE_S3_PATH_STYLE` | automatic | Force path-style bucket addressing. |
 | `storage.s3.accessKey` | `UNPUB_STORAGE_S3_ACCESS_KEY` | `AWS_ACCESS_KEY_ID` | Access key. |
 | `storage.s3.secretKey` | `UNPUB_STORAGE_S3_SECRET_KEY` | `AWS_SECRET_ACCESS_KEY` | Secret key. |
-| `storage.s3.sessionToken` | `UNPUB_STORAGE_S3_SESSION_TOKEN` | `AWS_SESSION_TOKEN` | Session token. |
+| `storage.s3.sessionToken` | `UNPUB_STORAGE_S3_SESSION_TOKEN` | | Session token for `storage.s3.accessKey`. Keys from the environment use `AWS_SESSION_TOKEN` instead. |
 | `upstream.url` | `UNPUB_UPSTREAM_URL` | `https://pub.dev` | Where unknown packages redirect. |
 | `auth.bootstrapToken` | `UNPUB_AUTH_BOOTSTRAP_TOKEN` | | Bearer token for publishing and uploader management. Publishing is disabled while unset. |
 | `auth.bootstrapEmail` | `UNPUB_AUTH_BOOTSTRAP_EMAIL` | `admin@localhost` | Uploader recorded for token publishes. |
@@ -100,7 +100,7 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `logging.level` | `UNPUB_LOGGING_LEVEL` | `info` | `fine`, `info`, `warning`, `severe` and other `package:logging` levels, or `off`. |
 | `logging.format` | `UNPUB_LOGGING_FORMAT` | `text` | `text` or `json`. |
 
-Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variables or the ECS task role.
+Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variables or the ECS task role. Credentials are never combined across these sources.
 
 ### Upgrading from 2.x
 
