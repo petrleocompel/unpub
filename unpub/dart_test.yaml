@@ -1,0 +1,2 @@
+# Test files share one MongoDB database, so they must not run concurrently.
+concurrency: 1

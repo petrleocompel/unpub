@@ -1,10 +1,14 @@
-import 'package:mongo_dart/mongo_dart.dart';
 import 'package:intl/intl.dart';
+import 'package:logging/logging.dart';
+import 'package:mongo_dart/mongo_dart.dart';
 import 'package:unpub/src/models.dart';
+
 import 'meta_store.dart';
 
 final packageCollection = 'packages';
 final statsCollection = 'stats';
+
+final _log = Logger('unpub.mongo');
 
 class MongoStore extends MetaStore {
   Db db;
@@ -63,12 +67,17 @@ class MongoStore extends MetaStore {
   @override
   increaseDownloads(name, version) {
     var today = DateFormat('yyyyMMdd').format(DateTime.now());
-    db
-        .collection(packageCollection)
-        .update(_selectByName(name), modify.inc('download', 1));
-    db
-        .collection(statsCollection)
-        .update(_selectByName(name), modify.inc('d$today', 1));
+    Future.wait([
+      db
+          .collection(packageCollection)
+          .update(_selectByName(name), modify.inc('download', 1)),
+      db
+          .collection(statsCollection)
+          .update(_selectByName(name), modify.inc('d$today', 1)),
+    ]).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
+      // Counting is best effort and must not fail the download.
+      _log.warning('failed to count download of $name', error, stackTrace);
+    });
   }
 
   @override
@@ -100,5 +109,11 @@ class MongoStore extends MetaStore {
     }
 
     return _queryPackagesBySelector(selector);
+  }
+
+  /// Pings the server.
+  @override
+  Future<void> checkHealth() async {
+    await db.pingCommand();
   }
 }

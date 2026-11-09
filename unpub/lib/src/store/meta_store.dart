@@ -19,4 +19,7 @@ abstract class MetaStore {
     String? uploader,
     String? dependency,
   });
+
+  /// Throws if the store cannot currently serve requests.
+  Future<void> checkHealth() async {}
 }

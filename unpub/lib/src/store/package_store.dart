@@ -12,4 +12,7 @@ abstract class PackageStore {
   }
 
   Future<void> upload(String name, String version, List<int> content);
+
+  /// Throws if the store cannot currently serve requests.
+  Future<void> checkHealth() async {}
 }

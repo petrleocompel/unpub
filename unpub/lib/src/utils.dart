@@ -1,6 +1,6 @@
 import 'package:yaml/yaml.dart';
 
-convertYaml(dynamic value) {
+dynamic convertYaml(dynamic value) {
   if (value is YamlMap) {
     return value
         .cast<String, dynamic>()

@@ -1,13 +1,13 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'models.dart';
+part of 'webapi_models.dart';
 
 // **************************************************************************
 // JsonSerializableGenerator
 // **************************************************************************
 
 ListApi _$ListApiFromJson(Map<String, dynamic> json) => ListApi(
-      json['count'] as int,
+      (json['count'] as num).toInt(),
       (json['packages'] as List<dynamic>)
           .map((e) => ListApiPackage.fromJson(e as Map<String, dynamic>))
           .toList(),

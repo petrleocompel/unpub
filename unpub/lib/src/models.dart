@@ -4,7 +4,7 @@ part 'models.g.dart';
 
 DateTime identity(DateTime x) => x;
 
-@JsonSerializable(includeIfNull: false)
+@JsonSerializable()
 class UnpubVersion {
   final String version;
   final Map<String, dynamic> pubspec;
@@ -29,10 +29,12 @@ class UnpubVersion {
   factory UnpubVersion.fromJson(Map<String, dynamic> map) =>
       _$UnpubVersionFromJson(map);
 
-  Map<String, dynamic> toJson() => _$UnpubVersionToJson(this);
+  /// Omits null fields, so that stored documents keep their existing shape.
+  Map<String, dynamic> toJson() =>
+      _$UnpubVersionToJson(this)..removeWhere((_, value) => value == null);
 }
 
-@JsonSerializable()
+@JsonSerializable(createToJson: false)
 class UnpubPackage {
   final String name;
   final List<UnpubVersion> versions;
@@ -61,7 +63,7 @@ class UnpubPackage {
       _$UnpubPackageFromJson(map);
 }
 
-@JsonSerializable()
+@JsonSerializable(createToJson: false)
 class UnpubQueryResult {
   int count;
   List<UnpubPackage> packages;

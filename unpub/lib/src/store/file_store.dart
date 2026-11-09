@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:path/path.dart' as path;
+
 import 'package_store.dart';
 
 class FileStore extends PackageStore {
@@ -24,5 +26,15 @@ class FileStore extends PackageStore {
   @override
   Stream<List<int>> download(String name, String version) {
     return _getTarballFile(name, version).openRead();
+  }
+
+  /// Verifies [baseDir] exists and is writable by writing a probe file.
+  @override
+  Future<void> checkHealth() async {
+    await Directory(baseDir).create(recursive: true);
+    final stamp = '$pid-${DateTime.now().microsecondsSinceEpoch}';
+    final probe = File(path.join(baseDir, '.unpub-health-$stamp'));
+    await probe.writeAsString('ok');
+    await probe.delete();
   }
 }
