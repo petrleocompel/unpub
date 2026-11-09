@@ -186,6 +186,43 @@ class FileStore extends PackageStore {
       PackageStore.reclaimDirectory(
           _temporaryDirectory, (now ?? DateTime.now()).subtract(maxAge));
 
+  /// A custom [getObjectPath] cannot be listed, so its objects are left alone
+  /// and only `upstream/` is looked at.
+  @override
+  Future<List<StoredObject>> listObjects() async {
+    final base = path.normalize(path.absolute(baseDir));
+    final directory = Directory(base);
+    if (!await directory.exists()) return const [];
+    final objects = <StoredObject>[];
+    await for (final entity
+        in directory.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      final location = path.split(path.relative(entity.path, from: base));
+      if (location.first == temporaryNamespace) continue;
+      final FileStat stat;
+      try {
+        stat = await entity.stat();
+      } on FileSystemException {
+        continue;
+      }
+      final object =
+          PackageStore.parseObject(location.join('/'), stat.modified);
+      if (object != null && (object.upstream || getObjectPath == null)) {
+        objects.add(object);
+      }
+    }
+    return objects;
+  }
+
+  @override
+  Future<DateTime?> objectModified(StoredObject object) async {
+    final file = object.upstream
+        ? _getUpstreamFile(object.name, object.version, object.digest)
+        : _getObjectFile(object.name, object.version, object.digest);
+    final stat = await file.stat();
+    return stat.type == FileSystemEntityType.notFound ? null : stat.modified;
+  }
+
   /// Creates [baseDir] if it is missing, and returns whether it did.
   ///
   /// Call this once at startup, so that [checkHealth] can report a directory

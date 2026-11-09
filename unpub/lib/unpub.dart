@@ -14,6 +14,7 @@ export 'src/publish_policy.dart';
 export 'src/redact.dart';
 export 'src/server.dart';
 export 'src/store/account_store.dart';
+export 'src/store/archive_references.dart';
 export 'src/store/audit_store.dart';
 export 'src/store/aws_credentials.dart';
 export 'src/store/file_store.dart';

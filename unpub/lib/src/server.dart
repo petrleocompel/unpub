@@ -14,6 +14,7 @@ import 'logging.dart';
 import 'publish_policy.dart';
 import 'redact.dart';
 import 'store/account_store.dart';
+import 'store/archive_references.dart';
 import 'store/audit_store.dart';
 import 'store/file_store.dart';
 import 'store/mongo_store.dart';
@@ -118,7 +119,9 @@ class UnpubServer {
         publicUrl: config.server.publicUrl,
       );
       final http = await app.serve(config.server.host, config.server.port);
-      final reclaimer = TemporaryReclaimer(packageStore)..start();
+      final reclaimer = TemporaryReclaimer(packageStore,
+          references: MongoArchiveReferences(db))
+        ..start();
       return UnpubServer._(http, db, upstreamProxy, reclaimer);
     } catch (_) {
       await db.close().catchError((Object _) {});

@@ -16,6 +16,24 @@ const temporaryNamespace = '.unpub-tmp';
 
 final _digestPattern = RegExp(r'^[0-9a-f]{64}$');
 
+/// The default layout of an object, published or under `upstream/`.
+final _objectPattern = RegExp(
+    r'^(upstream/)?([a-z_][a-z0-9_]*)/\2-([^/]+)-([0-9a-f]{64})\.tar\.gz$');
+
+/// An immutable object found in a store, named by the digest of its bytes.
+class StoredObject {
+  final String name;
+  final String version;
+  final String digest;
+
+  /// Whether this is a proxied archive rather than a published one.
+  final bool upstream;
+  final DateTime modified;
+
+  const StoredObject(
+      this.name, this.version, this.digest, this.upstream, this.modified);
+}
+
 abstract class PackageStore {
   bool supportsDownloadUrl = false;
 
@@ -113,6 +131,30 @@ abstract class PackageStore {
     if (!_digestPattern.hasMatch(digest)) {
       throw ArgumentError('not a SHA-256 digest');
     }
+  }
+
+  /// The objects in this store that have the default layout, for reclamation.
+  /// A store that keeps this default reports none and is left alone.
+  Future<List<StoredObject>> listObjects() async => const [];
+
+  /// When [object] was last written, or null if it is gone.
+  Future<DateTime?> objectModified(StoredObject object) async => null;
+
+  Stream<List<int>> readObject(StoredObject object) => object.upstream
+      ? downloadUpstream(object.name, object.version, object.digest)
+      : downloadObject(object.name, object.version, object.digest);
+
+  Future<void> removeObject(StoredObject object) => object.upstream
+      ? deleteUpstream(object.name, object.version, object.digest)
+      : deleteObject(object.name, object.version, object.digest);
+
+  /// The object stored under [location], a `/` separated path or key in the
+  /// default layout, or null for anything else.
+  static StoredObject? parseObject(String location, DateTime modified) {
+    final match = _objectPattern.firstMatch(location);
+    if (match == null) return null;
+    return StoredObject(
+        match[2]!, match[3]!, match[4]!, match[1] != null, modified);
   }
 
   /// Whether [digest] is a lowercase hex SHA-256, and so can name an object.

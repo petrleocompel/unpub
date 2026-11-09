@@ -705,6 +705,65 @@ void main() {
     });
   });
 
+  group('reclaiming orphans against the metadata', () {
+    final reclaimAt = DateTime.now().add(const Duration(hours: 2));
+
+    TemporaryReclaimer reclaimer() =>
+        TemporaryReclaimer(FileStore(storage.path),
+            references: MongoArchiveReferences(db));
+
+    test('removes what a replacement left behind, and only that', () async {
+      final app =
+          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      expect(await upload(app, 'first'), isNull);
+      final first = (await storedVersion())['sha256'] as String;
+      expect(await upload(app, 'second'), isNull);
+      final second = (await storedVersion())['sha256'] as String;
+
+      expect(await reclaimer().reclaimOrphans(now: reclaimAt), 1);
+
+      expect(objectFile(first).existsSync(), isFalse);
+      expect(objectFile(second).existsSync(), isTrue);
+      await expectServedConsistent(app);
+    });
+
+    test('a fresh orphan is kept', () async {
+      final app =
+          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      expect(await upload(app, 'first'), isNull);
+      final first = (await storedVersion())['sha256'] as String;
+      expect(await upload(app, 'second'), isNull);
+
+      expect(await reclaimer().reclaimOrphans(), 0);
+      expect(objectFile(first).existsSync(), isTrue);
+    });
+
+    test('an upstream_archives record keeps its object', () async {
+      final bytes = [1, 2, 3];
+      final digest = crypto.sha256.convert(bytes).toString();
+      final store = FileStore(storage.path);
+      final temporary = await store.upstreamTemporaryFile('proxied', '1.0.0');
+      await temporary.writeAsBytes(bytes);
+      await store.commitUpstream('proxied', '1.0.0', digest, temporary, 3);
+      addTearDown(() => db.dropCollection(upstreamArchivesCollection));
+
+      await MongoUpstreamCacheStore(db).writeArchive(UpstreamArchiveRecord(
+        name: 'proxied',
+        version: '1.0.0',
+        sha256: digest,
+        bytes: 3,
+        fetchedAt: DateTime.now(),
+        verified: true,
+      ));
+      expect(await reclaimer().reclaimOrphans(now: reclaimAt), 0);
+      expect(await store.upstreamCached('proxied', '1.0.0', digest), isTrue);
+
+      await db.dropCollection(upstreamArchivesCollection);
+      expect(await reclaimer().reclaimOrphans(now: reclaimAt), 1);
+      expect(await store.upstreamCached('proxied', '1.0.0', digest), isFalse);
+    });
+  });
+
   for (final backend in ['file', 's3']) {
     group('a publisher stalled past its reservation, on $backend', () {
       late PackageStore store;

@@ -391,6 +391,31 @@ void main() {
       expect(await store.objectExists(name, '1.0.0', digest), isFalse);
     });
 
+    test('reclaims an old orphan object and keeps a referenced one', () async {
+      final store = S3Store(s3Bucket, minio: minio);
+      final stamp = DateTime.now().microsecondsSinceEpoch;
+      final orphanData = Uint8List.fromList(utf8.encode('orphan $stamp'));
+      final keptData = Uint8List.fromList(utf8.encode('kept $stamp'));
+      final orphan = crypto.sha256.convert(orphanData).toString();
+      final kept = crypto.sha256.convert(keptData).toString();
+      final name = 'orphan_$stamp';
+      await store.storeObject(name, '1.0.0', orphan, orphanData);
+      await store.storeObject(name, '2.0.0', kept, keptData);
+
+      final reclaimer = TemporaryReclaimer(store, references: _Held({kept}));
+
+      await reclaimer.reclaimOrphans();
+      expect(await store.objectExists(name, '1.0.0', orphan), isTrue,
+          reason: 'it is less than an hour old');
+
+      expect(
+          await reclaimer.reclaimOrphans(
+              now: DateTime.now().add(const Duration(hours: 2))),
+          greaterThanOrEqualTo(1));
+      expect(await store.objectExists(name, '1.0.0', orphan), isFalse);
+      expect(await store.objectExists(name, '2.0.0', kept), isTrue);
+    });
+
     test('reclaims an old temporary object and keeps a fresh one', () async {
       final key = '.unpub-tmp/test_${DateTime.now().microsecondsSinceEpoch}';
       await minio.putObject(
@@ -500,6 +525,18 @@ class FakeMinio extends Minio {
     if (removeError != null) throw removeError!;
     removed.add(object);
   }
+}
+
+class _Held implements ArchiveReferences {
+  final Set<String> held;
+
+  const _Held(this.held);
+
+  @override
+  Future<Set<String>> digests() async => held;
+
+  @override
+  Future<bool> isReferenced(String digest) async => held.contains(digest);
 }
 
 class _HealthyMetaStore extends MetaStore {

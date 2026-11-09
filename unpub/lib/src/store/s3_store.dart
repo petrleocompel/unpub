@@ -248,6 +248,36 @@ class S3Store extends PackageStore {
     return count;
   }
 
+  /// A custom [getDigestObjectPath] cannot be listed, so its objects are left
+  /// alone and only `upstream/` is looked at.
+  @override
+  Future<List<StoredObject>> listObjects() async {
+    final listed = await _minio.listAllObjects(bucketName, recursive: true);
+    return [
+      for (final object in listed.objects)
+        if (object.key != null && object.lastModified != null)
+          if (PackageStore.parseObject(object.key!, object.lastModified!)
+              case final parsed?
+              when parsed.upstream || getDigestObjectPath == null)
+            parsed,
+    ];
+  }
+
+  @override
+  Future<DateTime?> objectModified(StoredObject object) async {
+    final key = object.upstream
+        ? _getUpstreamKey(object.name, object.version, object.digest)
+        : _getDigestKey(object.name, object.version, object.digest);
+    try {
+      final stat =
+          await _minio.statObject(bucketName, key, retrieveAcls: false);
+      return stat.lastModified;
+    } on MinioS3Error catch (error) {
+      if (error.response?.statusCode == HttpStatus.notFound) return null;
+      rethrow;
+    }
+  }
+
   /// Verifies the bucket exists and accepts writes and deletes, by storing and
   /// removing a probe object.
   ///

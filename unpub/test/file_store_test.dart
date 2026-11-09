@@ -408,6 +408,150 @@ void main() {
     });
   });
 
+  group('reclaiming orphan objects', () {
+    const data = [1, 2, 3];
+    final digest = digestOf(data);
+    late Directory baseDir;
+    late unpub.FileStore store;
+
+    File objectAt(String relative, {List<int> bytes = data, bool old = true}) {
+      var file = File(path.join(baseDir.path, relative))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(bytes);
+      if (old) file.setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
+      return file;
+    }
+
+    Future<int> reclaim(unpub.PackageStore store, Set<String> referenced) =>
+        unpub.TemporaryReclaimer(store, references: _Held(referenced))
+            .reclaimOrphans();
+
+    setUp(() {
+      baseDir = setupFixture('orphans');
+      store = unpub.FileStore(baseDir.path);
+    });
+
+    test('deletes an old object nothing refers to', () async {
+      var published = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      var proxied = objectAt('upstream/foo/foo-1.0.0-$digest.tar.gz');
+
+      expect(await reclaim(store, {}), 2);
+
+      expect(published.existsSync(), isFalse);
+      expect(proxied.existsSync(), isFalse);
+    });
+
+    test('keeps a referenced object', () async {
+      var file = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      expect(await reclaim(store, {digest}), 0);
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('keeps a fresh object', () async {
+      var file = objectAt('foo/foo-1.0.0-$digest.tar.gz', old: false);
+      expect(await reclaim(store, {}), 0);
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('keeps an object referenced since the listing was taken', () async {
+      var file = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      expect(
+          await unpub.TemporaryReclaimer(store, references: _LateHeld(digest))
+              .reclaimOrphans(),
+          0);
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('keeps an object written again since the listing was taken', () async {
+      var file = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      expect(await reclaim(_StaleListingStore(baseDir.path, file), {}), 0);
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('keeps a file that only looks like an object', () async {
+      var legacy = objectAt('foo/foo-1.0.0-$digest.tar.gz', bytes: [9]);
+      expect(await reclaim(store, {}), 0);
+      expect(legacy.existsSync(), isTrue);
+    });
+
+    for (var name in [
+      'foo-1.0.0.tar.gz',
+      'custom/layout/foo-1.0.0.tar.gz',
+      'foo/foo-1.0.0-${'a' * 63}.tar.gz',
+      'foo/bar-1.0.0-${'a' * 64}.tar.gz',
+      'foo/foo-1.0.0-${'A' * 64}.tar.gz',
+      'a/foo/foo-1.0.0-${'a' * 64}.tar.gz',
+      '.unpub-tmp/foo/foo-1.0.0-${'a' * 64}.tar.gz',
+    ]) {
+      test('never touches $name, however old', () async {
+        var file = objectAt(name);
+        expect(await reclaim(store, {}), 0);
+        expect(file.existsSync(), isTrue);
+      });
+    }
+
+    test('with a custom getObjectPath, looks only at upstream/', () async {
+      var custom = unpub.FileStore(baseDir.path,
+          getObjectPath: (name, version, sha) => 'objects/$sha');
+      var local = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      var inCustom = objectAt('objects/$digest');
+      var proxied = objectAt('upstream/foo/foo-1.0.0-$digest.tar.gz');
+
+      expect(await reclaim(custom, {}), 1);
+
+      expect(local.existsSync(), isTrue);
+      expect(inCustom.existsSync(), isTrue);
+      expect(proxied.existsSync(), isFalse);
+    });
+
+    test('a store with the defaults has no objects to look at', () async {
+      expect(await reclaim(_UploadOnlyStore(), {}), 0);
+    });
+
+    test('leaves everything alone without references', () async {
+      var file = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      expect(await unpub.TemporaryReclaimer(store).reclaimOrphans(), 0);
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('tolerates a missing storage directory', () async {
+      expect(
+          await reclaim(
+              unpub.FileStore(path.join(baseDir.path, 'missing')), {}),
+          0);
+    });
+
+    test('one that cannot be read does not stop the others', () async {
+      var first = objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      var second = objectAt('bar/bar-1.0.0-$digest.tar.gz');
+      expect(await reclaim(_UnreadableStore(baseDir.path, 'foo'), {}), 1);
+      expect(first.existsSync(), isTrue);
+      expect(second.existsSync(), isFalse);
+    });
+
+    test('a run logs the count of each kind', () async {
+      var records = <LogRecord>[];
+      var previous = Logger.root.level;
+      Logger.root.level = Level.ALL;
+      var subscription = Logger('unpub.reclaim').onRecord.listen(records.add);
+      addTearDown(() async {
+        Logger.root.level = previous;
+        await subscription.cancel();
+      });
+      objectAt('foo/foo-1.0.0-$digest.tar.gz');
+      _temporaryFile(baseDir, '.unpub-tmp/1.tmp');
+
+      var count =
+          await unpub.TemporaryReclaimer(store, references: _Held({})).run();
+
+      expect(count, 2);
+      expect(records.map((r) => r.message.toString()), [
+        contains('reclaimed temporary files'),
+        contains('reclaimed orphan objects'),
+      ]);
+    });
+  });
+
   group('upstream namespace', () {
     const data = [1, 2, 3];
     final digest = digestOf(data);
@@ -535,6 +679,57 @@ File _temporaryFile(Directory baseDir, String relative, {bool old = true}) {
     ..writeAsStringSync('partial');
   if (old) file.setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
   return file;
+}
+
+class _Held implements unpub.ArchiveReferences {
+  final Set<String> held;
+
+  const _Held(this.held);
+
+  @override
+  Future<Set<String>> digests() async => held;
+
+  @override
+  Future<bool> isReferenced(String digest) async => held.contains(digest);
+}
+
+/// Reports nothing in the listing, and [digest] when asked about it.
+class _LateHeld implements unpub.ArchiveReferences {
+  final String digest;
+
+  const _LateHeld(this.digest);
+
+  @override
+  Future<Set<String>> digests() async => const {};
+
+  @override
+  Future<bool> isReferenced(String candidate) async => candidate == digest;
+}
+
+/// Lists a file as old, though it has just been written again.
+class _StaleListingStore extends unpub.FileStore {
+  final File file;
+
+  _StaleListingStore(super.baseDir, this.file);
+
+  @override
+  Future<List<unpub.StoredObject>> listObjects() async {
+    final objects = await super.listObjects();
+    file.setLastModifiedSync(DateTime.now());
+    return objects;
+  }
+}
+
+class _UnreadableStore extends unpub.FileStore {
+  final String unreadable;
+
+  _UnreadableStore(super.baseDir, this.unreadable);
+
+  @override
+  Stream<List<int>> readObject(unpub.StoredObject object) =>
+      object.name == unreadable
+          ? Stream.error(const FileSystemException('no access'))
+          : super.readObject(object);
 }
 
 class _FailingReclaimStore extends unpub.PackageStore {
