@@ -58,7 +58,8 @@ class FakeUpstream {
   bool sendHashes = true;
   String listingVersion = 'a';
 
-  Uri get url => Uri.parse('http://localhost:${_server.port}');
+  /// Kept from [start], since a late request can outlive the server.
+  late final Uri url;
 
   void add(String name, String version) {
     packages.putIfAbsent(name, () => {})[version] = _archiveOf(name, version);
@@ -69,6 +70,7 @@ class FakeUpstream {
 
   Future<void> start() async {
     _server = await shelf_io.serve(_handle, 'localhost', 0);
+    url = Uri.parse('http://localhost:${_server.port}');
   }
 
   Future<void> stop() => _server.close(force: true);

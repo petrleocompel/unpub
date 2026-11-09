@@ -26,6 +26,7 @@ import 'auth/authenticator.dart';
 import 'config/config.dart';
 import 'http_cache.dart';
 import 'logging.dart';
+import 'pub_listing.dart';
 import 'publish_policy.dart';
 import 'redact.dart';
 import 'request_logger.dart';
@@ -188,17 +189,16 @@ class App {
   }
 
   Map<String, dynamic> _versionToJson(UnpubVersion item, shelf.Request req) {
-    var name = item.pubspec['name'] as String;
-    var version = item.version;
-    return {
-      'archive_url':
-          _resolveUrl(req, '/packages/$name/versions/$version.tar.gz'),
-      if (item.sha256 != null) 'archive_sha256': item.sha256,
-      'pubspec': item.pubspec,
-      'version': version,
-      'published': item.createdAt.toUtc().toIso8601String(),
-      if (item.isRetracted) 'retracted': true,
-    };
+    final name = item.pubspec['name'] as String;
+    return pubVersionJson(
+      archiveUrl:
+          _resolveUrl(req, UpstreamProxy.archivePath(name, item.version)),
+      archiveSha256: item.sha256,
+      pubspec: item.pubspec,
+      version: item.version,
+      published: item.createdAt.toUtc().toIso8601String(),
+      retracted: item.isRetracted,
+    );
   }
 
   bool get _isPublicRead => readAccess == ReadAccess.public;
@@ -346,14 +346,14 @@ class App {
     });
 
     return _listingResponse(req, _packageEtag(req, package), () {
-      return {
-        'name': name,
-        'latest': _versionToJson(package.latest, req),
-        'versions':
+      return pubPackageJson(
+        name: name,
+        latest: _versionToJson(package.latest, req),
+        versions:
             package.versions.map((item) => _versionToJson(item, req)).toList(),
-        'isDiscontinued': package.isDiscontinued,
-        if (package.replacedBy != null) 'replacedBy': package.replacedBy,
-      };
+        isDiscontinued: package.isDiscontinued,
+        replacedBy: package.replacedBy,
+      );
     });
   }
 
@@ -369,16 +369,19 @@ class App {
     if (listing == null) return _notFound();
     final data = listing.json;
     return _listingResponse(req, _listingEtag(req, [listing.digest]), () {
-      return {
-        ...data,
-        if (data['latest'] != null)
-          'latest':
-              _absoluteArchiveUrl(req, data['latest'] as Map<String, dynamic>),
-        'versions': [
+      return pubPackageJson(
+        name: name,
+        latest: data['latest'] == null
+            ? null
+            : _absoluteArchiveUrl(req, data['latest'] as Map<String, dynamic>),
+        versions: [
           for (final item in data['versions'] as List)
             _absoluteArchiveUrl(req, item as Map<String, dynamic>),
         ],
-      };
+        isDiscontinued: data['isDiscontinued'] as bool,
+        replacedBy: data['replacedBy'],
+        advisoriesUpdated: data['advisoriesUpdated'],
+      );
     });
   }
 

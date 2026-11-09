@@ -10,6 +10,7 @@ import 'package:logging/logging.dart';
 
 import '../config/config.dart';
 import '../logging.dart';
+import '../pub_listing.dart';
 import '../store/package_store.dart';
 import '../store/upstream_cache_store.dart';
 import '../validation.dart';
@@ -326,14 +327,14 @@ class UpstreamProxy {
       final hash = item['archive_sha256'];
       final isValidHash = hash is String && _sha256Pattern.hasMatch(hash);
       if (hash != null && !isValidHash) invalidHashes.add(version);
-      return {
-        'version': version,
-        'pubspec': item['pubspec'],
-        'archive_url': archivePath(name, version),
-        if (isValidHash) 'archive_sha256': hash.toLowerCase(),
-        if (item['published'] != null) 'published': item['published'],
-        if (item['retracted'] == true) 'retracted': true,
-      };
+      return pubVersionJson(
+        archiveUrl: archivePath(name, version),
+        archiveSha256: isValidHash ? hash.toLowerCase() : null,
+        pubspec: item['pubspec'],
+        version: version,
+        published: item['published'],
+        retracted: item['retracted'] == true,
+      );
     }
 
     final versions =
@@ -342,15 +343,15 @@ class UpstreamProxy {
       throw const UpstreamException('the upstream listing has no versions');
     }
     final latest = rewrite(decoded['latest']);
-    final result = json.encode({
-      'name': name,
-      if (latest != null) 'latest': latest,
-      'versions': versions,
-      'isDiscontinued': decoded['isDiscontinued'] == true,
-      if (decoded['replacedBy'] is String) 'replacedBy': decoded['replacedBy'],
-      if (decoded['advisoriesUpdated'] != null)
-        'advisoriesUpdated': decoded['advisoriesUpdated'],
-    });
+    final result = json.encode(pubPackageJson(
+      name: name,
+      latest: latest,
+      versions: versions,
+      isDiscontinued: decoded['isDiscontinued'] == true,
+      replacedBy:
+          decoded['replacedBy'] is String ? decoded['replacedBy'] : null,
+      advisoriesUpdated: decoded['advisoriesUpdated'],
+    ));
     return (result, urls, invalidHashes);
   }
 
