@@ -24,6 +24,7 @@ import 'auth/auth_middleware.dart';
 import 'auth/authenticator.dart';
 import 'config/config.dart';
 import 'logging.dart';
+import 'publish_policy.dart';
 import 'redact.dart';
 import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
@@ -38,6 +39,9 @@ final _log = Logger('unpub.app');
 
 /// How long a single readiness check may take.
 const _healthCheckTimeout = Duration(seconds: 5);
+
+/// Room for the multipart framing around an uploaded archive.
+const _multipartOverhead = 64 * 1024;
 
 class App {
   /// meta information store
@@ -68,9 +72,18 @@ class App {
   /// External URL of this server. When null, URLs derive from the request.
   final Uri? publicUrl;
 
+  /// The `publish` rules uploads must satisfy.
+  final PublishPolicy publishPolicy;
+
   /// validate if the package can be published
+  ///
+  /// Runs after the [publishPolicy], and only for an upload that passes it.
   final Future<void> Function(
       Map<String, dynamic> pubspec, String uploaderEmail)? uploadValidator;
+
+  /// Uploads being stored. Two uploads of one version writing the same archive
+  /// could otherwise overwrite each other.
+  final _uploadsInProgress = <String>{};
 
   App({
     required this.metaStore,
@@ -81,6 +94,7 @@ class App {
     this.auditStore = const NullAuditStore(),
     this.trustForwardedFor = false,
     this.upstream = 'https://pub.dev',
+    this.publishPolicy = const PublishPolicy(PublishConfig()),
     this.uploadValidator,
     this.publicUrl,
   });
@@ -316,28 +330,9 @@ class App {
     if (principal == null) return _unauthenticated();
     final uploader = principal.email;
 
+    String? uploadKey;
     try {
-      var contentType = req.headers['content-type'];
-      if (contentType == null) throw 'invalid content type';
-
-      var mediaType = MediaType.parse(contentType);
-      var boundary = mediaType.parameters['boundary'];
-      if (boundary == null) throw 'invalid boundary';
-
-      var transformer = MimeMultipartTransformer(boundary);
-      MimeMultipart? fileData;
-
-      // The map below makes the runtime type checker happy.
-      // https://github.com/dart-lang/pub-dev/blob/19033f8154ca1f597ef5495acbc84a2bb368f16d/app/lib/fake/server/fake_storage_server.dart#L74
-      final stream = req.read().map((a) => a).transform(transformer);
-      await for (var part in stream) {
-        if (fileData != null) continue;
-        fileData = part;
-      }
-
-      var bb = await fileData!.fold(
-          BytesBuilder(), (BytesBuilder byteBuilder, d) => byteBuilder..add(d));
-      var tarballBytes = bb.takeBytes();
+      var tarballBytes = await _readUploadedArchive(req);
       var tarBytes = GZipDecoder().decodeBytes(tarballBytes);
       var archive = TarDecoder().decodeBytes(tarBytes);
       ArchiveFile? pubspecArchiveFile;
@@ -379,10 +374,6 @@ class App {
             '1.2.3.';
       }
 
-      if (uploadValidator != null) {
-        await uploadValidator!(pubspec, uploader);
-      }
-
       var package = await metaStore.queryPackage(name);
 
       // Package already exists
@@ -395,14 +386,24 @@ class App {
         if (!principal.canChangePackage(package.uploaders)) {
           throw '$uploader is not an uploader of $name';
         }
-
-        // Check duplicated version
-        var duplicated = package.versions
-            .firstWhereOrNull((item) => version == item.version);
-        if (duplicated != null) {
-          throw 'version invalid: $name@$version already exists.';
-        }
       }
+
+      publishPolicy.checkName(name);
+      publishPolicy.checkRequiredFiles(
+          archive.files.where((file) => file.isFile).map((file) => file.name));
+      if (package != null) publishPolicy.checkVersion(package, version);
+
+      final callback = uploadValidator;
+      if (callback != null) await callback(pubspec, uploader);
+
+      final key = '$name@$version';
+      if (!_uploadsInProgress.add(key)) {
+        throw PublishPolicy.duplicateVersion(name, version);
+      }
+      uploadKey = key;
+
+      final isReplacement =
+          package?.versions.any((item) => item.version == version) ?? false;
 
       // Upload package tarball to storage
       await packageStore.upload(name, version, tarballBytes);
@@ -426,7 +427,11 @@ class App {
         changelog,
         DateTime.now(),
       );
-      await metaStore.addVersion(name, unpubVersion);
+      if (isReplacement) {
+        await metaStore.replaceVersion(name, unpubVersion);
+      } else if (!await metaStore.addVersion(name, unpubVersion)) {
+        throw PublishPolicy.duplicateVersion(name, version);
+      }
       await _audit(req, principal, 'package.published', '$name@$version', {
         'uploader': uploader,
       });
@@ -441,7 +446,56 @@ class App {
           req,
           '/api/packages/versions/newUploadFinish'
           '?error=${Uri.encodeQueryComponent('$err')}'));
+    } finally {
+      if (uploadKey != null) _uploadsInProgress.remove(uploadKey);
     }
+  }
+
+  /// The archive part of a `dart pub publish` request.
+  ///
+  /// An archive over the limit is not kept in memory, but the body is still
+  /// read to its end: closing the connection early would replace the policy
+  /// message the client is waiting for with a connection error.
+  Future<Uint8List> _readUploadedArchive(shelf.Request req) async {
+    final limit = publishPolicy.maxArchiveBytes;
+    final declared = req.contentLength;
+    if (declared != null && declared > limit + _multipartOverhead) {
+      await req.read().drain<void>();
+      throw publishPolicy.archiveTooLarge();
+    }
+
+    var contentType = req.headers['content-type'];
+    if (contentType == null) throw 'invalid content type';
+
+    var mediaType = MediaType.parse(contentType);
+    var boundary = mediaType.parameters['boundary'];
+    if (boundary == null) throw 'invalid boundary';
+
+    var transformer = MimeMultipartTransformer(boundary);
+
+    // The map below makes the runtime type checker happy.
+    // https://github.com/dart-lang/pub-dev/blob/19033f8154ca1f597ef5495acbc84a2bb368f16d/app/lib/fake/server/fake_storage_server.dart#L74
+    final stream = req.read().map((a) => a).transform(transformer);
+    BytesBuilder? archive;
+    var size = 0;
+    await for (var part in stream) {
+      if (archive != null) {
+        await part.drain<void>();
+        continue;
+      }
+      final builder = archive = BytesBuilder(copy: false);
+      await for (final chunk in part) {
+        size += chunk.length;
+        if (size <= limit) {
+          builder.add(chunk);
+        } else {
+          builder.clear();
+        }
+      }
+    }
+    if (archive == null) throw 'the upload has no file';
+    publishPolicy.checkSize(size);
+    return archive.takeBytes();
   }
 
   @Route.get('/api/packages/versions/newUploadFinish')

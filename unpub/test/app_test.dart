@@ -372,6 +372,33 @@ void main() {
     }
   });
 
+  group('upload size', () {
+    test('a declared length over the limit is refused unread', () async {
+      final app = App(
+        metaStore: metaStore,
+        packageStore: packageStore,
+        authenticator: const StaticTokenAuthenticator(bootstrapToken: 'secret'),
+        publishPolicy: const PublishPolicy(PublishConfig(maxArchiveBytes: 10)),
+      );
+
+      final response = await app.handler(shelf.Request(
+        'POST',
+        Uri.parse('http://internal:4000/api/packages/versions/newUpload'),
+        headers: {
+          ...authorized,
+          'content-type': 'multipart/form-data; boundary=x',
+        },
+        body: List<int>.filled(70000, 65),
+      ));
+
+      expect(response.statusCode, HttpStatus.found);
+      final error =
+          Uri.parse(response.headers['location']!).queryParameters['error'];
+      expect(error, contains('publish.maxArchiveBytes'));
+      expect(metaStore.added, isEmpty);
+    });
+  });
+
   group('download', () {
     late Directory temp;
     late App app;

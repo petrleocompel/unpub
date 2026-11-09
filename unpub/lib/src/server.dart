@@ -11,6 +11,7 @@ import 'auth/authenticator.dart';
 import 'auth/rate_limiter.dart';
 import 'config/config.dart';
 import 'logging.dart';
+import 'publish_policy.dart';
 import 'redact.dart';
 import 'store/account_store.dart';
 import 'store/audit_store.dart';
@@ -95,6 +96,7 @@ class UnpubServer {
         auditStore: audit,
         trustForwardedFor: config.server.trustForwardedFor,
         upstream: config.upstream.url.toString(),
+        publishPolicy: PublishPolicy(config.publish),
         publicUrl: config.server.publicUrl,
       );
       final http = await app.serve(config.server.host, config.server.port);

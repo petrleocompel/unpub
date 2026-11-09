@@ -10,6 +10,7 @@ export 'src/config/config.dart';
 export 'src/logging.dart';
 export 'src/migrate/migrations.dart';
 export 'src/models.dart';
+export 'src/publish_policy.dart';
 export 'src/redact.dart';
 export 'src/server.dart';
 export 'src/store/account_store.dart';
