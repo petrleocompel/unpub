@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:collection/collection.dart' show IterableExtension;
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:http_parser/http_parser.dart';
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
@@ -42,6 +43,9 @@ const _healthCheckTimeout = Duration(seconds: 5);
 
 /// Room for the multipart framing around an uploaded archive.
 const _multipartOverhead = 64 * 1024;
+
+/// Largest JSON body read by the package management routes.
+const _maxJsonBodyBytes = 64 * 1024;
 
 class App {
   /// meta information store
@@ -82,7 +86,7 @@ class App {
       Map<String, dynamic> pubspec, String uploaderEmail)? uploadValidator;
 
   /// Uploads being stored. Two uploads of one version writing the same archive
-  /// could otherwise overwrite each other.
+  /// could otherwise leave bytes that do not match the stored hash.
   final _uploadsInProgress = <String>{};
 
   App({
@@ -99,12 +103,14 @@ class App {
     this.publicUrl,
   });
 
-  static shelf.Response _okWithJson(Map<String, dynamic> data) =>
+  static shelf.Response _okWithJson(Map<String, dynamic> data,
+          {Map<String, String> headers = const {}}) =>
       shelf.Response.ok(
         json.encode(data),
         headers: {
           HttpHeaders.contentTypeHeader: ContentType.json.mimeType,
-          'Access-Control-Allow-Origin': '*'
+          'Access-Control-Allow-Origin': '*',
+          ...headers,
         },
       );
 
@@ -163,8 +169,11 @@ class App {
     return {
       'archive_url':
           _resolveUrl(req, '/packages/$name/versions/$version.tar.gz'),
+      if (item.sha256 != null) 'archive_sha256': item.sha256,
       'pubspec': item.pubspec,
       'version': version,
+      'published': item.createdAt.toUtc().toIso8601String(),
+      if (item.isRetracted) 'retracted': true,
     };
   }
 
@@ -232,26 +241,40 @@ class App {
   Future<shelf.Response> getVersions(shelf.Request req, String name) async {
     if (!isValidPackageName(name)) return _notFound();
 
-    var package = await metaStore.queryPackage(name);
+    final found = await metaStore.queryPackage(name);
 
-    if (package == null) {
+    if (found == null) {
       return shelf.Response.found(
           Uri.parse(upstream).resolve('/api/packages/$name').toString());
     }
+    final package = found;
 
     package.versions.sort((a, b) {
       return semver.Version.prioritize(
           semver.Version.parse(a.version), semver.Version.parse(b.version));
     });
 
-    var versionMaps =
-        package.versions.map((item) => _versionToJson(item, req)).toList();
-
     return _okWithJson({
       'name': name,
-      'latest': versionMaps.last, // TODO: Exclude pre release
-      'versions': versionMaps,
+      'latest': _versionToJson(package.latest, req),
+      'versions':
+          package.versions.map((item) => _versionToJson(item, req)).toList(),
+      'isDiscontinued': package.isDiscontinued,
+      if (package.replacedBy != null) 'replacedBy': package.replacedBy,
     });
+  }
+
+  @Route.get('/api/packages/<name>/advisories')
+  Future<shelf.Response> getAdvisories(shelf.Request req, String name) async {
+    if (!isValidPackageName(name)) return _notFound();
+
+    if (await metaStore.queryPackage(name) != null) {
+      return _okWithJson({'advisories': [], 'advisoriesUpdated': null});
+    }
+
+    return shelf.Response.found(Uri.parse(upstream)
+        .resolve('/api/packages/$name/advisories')
+        .toString());
   }
 
   @Route.get('/api/packages/<name>/versions/<version>')
@@ -292,7 +315,9 @@ class App {
           .toString());
     }
 
-    if (!package.versions.any((item) => item.version == version)) {
+    final packageVersion =
+        package.versions.firstWhereOrNull((item) => item.version == version);
+    if (packageVersion == null) {
       return _notFound();
     }
     if (!await packageStore.exists(name, version)) {
@@ -301,7 +326,7 @@ class App {
       return _notFound();
     }
 
-    if (isPubClient(req)) {
+    if (isPubClient(req) && req.method == 'GET') {
       metaStore.increaseDownloads(name, version);
     }
 
@@ -404,6 +429,7 @@ class App {
 
       final isReplacement =
           package?.versions.any((item) => item.version == version) ?? false;
+      final archiveHash = sha256.convert(tarballBytes).toString();
 
       // Upload package tarball to storage
       await packageStore.upload(name, version, tarballBytes);
@@ -426,6 +452,7 @@ class App {
         readme,
         changelog,
         DateTime.now(),
+        sha256: archiveHash,
       );
       if (isReplacement) {
         await metaStore.replaceVersion(name, unpubVersion);
@@ -507,11 +534,10 @@ class App {
     return _successMessage('Successfully uploaded package.');
   }
 
-  /// The package when [principal] may manage its uploaders, or the response
-  /// refusing it.
+  /// The package when [principal] may manage it, or the response refusing it.
   ///
   /// Only an administrator learns that a package does not exist.
-  Future<(UnpubPackage?, shelf.Response?)> _packageForUploaderChange(
+  Future<(UnpubPackage?, shelf.Response?)> _packageForChange(
       String name, Principal principal) async {
     final package = await metaStore.queryPackage(name);
     if (package == null && principal.canPublish && principal.isAdmin) {
@@ -535,7 +561,7 @@ class App {
     email = normalizeEmail(email);
     if (!isValidEmail(email)) return _badRequest('email is invalid');
 
-    final (package, refusal) = await _packageForUploaderChange(name, principal);
+    final (package, refusal) = await _packageForChange(name, principal);
     if (refusal != null) return refusal;
 
     if (findEmail(package!.uploaders, email) != null) {
@@ -557,7 +583,7 @@ class App {
 
     email = Uri.decodeComponent(email);
 
-    final (package, refusal) = await _packageForUploaderChange(name, principal);
+    final (package, refusal) = await _packageForChange(name, principal);
     if (refusal != null) return refusal;
 
     final stored = findEmail(package!.uploaders, email);
@@ -566,6 +592,122 @@ class App {
     await metaStore.removeUploader(name, stored);
     await _audit(req, principal, 'uploader.removed', name, {'email': stored});
     return _successMessage('uploader removed');
+  }
+
+  @Route.post('/api/packages/<name>/versions/<version>/retract')
+  Future<shelf.Response> retractVersion(
+          shelf.Request req, String name, String version) =>
+      _changeRetraction(req, name, version, retracted: true);
+
+  @Route.post('/api/packages/<name>/versions/<version>/unretract')
+  Future<shelf.Response> unretractVersion(
+          shelf.Request req, String name, String version) =>
+      _changeRetraction(req, name, version, retracted: false);
+
+  Future<shelf.Response> _changeRetraction(
+      shelf.Request req, String name, String version,
+      {required bool retracted}) async {
+    final decodedVersion = _parseVersionSegment(version);
+    if (!isValidPackageName(name) || decodedVersion == null) return _notFound();
+    version = decodedVersion;
+
+    final principal = principalOf(req);
+    if (principal == null) return _unauthenticated();
+
+    final (package, refusal) = await _packageForChange(name, principal);
+    if (refusal != null) return refusal;
+
+    final target =
+        package!.versions.firstWhereOrNull((item) => item.version == version);
+    if (target == null) return _notFound('version not found');
+
+    final now = DateTime.now();
+    if (retracted &&
+        !principal.isAdmin &&
+        publishPolicy.retractionWindowClosed(target.createdAt, now)) {
+      return _badRequest(
+          'publish.retractionWindow: $name@$version can no longer be '
+          'retracted. Only an administrator can retract it now.',
+          status: HttpStatus.forbidden);
+    }
+
+    final changed = await metaStore.setVersionRetracted(name, version,
+        retracted: retracted,
+        retractedAt: retracted ? now : null,
+        retractedBy: retracted ? principal.email : null);
+    if (changed) {
+      await _audit(
+        req,
+        principal,
+        retracted ? 'version.retracted' : 'version.unretracted',
+        '$name@$version',
+      );
+    }
+    return _successMessage(
+        retracted ? 'version retracted' : 'version restored');
+  }
+
+  @Route.put('/api/packages/<name>/discontinue')
+  Future<shelf.Response> discontinue(shelf.Request req, String name) async {
+    if (!isValidPackageName(name)) return _notFound();
+
+    final principal = principalOf(req);
+    if (principal == null) return _unauthenticated();
+
+    final Object? body = await _readJsonBody(req);
+    if (body is! Map || body['isDiscontinued'] is! bool) {
+      return _badRequest('isDiscontinued must be true or false');
+    }
+    final discontinued = body['isDiscontinued'] as bool;
+    final replacedBy = body['replacedBy'];
+    if (replacedBy != null) {
+      if (replacedBy is! String || !isValidPackageName(replacedBy)) {
+        return _badRequest('replacedBy must be a valid package name');
+      }
+      if (replacedBy == name) {
+        return _badRequest('a package cannot replace itself');
+      }
+      if (!discontinued) {
+        return _badRequest('replacedBy needs isDiscontinued to be true');
+      }
+    }
+
+    final (package, refusal) = await _packageForChange(name, principal);
+    if (refusal != null) return refusal;
+
+    final wasDiscontinued = package!.isDiscontinued;
+    await metaStore.setDiscontinued(
+      name,
+      discontinued: discontinued,
+      replacedBy: replacedBy as String?,
+      discontinuedAt: discontinued
+          ? (wasDiscontinued ? package.discontinuedAt : null) ?? DateTime.now()
+          : null,
+    );
+    await _audit(
+      req,
+      principal,
+      discontinued ? 'package.discontinued' : 'package.continued',
+      name,
+      {if (replacedBy != null) 'replacedBy': replacedBy},
+    );
+    return _successMessage(
+        discontinued ? 'package discontinued' : 'package continued');
+  }
+
+  /// The JSON value of the request body, or null if it is too large or not
+  /// valid JSON.
+  static Future<Object?> _readJsonBody(shelf.Request req) async {
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in req.read()) {
+      bytes.add(chunk);
+      if (bytes.length > _maxJsonBodyBytes) return null;
+    }
+    try {
+      return json.decode(utf8.decode(bytes.takeBytes()));
+    } on FormatException {
+      return null;
+    }
   }
 
   @Route.get('/webapi/packages')
@@ -596,16 +738,19 @@ class App {
       keyword: keyword,
       uploader: uploader,
       dependency: dependency,
+      includeDiscontinued: params['discontinued'] == 'true',
     );
 
     var data = ListApi(result.count, [
       for (var package in result.packages)
         ListApiPackage(
           package.name,
-          package.versions.last.pubspec['description'] as String?,
-          getPackageTags(package.versions.last.pubspec),
-          package.versions.last.version,
+          package.latest.pubspec['description'] as String?,
+          getPackageTags(package.latest.pubspec),
+          package.latest.version,
           package.updatedAt,
+          isDiscontinued: package.isDiscontinued,
+          replacedBy: package.replacedBy,
         )
     ]);
 
@@ -651,7 +796,7 @@ class App {
 
     UnpubVersion? packageVersion;
     if (version == 'latest') {
-      packageVersion = package.versions.last;
+      packageVersion = package.latest;
     } else {
       packageVersion =
           package.versions.firstWhereOrNull((item) => item.version == version);
@@ -661,7 +806,8 @@ class App {
     }
 
     var versions = package.versions
-        .map((v) => DetailViewVersion(v.version, v.createdAt))
+        .map((v) => DetailViewVersion(v.version, v.createdAt,
+            isRetracted: v.isRetracted))
         .toList();
     versions.sort((a, b) {
       return semver.Version.prioritize(
@@ -698,6 +844,15 @@ class App {
       authors,
       depMap.keys.toList(),
       getPackageTags(packageVersion.pubspec),
+      isRetracted: packageVersion.isRetracted,
+      retractedAt: packageVersion.retractedAt,
+      isDiscontinued: package.isDiscontinued,
+      replacedBy: package.replacedBy,
+      downloads: {
+        'version':
+            await metaStore.versionDownloads(name, packageVersion.version),
+        'package': package.download ?? 0,
+      },
     );
 
     return _okWithJson({'data': data.toJson()});
@@ -746,9 +901,7 @@ class App {
 
     switch (type) {
       case 'v':
-        var latest = semver.Version.primary(package.versions
-            .map((pv) => semver.Version.parse(pv.version))
-            .toList());
+        var latest = semver.Version.parse(package.latest.version);
 
         var color = latest.major == 0 ? 'orange' : 'blue';
 

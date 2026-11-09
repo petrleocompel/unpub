@@ -45,6 +45,12 @@ void main() {
     await db.dropCollection(statsCollection);
   }
 
+  /// Removes the fields computed per upload, after checking their format.
+  void stripRegistryFields(dynamic version) {
+    expect(version.remove('archive_sha256'), matches(r'^[0-9a-f]{64}$'));
+    expect(version.remove('published'), endsWith('Z'));
+  }
+
   tearDownAll(() async {
     await db.close();
     await tearDownPubClient();
@@ -79,6 +85,7 @@ void main() {
       var item = meta['versions'][0];
       expect(item['createdAt'], isA<DateTime>());
       item.remove('createdAt');
+      expect(item.remove('sha256'), hasLength(64));
       expect(
         DeepCollectionEquality().equals(item, {
           'version': version,
@@ -130,6 +137,7 @@ void main() {
       var item = meta['versions'][2];
       expect(item['createdAt'], isA<DateTime>());
       item.remove('createdAt');
+      expect(item.remove('sha256'), hasLength(64));
       expect(
         DeepCollectionEquality().equals(item, {
           'version': version,
@@ -160,9 +168,12 @@ void main() {
       expect(res.statusCode, HttpStatus.ok);
 
       var body = json.decode(res.body);
+      stripRegistryFields(body['latest']);
+      (body['versions'] as List).forEach(stripRegistryFields);
       expect(
         DeepCollectionEquality().equals(body, {
           "name": "package_0",
+          "isDiscontinued": false,
           "latest": {
             "archive_url":
                 "$pubHostedUrl/packages/package_0/versions/0.0.2.tar.gz",
@@ -223,6 +234,7 @@ void main() {
       expect(res.statusCode, HttpStatus.ok);
 
       var body = json.decode(res.body);
+      stripRegistryFields(body);
       expect(
         DeepCollectionEquality().equals(body, {
           "archive_url":
@@ -240,6 +252,7 @@ void main() {
       expect(res.statusCode, HttpStatus.ok);
 
       var body = json.decode(res.body);
+      stripRegistryFields(body);
       expect(
         DeepCollectionEquality().equals(body, {
           "archive_url":

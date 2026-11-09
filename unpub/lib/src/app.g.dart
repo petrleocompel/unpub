@@ -25,6 +25,11 @@ Router _$AppRouter(App service) {
   );
   router.add(
     'GET',
+    r'/api/packages/<name>/advisories',
+    service.getAdvisories,
+  );
+  router.add(
+    'GET',
     r'/api/packages/<name>/versions/<version>',
     service.getVersion,
   );
@@ -57,6 +62,21 @@ Router _$AppRouter(App service) {
     'DELETE',
     r'/api/packages/<name>/uploaders/<email>',
     service.removeUploader,
+  );
+  router.add(
+    'POST',
+    r'/api/packages/<name>/versions/<version>/retract',
+    service.retractVersion,
+  );
+  router.add(
+    'POST',
+    r'/api/packages/<name>/versions/<version>/unretract',
+    service.unretractVersion,
+  );
+  router.add(
+    'PUT',
+    r'/api/packages/<name>/discontinue',
+    service.discontinue,
   );
   router.add(
     'GET',

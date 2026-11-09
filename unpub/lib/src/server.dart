@@ -61,6 +61,7 @@ class UnpubServer {
       final metaStore = MongoStore(db);
       await accounts.ensureIndexes();
       await audit.ensureIndexes();
+      await metaStore.ensureIndexes();
       final service = AccountService(accounts, audit: audit);
       await service.bootstrapAdmin(config.auth.admin);
       await accounts.reconcileAdminSet(DateTime.now());
