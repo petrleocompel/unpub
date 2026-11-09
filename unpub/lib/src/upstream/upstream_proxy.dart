@@ -784,6 +784,14 @@ class UpstreamProxy {
         final response = await _send(uri, accept: accept, etag: etag);
         if (response.statusCode == 304) {
           await _discard(response);
+          // Only a validator from the cache can be answered with a 304, so
+          // without one there is nothing it could refer to.
+          if (etag == null) {
+            _log.warning(LogEvent(
+                'upstream sent an unrequested 304', {'path': uri.path}));
+            throw const UpstreamException(
+                'the upstream sent a 304 for a request that had no validator');
+          }
           return _Response(null, etag, notModified: true);
         }
         if (response.statusCode == 404) {

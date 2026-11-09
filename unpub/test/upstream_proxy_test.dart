@@ -33,6 +33,7 @@ class FakeUpstream {
   final userAgents = <String?>[];
   final accepts = <String?>[];
   final authorizations = <String?>[];
+  final validators = <String?>[];
 
   /// name → version → archive bytes.
   final packages = <String, Map<String, List<int>>>{};
@@ -57,6 +58,9 @@ class FakeUpstream {
   int? failWith;
   bool hang = false;
   bool sendHashes = true;
+
+  /// Answers every listing with a 304, asked for or not.
+  bool alwaysNotModified = false;
   String listingVersion = 'a';
 
   /// Kept from [start], since a late request can outlive the server.
@@ -84,6 +88,7 @@ class FakeUpstream {
     userAgents.add(request.headers['user-agent']);
     accepts.add(request.headers['accept']);
     authorizations.add(request.headers['authorization']);
+    validators.add(request.headers['if-none-match']);
 
     if (hang) await Future<void>.delayed(const Duration(seconds: 2));
     final redirect = redirects[route];
@@ -136,6 +141,7 @@ class FakeUpstream {
   }
 
   shelf.Response _listing(shelf.Request request, String name) {
+    if (alwaysNotModified) return shelf.Response.notModified();
     final versions = packages[name];
     if (versions == null) return shelf.Response.notFound('no');
 
@@ -1583,6 +1589,63 @@ void main() {
 
   group('upstream failures', () {
     const route = '/packages/$_name/versions/1.0.0.tar.gz';
+
+    group('an unrequested 304', () {
+      setUp(() => upstream.alwaysNotModified = true);
+
+      test('for a listing is a JSON 502', () async {
+        final response = await get('/api/packages/$_name');
+        expect(response.statusCode, 502);
+        expect(json.decode(await response.readAsString())['error']['message'],
+            contains('304'));
+      });
+
+      test('for advisories is a JSON 502', () async {
+        upstream.failWith = 304;
+        final response = await get('/api/packages/$_name/advisories');
+        expect(response.statusCode, 502);
+        expect(json.decode(await response.readAsString())['error']['message'],
+            contains('304'));
+      });
+
+      test('when publishing is a retryable 503', () async {
+        final outcome = await publishOutcome('brand_new', '1.0.0');
+        expect(outcome.statusCode, 503);
+        expect(
+            json.decode(await outcome.readAsString())['error']['message'],
+            'upstream registry unavailable, cannot verify that brand_new is '
+            'free, try again');
+        expect(await localPackage('brand_new'), isNull);
+      });
+
+      test('is not trusted for an entry that has no validator', () async {
+        await MongoUpstreamCacheStore(db).write(
+            UpstreamCacheEntry(
+                key: _name,
+                body: json.encode({
+                  'name': _name,
+                  'versions': <Object>[],
+                  'isDiscontinued': false,
+                }),
+                fetchedAt: now.subtract(const Duration(minutes: 11))),
+            now.add(const Duration(days: 1)));
+
+        expect((await get('/api/packages/$_name')).statusCode, 502);
+      });
+    });
+
+    test('nothing cached sends no If-None-Match', () async {
+      await get('/api/packages/$_name');
+      await get('/api/packages/$_name/advisories');
+      expect(upstream.validators, everyElement(isNull));
+    });
+
+    test('a cached entry does send its validator once stale', () async {
+      await getJson('/api/packages/$_name');
+      now = now.add(const Duration(minutes: 11));
+      await getJson('/api/packages/$_name');
+      expect(upstream.validators.last, '"listing-$_name-a"');
+    });
 
     for (final status in [500, 503, 429, 403]) {
       test('$status for metadata is a JSON 502', () async {
