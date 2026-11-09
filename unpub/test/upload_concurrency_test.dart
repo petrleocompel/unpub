@@ -16,6 +16,7 @@ const _auth = {'authorization': 'Bearer $_token'};
 class _PausingStore extends FileStore {
   Completer<void>? reached;
   Completer<void>? resume;
+  final finished = Completer<void>();
   Object? failure;
 
   _PausingStore(super.baseDir);
@@ -28,6 +29,7 @@ class _PausingStore extends FileStore {
     final error = failure;
     if (error != null) throw error;
     await super.stageArchive(name, version, id, content);
+    if (!finished.isCompleted) finished.complete();
   }
 }
 
@@ -420,6 +422,7 @@ storage:
       expect(await db.collection(packageCollection).findOne(), isNull);
 
       store.resume!.complete();
+      await store.finished.future;
       for (var i = 0; i < 100 && stagedFiles().isNotEmpty; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }

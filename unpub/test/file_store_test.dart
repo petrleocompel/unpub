@@ -396,9 +396,17 @@ void main() {
       var baseDir = setupFixture('upstream-repeat');
       var store = unpub.FileStore(baseDir.path);
       await cacheUpstream(store, 'foo', '1.0.0', data);
+      var kept = File(path.join(
+          baseDir.path, 'upstream', 'foo', 'foo-1.0.0-$digest.tar.gz'));
+      final stamp = DateTime.now().subtract(const Duration(days: 1));
+      kept.setLastModifiedSync(stamp);
+
       await cacheUpstream(store, 'foo', '1.0.0', data);
-      expect(Directory(path.join(baseDir.path, 'upstream', 'foo')).listSync(),
-          hasLength(1));
+
+      expect(kept.parent.listSync(), hasLength(1));
+      expect(kept.lastModifiedSync().difference(stamp).inSeconds.abs(),
+          lessThan(5),
+          reason: 'the object that was already there is left as it is');
     });
 
     test('never serves a file at the mutable path of earlier commits',
