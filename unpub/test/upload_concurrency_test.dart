@@ -138,6 +138,19 @@ class _LockWatchingMetaStore extends MongoStore {
   }
 }
 
+/// Counts deletions, on top of stopping once right after writing an object.
+class _DeletionCountingStore extends _StallingStore {
+  int deletions = 0;
+
+  _DeletionCountingStore(super.inner);
+
+  @override
+  Future<void> deleteObject(String name, String version, String digest) {
+    deletions++;
+    return super.deleteObject(name, version, digest);
+  }
+}
+
 /// Fails to write the version, with the write either lost or applied.
 class _FailingMetaStore extends MongoStore {
   final bool applied;
@@ -577,12 +590,13 @@ void main() {
           .collection(uploadReservationsCollection)
           .deleteMany(where.eq('name', _name));
       expect(await upload(buildApp(), 'winner'), isNull);
-      final winnerBytes = objects().single.readAsBytesSync();
+      final winner = objectFile((await storedVersion())['sha256'] as String);
+      final winnerBytes = winner.readAsBytesSync();
 
       store.resume!.complete();
 
       expect(await stalled, contains('already exists'));
-      expect(objects().single.readAsBytesSync(), winnerBytes);
+      expect(winner.readAsBytesSync(), winnerBytes);
       await expectConsistent('winner');
       expect(temporaries(), isEmpty);
     });
@@ -603,21 +617,53 @@ void main() {
       await expectConsistent('first');
     });
 
-    test('losing the metadata write deletes the object', () async {
+    test('losing the metadata write leaves the object to reclamation',
+        () async {
       final error =
           await upload(buildApp(metaStore: _LosingMetaStore(db)), 'first');
 
       expect(error, contains('already exists'));
-      expect(objects(), isEmpty);
+      expect(objects(), hasLength(1));
       expect(temporaries(), isEmpty);
+
+      expect(
+          await TemporaryReclaimer(FileStore(storage.path),
+                  references: MongoArchiveReferences(db))
+              .reclaimOrphans(
+                  now: DateTime.now().add(const Duration(hours: 2))),
+          1);
+      expect(objects(), isEmpty);
     });
 
-    test('a failed metadata write deletes the object', () async {
+    test('a failed metadata write leaves the object to reclamation', () async {
       final error = await upload(
           buildApp(metaStore: _FailingMetaStore(db, applied: false)), 'first');
 
       expect(error, contains('connection lost'));
-      expect(objects(), isEmpty);
+      expect(objects(), hasLength(1));
+    });
+
+    test(
+        'a losing upload deletes nothing, so a later publish of its digest '
+        'stays served', () async {
+      final loserStore = _DeletionCountingStore(FileStore(storage.path));
+      final losing = upload(buildApp(packageStore: loserStore), 'same');
+      await loserStore.reached.future;
+      await db
+          .collection(uploadReservationsCollection)
+          .deleteMany(where.eq('name', _name));
+
+      final winner =
+          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      expect(await upload(winner, 'different'), isNull);
+      loserStore.resume.complete();
+      expect(await losing, contains('already exists'));
+
+      expect(await upload(winner, 'same'), isNull);
+
+      expect(loserStore.deletions, 0);
+      await expectConsistent('same');
+      await expectServedConsistent(winner);
     });
 
     test('an object the metadata does refer to is kept', () async {
@@ -1058,7 +1104,7 @@ storage:
   });
 
   group('publish.uploadTimeout', () {
-    test('fails a stalled write, retryably, and cleans up after it', () async {
+    test('fails a stalled write, retryably', () async {
       final store = _PausingStore(storage.path)
         ..reached = Completer<void>()
         ..resume = Completer<void>();
@@ -1079,10 +1125,8 @@ storage:
 
       store.resume!.complete();
       await store.finished.future;
-      for (var i = 0; i < 100 && objects().isNotEmpty; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-      expect(objects(), isEmpty);
+      expect(objects(), hasLength(1),
+          reason: 'reclamation removes it, nothing else may');
       expect(temporaries(), isEmpty);
     });
 

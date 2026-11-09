@@ -566,7 +566,6 @@ class App {
 
     String? uploadKey;
     (String, String, String)? reservation;
-    (String, String, String)? unpublished;
     try {
       var tarballBytes = await _readUploadedArchive(req);
       var tarBytes = publishPolicy.inflate(tarballBytes);
@@ -657,10 +656,10 @@ class App {
 
       // Nothing can reach this object until the metadata names its digest, so
       // a publish that stalled past its reservation cannot change an archive.
-      // A crash from here on leaves only an object that nothing refers to.
+      // A crash or a lost race leaves an object nothing refers to, which is
+      // never deleted here: only reclamation may decide that, under the lock.
       final lock =
           await _lockAndStore(name, version, claim, archiveHash, tarballBytes);
-      unpublished = (name, version, archiveHash);
       try {
         if (!await lock.confirm()) {
           throw const _UploadRetryLater(
@@ -690,7 +689,6 @@ class App {
             throw PublishPolicy.duplicateVersion(name, version);
           }
         }
-        unpublished = null;
         await _restoreIfGone(name, version, archiveHash, tarballBytes);
       } finally {
         await lock.release();
@@ -711,7 +709,6 @@ class App {
           '?error=${Uri.encodeQueryComponent('$err')}'
           '${err is _UploadRetryLater ? '&retryable=true' : ''}'));
     } finally {
-      if (unpublished != null) await _discardUnpublished(unpublished);
       if (reservation != null) await _releaseReservation(reservation);
       if (uploadKey != null) _uploadsInProgress.remove(uploadKey);
     }
@@ -748,15 +745,11 @@ class App {
         throw const _UploadRetryLater('the archive stayed locked for longer '
             'than publish.uploadTimeout, try again');
       }
-      final write = packageStore.storeObject(name, version, digest, content);
       try {
-        await write.timeout(limit - elapsed.elapsed);
+        await packageStore
+            .storeObject(name, version, digest, content)
+            .timeout(limit - elapsed.elapsed);
       } on TimeoutException {
-        // A write that is still running can create its object after the caller
-        // has cleaned up, so it gets cleaned up again when it ends.
-        unawaited(write.then(
-            (_) => _discardUnpublished((name, version, digest)),
-            onError: (_) {}));
         throw const _UploadRetryLater(
             'storing the archive exceeded publish.uploadTimeout, try again');
       }
@@ -766,29 +759,6 @@ class App {
       rethrow;
     } finally {
       renewal.cancel();
-    }
-  }
-
-  /// Deletes an object this upload wrote and did not get to publish, unless
-  /// the version names it anyway: an identical upload may have published it, or
-  /// the metadata write may have reached the database and only its answer got
-  /// lost. An object that cannot be deleted is reclaimed later.
-  Future<void> _discardUnpublished((String, String, String) object) async {
-    final (name, version, digest) = object;
-    try {
-      final package = await metaStore.queryPackage(name);
-      final published = package?.versions.any(
-              (item) => item.version == version && item.sha256 == digest) ??
-          false;
-      if (!published) {
-        await packageStore.deleteObject(name, version, digest);
-      }
-    } catch (error, stackTrace) {
-      _log.warning(
-          LogEvent('failed to delete an unpublished archive',
-              {'name': name, 'version': version}),
-          error,
-          stackTrace);
     }
   }
 
