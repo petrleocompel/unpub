@@ -32,7 +32,10 @@ class _Step {
   final String id;
   final Future<List<String>> Function(bool dryRun) apply;
 
-  const _Step(this.id, this.apply);
+  /// Whether the step can usefully be run again after it was recorded.
+  final bool rerunnable;
+
+  const _Step(this.id, this.apply, {this.rerunnable = false});
 }
 
 /// Applies each data migration once and records it in `migrations`.
@@ -49,12 +52,20 @@ class Migrator {
 
   late final _steps = [
     _Step('0001_users_from_uploaders', _usersFromUploaders),
-    _Step('0002_version_sha256', _versionSha256),
+    _Step('0002_version_sha256', _versionSha256, rerunnable: true),
   ];
 
+  /// The ids to give [run] as `rerun`, shortened to their number.
+  static const rerunnableSteps = ['0002'];
+
   /// Runs the pending steps. A [dryRun] reports them and writes nothing.
-  Future<List<MigrationOutcome>> run({bool dryRun = false}) async {
+  ///
+  /// With [rerun], runs only the step of that number, even if it was recorded,
+  /// for one that skipped something that can be retried.
+  Future<List<MigrationOutcome>> run(
+      {bool dryRun = false, String? rerun}) async {
     if (!dryRun) await accounts.store.ensureIndexes();
+    if (rerun != null) return [await _rerun(rerun, dryRun)];
     final collection = db.collection(migrationCollection);
     final outcomes = <MigrationOutcome>[];
     for (final step in _steps) {
@@ -82,6 +93,32 @@ class Migrator {
       outcomes.add(MigrationOutcome(step.id, MigrationStatus.applied, changes));
     }
     return outcomes;
+  }
+
+  Future<MigrationOutcome> _rerun(String number, bool dryRun) async {
+    final step = _steps
+        .where((step) => step.rerunnable && step.id.startsWith('${number}_'))
+        .firstOrNull;
+    if (step == null) {
+      throw ArgumentError.value(number, 'rerun', 'cannot be run again');
+    }
+    final changes = await step.apply(dryRun);
+    if (dryRun) {
+      return MigrationOutcome(step.id, MigrationStatus.wouldApply, changes);
+    }
+    final now = accounts.clock();
+    final result = await db.collection(migrationCollection).updateOne(
+        where.eq('_id', step.id),
+        modify
+            .set('lastRerunAt', now)
+            .setOnInsert('appliedAt', now)
+            .setOnInsert('changes', changes.length),
+        upsert: true);
+    if (result.hasWriteErrors && result.writeError?.code != _duplicateKeyCode) {
+      throw StateError(
+          'cannot record ${step.id}: ${result.writeError?.errmsg}');
+    }
+    return MigrationOutcome(step.id, MigrationStatus.applied, changes);
   }
 
   /// Creates a placeholder user for every email in `packages.uploaders`.

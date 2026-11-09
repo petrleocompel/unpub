@@ -102,6 +102,11 @@ class MigrateCommand extends _DatabaseCommand {
   MigrateCommand() {
     argParser.addFlag('dry-run',
         negatable: false, help: 'List what would change and write nothing.');
+    argParser.addOption('rerun',
+        valueHelp: 'step',
+        allowed: Migrator.rerunnableSteps,
+        help: 'Run only this finished step again, such as 0002 to hash the '
+            'versions it had to skip because their archive was missing.');
   }
 
   bool get _dryRun => argResults!.flag('dry-run');
@@ -113,7 +118,7 @@ class MigrateCommand extends _DatabaseCommand {
   Future<int> runWith(Config config, Db db, AccountService accounts) async {
     final packageStore = await createPackageStore(config.storage);
     final outcomes = await Migrator(db, accounts, config.auth, packageStore)
-        .run(dryRun: _dryRun);
+        .run(dryRun: _dryRun, rerun: argResults!.option('rerun'));
     for (final outcome in outcomes) {
       final status = switch (outcome.status) {
         MigrationStatus.applied => 'applied',

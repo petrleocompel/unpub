@@ -240,6 +240,90 @@ void main() {
       expect(await readVersion('a', 0), first);
     });
 
+    group('--rerun', () {
+      final restored = [1, 2, 3];
+
+      Future<void> addSkippedVersion() async {
+        await db.collection(packageCollection).insertOne({
+          'name': 'pkg',
+          'versions': [
+            {'version': '1.0.0'},
+          ],
+        });
+        await migrator().run();
+      }
+
+      Future<Object?> storedHash() async => (await db
+          .collection(packageCollection)
+          .findOne(where.eq('name', 'pkg')))!['versions'][0]['sha256'];
+
+      void restoreArchive() =>
+          File(path.join(archives.path, 'pkg-1.0.0.tar.gz'))
+            ..writeAsBytesSync(restored);
+
+      test('a normal run does not come back to a skipped version', () async {
+        await addSkippedVersion();
+        restoreArchive();
+
+        await migrator().run();
+
+        expect(await storedHash(), isNull);
+      });
+
+      test('hashes a version that was skipped', () async {
+        await addSkippedVersion();
+        restoreArchive();
+
+        final outcomes = await migrator().run(rerun: '0002');
+
+        expect(outcomes.single.id, '0002_version_sha256');
+        expect(outcomes.single.status, MigrationStatus.applied);
+        expect(outcomes.single.changes, ['hash pkg@1.0.0']);
+        expect(await storedHash(), sha256.convert(restored).toString());
+        final record = await db
+            .collection(migrationCollection)
+            .findOne(where.eq('_id', '0002_version_sha256'));
+        expect(record!['lastRerunAt'], isA<DateTime>());
+      });
+
+      test('leaves other steps alone', () async {
+        await addSkippedVersion();
+        await db
+            .collection(migrationCollection)
+            .deleteOne(where.eq('_id', '0001_users_from_uploaders'));
+
+        final outcomes = await migrator().run(rerun: '0002');
+
+        expect(outcomes, hasLength(1));
+        expect(
+            await db
+                .collection(migrationCollection)
+                .findOne(where.eq('_id', '0001_users_from_uploaders')),
+            isNull);
+      });
+
+      test('a dry run writes nothing', () async {
+        await addSkippedVersion();
+        restoreArchive();
+
+        final outcomes = await migrator().run(rerun: '0002', dryRun: true);
+
+        expect(outcomes.single.status, MigrationStatus.wouldApply);
+        expect(outcomes.single.changes, ['hash pkg@1.0.0']);
+        expect(await storedHash(), isNull);
+      });
+
+      test('still reports an archive that is missing', () async {
+        await addSkippedVersion();
+        final outcomes = await migrator().run(rerun: '0002');
+        expect(outcomes.single.changes, ['skip pkg@1.0.0: archive missing']);
+      });
+
+      test('refuses a step that cannot be run again', () async {
+        expect(() => migrator().run(rerun: '0001'), throwsArgumentError);
+      });
+    });
+
     test('a dry run lists what would be hashed and writes nothing', () async {
       await addVersions('a', [
         {'version': '1.0.0'},

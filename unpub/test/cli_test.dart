@@ -411,6 +411,16 @@ void main() {
 
       final again = await run(['migrate']);
       expect(again.stdout, contains('0002_version_sha256: already applied'));
+
+      File(path.join(storage.path, 'p-2.0.0.tar.gz')).writeAsBytesSync([3]);
+      final rerun = await run(['migrate', '--rerun', '0002']);
+      expect(rerun.exitCode, 0, reason: '${rerun.stderr}');
+      expect(rerun.stdout, contains('0002_version_sha256: applied'));
+      expect(rerun.stdout, contains('hash p@2.0.0'));
+      expect((await versions()).last['sha256'], sha256.convert([3]).toString());
+
+      final refused = await run(['migrate', '--rerun', '0001']);
+      expect(refused.exitCode, 64);
     }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a bad config is reported', () async {
