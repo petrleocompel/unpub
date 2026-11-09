@@ -7,13 +7,20 @@ Completes the pub API, and adds publishing policies and an upstream proxy. See "
 - Listings and archives have `ETag` and `Cache-Control`, and answer 304 to `If-None-Match`.
 - Adds `POST /api/packages/<name>/versions/<version>/retract` and `unretract`, and `PUT /api/packages/<name>/discontinue`, for uploaders and administrators, audited. `publish.retractionWindow` limits non-administrators.
 - Adds the `publish` settings `allowedNamePrefixes`, `maxArchiveBytes`, `requiredFiles`, `rejectOlderThanLatest`, `requireVersionBump` and `retractionWindow`. They run before `uploadValidator`.
-- Adds `upstream.mode: proxy` with `cacheTtl`, `allowlist` and `timeout`. Proxied metadata goes to the new `upstream_cache` collection, and archives under `upstream/` in the package store, verified against the upstream hash. Proxied names cannot be published.
+- Adds `upstream.mode: proxy` with `cacheTtl`, `allowlist`, `timeout`, `maxArchiveBytes` and `maxConcurrentFetches`. Proxied metadata goes to the new `upstream_cache` collection, and archives under `upstream/` in the package store, streamed through a temporary file and verified against the upstream hash, with their digest kept in `upstream_archives`. A listing that later names another hash makes the copy be fetched again.
+- Upstream hashes are normalized to lowercase. A malformed one answers 502, and so does a missing one unless `upstream.requireSha256` is off.
+- Proxied archives only come from `upstream.url` and the new `upstream.allowedArchiveHosts`, with at most three redirects, each checked.
+- A new name in proxy mode needs a definitive answer from the upstream, and otherwise answers 503. `upstream.allowPublishWhenUnavailable` accepts it with a warning instead.
+- Adds `publish.maxUnpackedBytes`, enforced while inflating an upload. `publish.requiredFiles` only counts regular files.
+- A publish of a version takes a per-version guard before reading the package, and a claim in the new `upload_reservations` collection before writing the archive, so concurrent publishes, also across instances, cannot corrupt it.
+- `unpub migrate --rerun 0002` hashes the versions an earlier run skipped.
+- Archives are `private, no-store` in `authenticated` mode, and cached for 60 seconds with `publish.requireVersionBump: false`.
+- `/webapi` gains `discontinuedAt`, `downloads` and `uploader` per version, and `downloads` per package.
 - Adds per-version download counts in the new `version_stats` collection, reported as `downloads` by `/webapi/package/<name>/<version>`.
 - `/webapi/packages` hides discontinued packages unless called with `?discontinued=true`. The `/webapi` views and the version badge use the new `latest`.
 - A `HEAD` request for an archive is no longer counted as a download.
-- Two concurrent publishes of one version can no longer both be added.
 - **Breaking:** the validator in `uploadValidator` now runs after the uploader check and the policies, so it no longer sees uploads those refuse.
-- **Breaking:** `MetaStore` gains `replaceVersion`, `versionDownloads`, `setVersionRetracted`, `setDiscontinued` and an `includeDiscontinued` argument on `queryPackages`, and `addVersion` returns whether it added the version. `PackageStore` gains `cacheUpstream`, `upstreamCached` and `downloadUpstream`, with defaults that cache nothing. `Migrator` takes a `PackageStore`.
+- **Breaking:** `MetaStore` gains `replaceVersion`, `versionDownloads`, `setVersionRetracted`, `setDiscontinued` and an `includeDiscontinued` argument on `queryPackages`, and `addVersion` returns whether it added the version. `PackageStore` gains `upstreamTemporaryFile`, `commitUpstream`, `upstreamCached`, `downloadUpstream` and `deleteUpstream`, with defaults that cache nothing. `MetaStore` also gains `reserveUpload`, `releaseUpload` and `versionDownloadCounts`, with defaults. `UpstreamCacheStore` needs `readArchive`, `writeArchive` and `deleteArchive`. `Migrator` takes a `PackageStore`.
 
 ## 3.0.0-dev.2
 

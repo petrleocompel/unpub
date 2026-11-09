@@ -51,6 +51,21 @@ upstream:
   #   - path
   # Proxy mode only. How long the upstream may stay silent during a request.
   # timeout: 30s
+  # Proxy mode only. Hosts besides that of url that archives may come from.
+  # pub.dev needs none.
+  # allowedArchiveHosts:
+  #   - storage.example.com
+  # Proxy mode only. Refuse archives the upstream gives no hash for. When false
+  # they are served unverified.
+  # requireSha256: true
+  # Proxy mode only. Largest archive fetched, in bytes. 256 MiB by default.
+  # maxArchiveBytes: 268435456
+  # Proxy mode only. How many archives are fetched at once. Others wait for
+  # up to timeout, then answer 503.
+  # maxConcurrentFetches: 4
+  # Proxy mode only. Accept a new name when the upstream cannot say whether it
+  # has it. Such a name shadows the upstream package from then on.
+  # allowPublishWhenUnavailable: false
 
 publish:
   # Package names must start with one of these. Empty allows any name.
@@ -58,6 +73,8 @@ publish:
   #   - acme_
   # Largest archive accepted, in bytes. 100 MiB by default.
   # maxArchiveBytes: 104857600
+  # Largest size an archive may inflate to, in bytes. 512 MiB by default.
+  # maxUnpackedBytes: 536870912
   # Files the archive must hold at its root, matched ignoring case.
   # requiredFiles:
   #   - README.md

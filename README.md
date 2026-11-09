@@ -138,9 +138,9 @@ Responses can be cached:
 | Response | `ETag` | `Cache-Control` in `public` mode | `Cache-Control` in `authenticated` mode |
 | --- | --- | --- | --- |
 | Listing | Weak, changes with the package | `public, max-age=60` | `private, no-store` |
-| Archive | Strong, from the SHA-256, when known | `public, max-age=31536000, immutable` | `private` |
+| Archive | Strong, from the SHA-256, when known | `public, max-age=31536000, immutable`, or `public, max-age=60` with `publish.requireVersionBump: false`, because the archive can then be replaced | `private, no-store` |
 
-A matching `If-None-Match` answers 304. Downloads are counted only for `dart pub` and `flutter pub`, and a 304 or `HEAD` is not a download. Besides the package total and the daily `stats`, each version has its own count in the `version_stats` collection. `/webapi/package/<name>/<version>` reports them as `downloads: {"version": n, "package": n}`.
+A matching `If-None-Match` answers 304. Downloads are counted only for `dart pub` and `flutter pub`, and a 304 or `HEAD` is not a download. Besides the package total and the daily `stats`, each version has its own count in the `version_stats` collection. `/webapi/package/<name>/<version>` reports them as `downloads: {"version": n, "package": n}`, and each entry of its `versions` has `downloads` and `uploader`. `/webapi/packages` reports `downloads` per package.
 
 ## Retraction and discontinued
 
@@ -154,7 +154,7 @@ Uploaders of a package and administrators can change these, with a credential th
 
 A retracted version stays downloadable, so a project with it in its lockfile still resolves, but new resolutions avoid it and it is left out of `latest`. If every version of a package is retracted, `latest` is the highest version anyway, the same as pub.dev, because a listing has to name one. The only version of a package can be retracted too, and then stays `latest`. A non-administrator can retract only within `publish.retractionWindow` of publishing, 7 days by default, and is answered 403 after that. The window does not limit `unretract`.
 
-A discontinued package keeps serving everything, with the flag set. `/webapi/packages` leaves discontinued packages out unless called with `?discontinued=true`. `/webapi/packages` and `/webapi/package/<name>/<version>` include the flags.
+A discontinued package keeps serving everything, with the flag set. `/webapi/packages` leaves discontinued packages out unless called with `?discontinued=true`. `/webapi/packages` and `/webapi/package/<name>/<version>` include the flags, and the latter `discontinuedAt`.
 
 ## Publishing policies
 
@@ -164,10 +164,13 @@ Set under `publish`. A violation goes back through `dart pub publish`, with a me
 | --- | --- | --- | --- |
 | `publish.allowedNamePrefixes` | `UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES` | any name | Package names must start with one of these. Applies to every publish, including new versions of existing packages. A YAML list, or comma separated in the environment. |
 | `publish.maxArchiveBytes` | `UNPUB_PUBLISH_MAX_ARCHIVE_BYTES` | `104857600` (100 MiB) | Largest archive accepted. A larger one is refused without being kept in memory. A reverse proxy needs a matching limit, such as `client_max_body_size` in nginx. |
-| `publish.requiredFiles` | `UNPUB_PUBLISH_REQUIRED_FILES` | none | Files the archive must hold at its root, matched ignoring case, such as `README.md`, `CHANGELOG.md` and `LICENSE`. |
+| `publish.maxUnpackedBytes` | `UNPUB_PUBLISH_MAX_UNPACKED_BYTES` | `536870912` (512 MiB) | Largest size an archive may inflate to. Enforced while inflating, so a compression bomb is stopped at the limit. |
+| `publish.requiredFiles` | `UNPUB_PUBLISH_REQUIRED_FILES` | none | Files the archive must hold at its root, matched ignoring case, such as `README.md`, `CHANGELOG.md` and `LICENSE`. They must be regular files. A symbolic or hard link does not count. |
 | `publish.rejectOlderThanLatest` | `UNPUB_PUBLISH_REJECT_OLDER_THAN_LATEST` | `false` | Refuse a version lower than the highest version not retracted, prereleases included. |
-| `publish.requireVersionBump` | `UNPUB_PUBLISH_REQUIRE_VERSION_BUMP` | `true` | Refuse a version that already exists. When `false`, publishing an existing version replaces it, including any retraction. Clients that recorded its hash then fail, and caches may keep the old archive for up to a year. |
+| `publish.requireVersionBump` | `UNPUB_PUBLISH_REQUIRE_VERSION_BUMP` | `true` | Refuse a version that already exists. When `false`, publishing an existing version replaces it, including any retraction. Clients that recorded its hash then fail. Archives are then only cached for 60 seconds. |
 | `publish.retractionWindow` | `UNPUB_PUBLISH_RETRACTION_WINDOW` | `7d` | How long after publishing a non-administrator may retract, in `s`, `m`, `h`, `d` or `w`. `0` is unlimited. |
+
+While one version is being published, another upload of that version is refused with "version is being published by another request", also from another server instance on the same MongoDB. The claim lives in the `upload_reservations` collection for as long as the archive is written. If a server dies while holding one, the version stays blocked until the claim expires, 15 to 16 minutes later.
 
 ## Upstream proxy
 
@@ -179,14 +182,22 @@ By default a package that does not exist locally is redirected to `upstream.url`
 | `upstream.mode` | `UNPUB_UPSTREAM_MODE` | `redirect` | `redirect` or `proxy`. |
 | `upstream.cacheTtl` | `UNPUB_UPSTREAM_CACHE_TTL` | `10m` | How long metadata is served without asking the upstream. `0` asks every time. Archives never expire. |
 | `upstream.allowlist` | `UNPUB_UPSTREAM_ALLOWLIST` | any package | The only packages proxied. Others answer 404 and can be published here. Only applies in `proxy` mode, and the server warns at startup if it is set in `redirect` mode. |
-| `upstream.timeout` | `UNPUB_UPSTREAM_TIMEOUT` | `30s` | How long the upstream may stay silent during a request. |
+| `upstream.timeout` | `UNPUB_UPSTREAM_TIMEOUT` | `30s` | How long the upstream may stay silent during a request, and how long a first download may wait for a fetch slot. |
+| `upstream.allowedArchiveHosts` | `UNPUB_UPSTREAM_ALLOWED_ARCHIVE_HOSTS` | none | Hosts besides that of `upstream.url` that archives and redirects may go to. Host names only, without a scheme or port. |
+| `upstream.requireSha256` | `UNPUB_UPSTREAM_REQUIRE_SHA256` | `true` | Answer 502 for an archive the upstream gives no `archive_sha256` for. When `false` it is served and cached unverified, with a warning and no strong `ETag`. A malformed hash is always a 502. |
+| `upstream.maxArchiveBytes` | `UNPUB_UPSTREAM_MAX_ARCHIVE_BYTES` | `268435456` (256 MiB) | Largest archive fetched. Enforced while streaming, and a larger one answers 502 and leaves nothing behind. |
+| `upstream.maxConcurrentFetches` | `UNPUB_UPSTREAM_MAX_CONCURRENT_FETCHES` | `4` | How many archives are fetched at once. Other first downloads wait up to `upstream.timeout`, then answer 503. Downloads of one archive share a single fetch. |
+| `upstream.allowPublishWhenUnavailable` | `UNPUB_UPSTREAM_ALLOW_PUBLISH_WHEN_UNAVAILABLE` | `false` | Accept a new package name, with a warning, when the upstream cannot say whether it has it. Such a name shadows the upstream package from then on. |
 
 A local package always wins over the upstream. For the others:
 
 - **Metadata** is kept in the `upstream_cache` collection and served for `cacheTtl`, then revalidated. Archive URLs are rewritten to this server. Entries expire on their own 7 days after they go stale.
-- **Archives** are stored under `upstream/<name>/<name>-<version>.tar.gz` on disk, or the same key in S3. The first download fetches the whole archive, checks it against `archive_sha256` when the upstream provides one, stores it and then answers, so the client waits for the full download once. A mismatch is discarded and answered with 502. Later downloads come from storage.
+- **Archives** are stored under `upstream/<name>/<name>-<version>.tar.gz` on disk, or the same key in S3. The first download streams the whole archive to a temporary file while hashing it, next to the final path on disk and in the system temp directory for S3 (`TMPDIR`, which has to be writable and have room for the largest archive), checks it against `archive_sha256`, stores it and then answers, so the client waits for the full download once. A mismatch is discarded and answered with 502. Later downloads come from storage.
+- **Integrity:** the digest of a stored archive is kept with it in the `upstream_archives` collection and used for its `ETag`. If the listing later names another hash, the stored copy is discarded and fetched again, and a failed refetch answers 502. A stored archive with no recorded digest counts as not stored.
+- **Archive locations** must have the scheme, host and port of `upstream.url`, or a host in `upstream.allowedArchiveHosts`. Redirects are followed by hand, at most three, with each hop held to the same rule, and a hop from https to http is refused. pub.dev serves archives from its own host, so it needs no entry.
+- **Memory:** an archive is never held in memory, whatever its size. Metadata responses are read into memory, up to 64 MiB each, and `maxConcurrentFetches` does not limit them. On a proxy reachable by the public, set an `allowlist`, because every distinct package and version requested otherwise costs an upstream fetch and storage for as long as archives are kept.
 - **Upstream failures** answer 502 with a JSON error for metadata, also when a stale copy exists, and for archives that are not stored yet. Archives already stored keep being served.
-- **Publishing** a name the upstream has is refused, whether or not it is cached yet. If the upstream cannot be asked, the publish is allowed and a warning is logged.
+- **Publishing** a new name needs a definitive answer. A fresh listing refuses the name. Otherwise the upstream is asked: a 200 refuses it, a 404 accepts it, and anything else answers 503 with "upstream registry unavailable, cannot verify that <name> is free, try again", unless `upstream.allowPublishWhenUnavailable` is on. During an outage `dart pub publish` usually stops earlier, at its own listing request, with a 502.
 - **Reading** follows `auth.readAccess`, so clients need their token for proxied packages in `authenticated` mode. Client credentials are never sent to the upstream.
 - Proxied downloads are not counted, and proxied packages do not appear in `/webapi/packages` or the web UI.
 
@@ -210,7 +221,7 @@ To build a standalone binary, run `dart compile exe bin/unpub.dart -o unpub`.
 | `unpub serve [--config path] [--host address] [--port number]` | Start the server. |
 | `unpub version` | Print the version. |
 | `unpub --help` | Print usage. |
-| `unpub migrate [--dry-run] [--config path]` | Apply pending data migrations, or list what would change. |
+| `unpub migrate [--dry-run] [--rerun step] [--config path]` | Apply pending data migrations, or list what would change. `--rerun 0002` runs only that step again. |
 | `unpub admin ...` | Manage users and tokens. See [Administrators](#administrators). |
 
 ## Configuration
@@ -270,9 +281,9 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 - Run `unpub migrate` after creating your first administrator, or use `unpub admin create-user` afterwards: `auth.admin.*` is ignored once any user exists.
 - `auth.bootstrapToken` and `auth.readTokens` keep working but are deprecated. Replace them with personal tokens. Neither these nor personal tokens can manage users over HTTP, so use `unpub admin` or log in.
 - Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
-- Archive hashes: `unpub migrate` step `0002_version_sha256` records the SHA-256 of every stored archive, so that existing versions get `archive_sha256`. Check first with `unpub migrate --dry-run`. An archive missing from storage is skipped with a warning, and that version keeps being served without a hash. Run it with the same `storage` settings as the server.
+- Archive hashes: `unpub migrate` step `0002_version_sha256` records the SHA-256 of every stored archive, so that existing versions get `archive_sha256`. Check first with `unpub migrate --dry-run`. An archive missing from storage is skipped with a warning, and that version keeps being served without a hash. Once the archive is back, `unpub migrate --rerun 0002` hashes the versions still missing one. Run it with the same `storage` settings as the server.
 - The `latest` field of a listing now skips retracted versions, and the `/webapi` views use the same rule. Listings have new fields, and existing clients ignore what they do not know.
-- MongoDB documents and the archive layout are unchanged apart from new optional fields. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`. Phase 3 adds `version_stats` and `upstream_cache`.
+- MongoDB documents and the archive layout are unchanged apart from new optional fields. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`. Phase 3 adds `version_stats`, `upstream_cache`, `upstream_archives` and `upload_reservations`.
 
 ### Behind a reverse proxy
 
