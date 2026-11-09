@@ -115,7 +115,7 @@ Logins, token and user changes, publishes and uploader changes are recorded in t
 
 ## Running from source
 
-Requires the Dart SDK and a MongoDB instance.
+Requires the Dart SDK and MongoDB 3.6 or later. The server and `unpub admin` log the version they connect to and stop with a clear message on anything older.
 
 ```sh
 docker compose -f docker-compose.dev.yml up -d mongo

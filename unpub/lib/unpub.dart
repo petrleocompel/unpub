@@ -18,6 +18,7 @@ export 'src/store/aws_credentials.dart';
 export 'src/store/file_store.dart';
 export 'src/store/meta_store.dart';
 export 'src/store/mongo_store.dart';
+export 'src/store/mongo_version.dart';
 export 'src/store/package_store.dart';
 export 'src/store/s3_store.dart';
 export 'src/version.dart';

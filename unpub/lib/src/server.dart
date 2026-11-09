@@ -17,6 +17,7 @@ import 'store/audit_store.dart';
 import 'store/aws_credentials.dart';
 import 'store/file_store.dart';
 import 'store/mongo_store.dart';
+import 'store/mongo_version.dart';
 import 'store/package_store.dart';
 import 'store/s3_store.dart';
 
@@ -55,6 +56,7 @@ class UnpubServer {
     final db = await Db.create(config.mongo.uri);
     try {
       await db.open().timeout(_mongoConnectTimeout);
+      await checkMongoVersion(db);
       final accounts = AccountStore(db);
       final audit = MongoAuditStore(db);
       await accounts.ensureIndexes();

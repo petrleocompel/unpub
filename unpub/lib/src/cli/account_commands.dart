@@ -12,6 +12,7 @@ import '../migrate/migrations.dart';
 import '../redact.dart';
 import '../store/account_store.dart';
 import '../store/audit_store.dart';
+import '../store/mongo_version.dart';
 
 const _connectTimeout = Duration(seconds: 30);
 
@@ -49,6 +50,7 @@ abstract class _DatabaseCommand extends Command<int> {
     try {
       final connection = db = await Db.create(config.mongo.uri);
       await connection.open().timeout(_connectTimeout);
+      await checkMongoVersion(connection);
       final store = AccountStore(connection);
       final audit = MongoAuditStore(connection);
       if (!readOnly) {
