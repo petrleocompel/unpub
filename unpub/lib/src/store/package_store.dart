@@ -4,8 +4,25 @@ import 'dart:io';
 int _temporaryFiles = 0;
 
 final _digestPattern = RegExp(r'^[0-9a-f]{64}$');
+final _stagingIdPattern = RegExp(r'^[0-9A-Za-z]+$');
+
+/// Storage holds an archive for a version no published version accounts for,
+/// so publishing it would overwrite bytes that nobody can vouch for.
+class ArchiveExistsException implements Exception {
+  final String name;
+  final String version;
+
+  const ArchiveExistsException(this.name, this.version);
+
+  @override
+  String toString() => 'storage is corrupt: an archive of $name@$version is '
+      'already stored and no published version accounts for it, so it was not '
+      'overwritten. An administrator has to check it and remove it first.';
+}
 
 abstract class PackageStore {
+  final _staged = <String, List<int>>{};
+
   bool supportsDownloadUrl = false;
 
   FutureOr<String> downloadUrl(String name, String version) {
@@ -17,6 +34,34 @@ abstract class PackageStore {
   }
 
   Future<void> upload(String name, String version, List<int> content);
+
+  /// Puts [content] where no download can reach it, for [commitStaged] or
+  /// [discardStaged]. [id] tells apart attempts at publishing one version.
+  ///
+  /// A store that keeps these defaults holds the archive in memory and only
+  /// gets to see it in [upload], at commit.
+  Future<void> stageArchive(
+      String name, String version, String id, List<int> content) async {
+    _staged['$name@$version#$id'] = content;
+  }
+
+  /// Makes a staged archive the published one. Unless [replace] is set, throws
+  /// an [ArchiveExistsException] rather than overwrite an archive.
+  Future<void> commitStaged(String name, String version, String id,
+      {bool replace = false}) async {
+    final content = _staged.remove('$name@$version#$id');
+    if (content == null) throw StateError('nothing staged for $name@$version');
+    await upload(name, version, content);
+  }
+
+  /// Forgets a staged archive, if there is one.
+  Future<void> discardStaged(String name, String version, String id) async {
+    _staged.remove('$name@$version#$id');
+  }
+
+  /// Whether [commitStaged] would find the archive of [name] [version] there
+  /// already. Unlike [exists], a store that cannot tell answers false.
+  Future<bool> hasCommittedArchive(String name, String version) async => false;
 
   /// Whether the archive of [name] [version] is stored.
   ///
@@ -65,6 +110,13 @@ abstract class PackageStore {
   static void checkDigest(String digest) {
     if (!_digestPattern.hasMatch(digest)) {
       throw ArgumentError('not a SHA-256 digest');
+    }
+  }
+
+  /// Throws an [ArgumentError] for an id that could change a path or key.
+  static void checkStagingId(String id) {
+    if (!_stagingIdPattern.hasMatch(id)) {
+      throw ArgumentError('unsafe staging id');
     }
   }
 

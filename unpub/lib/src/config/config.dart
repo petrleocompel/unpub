@@ -57,6 +57,7 @@ const _schema = <String, _ValueKind>{
   'publish.rejectOlderThanLatest': _ValueKind.boolean,
   'publish.requireVersionBump': _ValueKind.boolean,
   'publish.retractionWindow': _ValueKind.string,
+  'publish.uploadTimeout': _ValueKind.string,
   'auth.bootstrapToken': _ValueKind.string,
   'auth.bootstrapEmail': _ValueKind.string,
   'auth.readAccess': _ValueKind.string,
@@ -280,10 +281,14 @@ class UpstreamConfig {
   });
 }
 
+/// How long a claim on publishing a version lasts unless it is renewed.
+const uploadReservationTtl = Duration(minutes: 15);
+
 /// Rules an upload must satisfy.
 class PublishConfig {
   static const defaultMaxArchiveBytes = 100 * 1024 * 1024;
   static const defaultMaxUnpackedBytes = 512 * 1024 * 1024;
+  static const defaultUploadTimeout = Duration(minutes: 10);
 
   /// Package names must start with one of these, or empty for any name.
   final List<String> allowedNamePrefixes;
@@ -306,6 +311,10 @@ class PublishConfig {
   /// no limit.
   final Duration? retractionWindow;
 
+  /// How long storing an archive may take. It stays below
+  /// [uploadReservationTtl], so that a stalled write fails first.
+  final Duration uploadTimeout;
+
   const PublishConfig({
     this.allowedNamePrefixes = const [],
     this.maxArchiveBytes = defaultMaxArchiveBytes,
@@ -314,6 +323,7 @@ class PublishConfig {
     this.rejectOlderThanLatest = false,
     this.requireVersionBump = true,
     this.retractionWindow = const Duration(days: 7),
+    this.uploadTimeout = defaultUploadTimeout,
   });
 }
 
@@ -724,6 +734,12 @@ class _ConfigReader {
           .add('${_describe('publish.maxUnpackedBytes')} must be positive');
     }
     final window = _duration('publish.retractionWindow', allowZero: true);
+    final uploadTimeout = _duration('publish.uploadTimeout', allowZero: false);
+    if (uploadTimeout != null && uploadTimeout >= uploadReservationTtl) {
+      _problems.add('${_describe('publish.uploadTimeout')} must be shorter '
+          'than the ${uploadReservationTtl.inMinutes} minutes a publish keeps '
+          'its version reserved');
+    }
     return PublishConfig(
       allowedNamePrefixes: prefixes,
       maxArchiveBytes: maxBytes ?? defaults.maxArchiveBytes,
@@ -733,6 +749,7 @@ class _ConfigReader {
       requireVersionBump: _boolean('publish.requireVersionBump') ?? true,
       retractionWindow:
           window == Duration.zero ? null : window ?? defaults.retractionWindow,
+      uploadTimeout: uploadTimeout ?? defaults.uploadTimeout,
     );
   }
 

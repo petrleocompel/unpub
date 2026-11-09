@@ -4,10 +4,14 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:logging/logging.dart';
 import 'package:minio/minio.dart';
 
+import '../logging.dart';
 import 'aws_credentials.dart';
 import 'package_store.dart';
+
+final _log = Logger('unpub.s3');
 
 /// Use an AWS S3 bucket, or an S3 compatible service, as a package store.
 class S3Store extends PackageStore {
@@ -94,6 +98,15 @@ class S3Store extends PackageStore {
     return 'upstream/$name/$name-$version-$digest.tar.gz';
   }
 
+  /// Where an archive waits until its metadata is written. It has three path
+  /// segments, so it is never the default key of a published archive, and a
+  /// package called `staging` does not reach it.
+  String _getStagingKey(String name, String version, String id) {
+    _checkComponents(name, version);
+    PackageStore.checkStagingId(id);
+    return 'staging/$name/$name-$version-$id.tar.gz';
+  }
+
   static void _checkComponents(String name, String version) {
     if (_unsafeComponent.hasMatch(name) || _unsafeComponent.hasMatch(version)) {
       throw ArgumentError('unsafe package name or version');
@@ -111,10 +124,56 @@ class S3Store extends PackageStore {
   }
 
   @override
-  Future<bool> exists(String name, String version) async {
+  Future<void> stageArchive(
+      String name, String version, String id, List<int> content) async {
+    await _minio.putObject(
+      bucketName,
+      _getStagingKey(name, version, id),
+      Stream.value(Uint8List.fromList(content)),
+      size: content.length,
+    );
+  }
+
+  /// A failure to delete the staged object only leaves it for reclamation.
+  @override
+  Future<void> commitStaged(String name, String version, String id,
+      {bool replace = false}) async {
+    final target = _getObjectKey(name, version);
+    final staged = _getStagingKey(name, version, id);
+    if (!replace && await _objectExists(target)) {
+      throw ArchiveExistsException(name, version);
+    }
+    // The copy source goes into a header as it is, where a `+` in a version
+    // would be read as a space.
+    final source = staged.split('/').map(Uri.encodeComponent).join('/');
+    await _minio.copyObject(bucketName, target, '/$bucketName/$source');
     try {
-      await _minio.statObject(bucketName, _getObjectKey(name, version),
-          retrieveAcls: false);
+      await _minio.removeObject(bucketName, staged);
+    } catch (error, stackTrace) {
+      _log.warning(
+          LogEvent('failed to delete a staged archive',
+              {'name': name, 'version': version}),
+          error,
+          stackTrace);
+    }
+  }
+
+  @override
+  Future<void> discardStaged(String name, String version, String id) async {
+    await _minio.removeObject(bucketName, _getStagingKey(name, version, id));
+  }
+
+  @override
+  Future<bool> hasCommittedArchive(String name, String version) =>
+      exists(name, version);
+
+  @override
+  Future<bool> exists(String name, String version) =>
+      _objectExists(_getObjectKey(name, version));
+
+  Future<bool> _objectExists(String key) async {
+    try {
+      await _minio.statObject(bucketName, key, retrieveAcls: false);
       return true;
     } on MinioS3Error catch (error) {
       if (error.response?.statusCode == HttpStatus.notFound) return false;
@@ -147,17 +206,8 @@ class S3Store extends PackageStore {
 
   @override
   Future<bool> upstreamCached(
-      String name, String version, String digest) async {
-    try {
-      await _minio.statObject(
-          bucketName, _getUpstreamKey(name, version, digest),
-          retrieveAcls: false);
-      return true;
-    } on MinioS3Error catch (error) {
-      if (error.response?.statusCode == HttpStatus.notFound) return false;
-      rethrow;
-    }
-  }
+          String name, String version, String digest) async =>
+      _objectExists(_getUpstreamKey(name, version, digest));
 
   @override
   Stream<List<int>> downloadUpstream(

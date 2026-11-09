@@ -45,6 +45,48 @@ class FileStore extends PackageStore {
   Future<bool> exists(String name, String version) =>
       _getTarballFile(name, version).exists();
 
+  File _getStagedFile(String name, String version, String id) {
+    PackageStore.checkStagingId(id);
+    return File('${_getTarballFile(name, version).path}.$id.staging');
+  }
+
+  @override
+  Future<void> stageArchive(
+      String name, String version, String id, List<int> content) async {
+    final file = _getStagedFile(name, version, id);
+    await file.parent.create(recursive: true);
+    final output = await file.open(mode: FileMode.writeOnly);
+    try {
+      await output.writeFrom(content);
+      await output.flush();
+    } finally {
+      await output.close();
+    }
+  }
+
+  @override
+  Future<void> commitStaged(String name, String version, String id,
+      {bool replace = false}) async {
+    final target = _getTarballFile(name, version);
+    if (!replace && await target.exists()) {
+      throw ArchiveExistsException(name, version);
+    }
+    await _getStagedFile(name, version, id).rename(target.path);
+  }
+
+  @override
+  Future<void> discardStaged(String name, String version, String id) async {
+    try {
+      await _getStagedFile(name, version, id).delete();
+    } on PathNotFoundException {
+      // Never written, or already committed.
+    }
+  }
+
+  @override
+  Future<bool> hasCommittedArchive(String name, String version) =>
+      exists(name, version);
+
   @override
   Stream<List<int>> download(String name, String version) {
     return _getTarballFile(name, version).openRead();

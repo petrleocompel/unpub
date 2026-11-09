@@ -556,6 +556,7 @@ class App {
 
     String? uploadKey;
     (String, String, String)? reservation;
+    (String, String, String)? staged;
     try {
       var tarballBytes = await _readUploadedArchive(req);
       var tarBytes = publishPolicy.inflate(tarballBytes);
@@ -635,9 +636,6 @@ class App {
           package?.versions.any((item) => item.version == version) ?? false;
       final archiveHash = sha256.convert(tarballBytes).toString();
 
-      // Upload package tarball to storage
-      await packageStore.upload(name, version, tarballBytes);
-
       String? readme;
       String? changelog;
       if (readmeFile != null) {
@@ -646,6 +644,12 @@ class App {
       if (changelogFile != null) {
         changelog = utf8.decode(changelogFile.content);
       }
+
+      // Nothing can be downloaded from here. A publish that stalled past its
+      // reservation can still get this far, so the final path has to wait for
+      // the metadata write that only one publish can win.
+      staged = (name, version, claim);
+      await _stageArchive(name, version, claim, tarballBytes);
 
       // Write package meta to database
       var unpubVersion = UnpubVersion(
@@ -660,9 +664,14 @@ class App {
       );
       if (isReplacement) {
         await metaStore.replaceVersion(name, unpubVersion);
-      } else if (!await metaStore.addVersion(name, unpubVersion)) {
-        throw PublishPolicy.duplicateVersion(name, version);
+      } else {
+        await _checkNotStoredYet(name, version);
+        if (!await metaStore.addVersion(name, unpubVersion)) {
+          throw PublishPolicy.duplicateVersion(name, version);
+        }
       }
+      await _commitStaged(name, version, claim, replace: isReplacement);
+      staged = null;
       await _audit(req, principal, 'package.published', '$name@$version', {
         'uploader': uploader,
       });
@@ -679,8 +688,87 @@ class App {
           '?error=${Uri.encodeQueryComponent('$err')}'
           '${err is _UploadRetryLater ? '&retryable=true' : ''}'));
     } finally {
+      if (staged != null) await _discardStaged(staged);
       if (reservation != null) await _releaseReservation(reservation);
       if (uploadKey != null) _uploadsInProgress.remove(uploadKey);
+    }
+  }
+
+  /// Stores [content] for publishing, within `publish.uploadTimeout` so that
+  /// a stalled write fails before its reservation can expire. The reservation
+  /// is renewed once, halfway through.
+  Future<void> _stageArchive(
+      String name, String version, String claim, List<int> content) async {
+    final limit = publishPolicy.config.uploadTimeout;
+    final renewal = Timer(limit ~/ 2, () {
+      metaStore.renewUpload(name, version, claim).then((held) {
+        if (!held) {
+          _log.warning(LogEvent('an upload reservation expired during a write',
+              {'name': name, 'version': version}));
+        }
+      }, onError: (Object error, StackTrace stackTrace) {
+        _log.warning(
+            LogEvent('failed to renew an upload reservation',
+                {'name': name, 'version': version}),
+            error,
+            stackTrace);
+      });
+    });
+    final write = packageStore.stageArchive(name, version, claim, content);
+    try {
+      await write.timeout(limit);
+    } on TimeoutException {
+      // A write that is still running can create its file after the caller
+      // has cleaned up, so it gets cleaned up again when it ends.
+      unawaited(write.then((_) => _discardStaged((name, version, claim)),
+          onError: (_) {}));
+      throw const _UploadRetryLater(
+          'storing the archive exceeded publish.uploadTimeout, try again');
+    } finally {
+      renewal.cancel();
+    }
+  }
+
+  /// Refuses a new version whose final path already holds an archive, before
+  /// the metadata changes. If the version is published, this upload simply
+  /// lost the race for it. If it is not, the archive came from somewhere else.
+  Future<void> _checkNotStoredYet(String name, String version) async {
+    if (!await packageStore.hasCommittedArchive(name, version)) return;
+    final current = await metaStore.queryPackage(name);
+    if (current?.versions.any((item) => item.version == version) ?? false) {
+      throw PublishPolicy.duplicateVersion(name, version);
+    }
+    _log.severe(LogEvent(
+        'an archive exists for a version that is not published',
+        {'name': name, 'version': version}));
+    throw ArchiveExistsException(name, version);
+  }
+
+  Future<void> _commitStaged(String name, String version, String claim,
+      {required bool replace}) async {
+    try {
+      await packageStore.commitStaged(name, version, claim, replace: replace);
+    } catch (error, stackTrace) {
+      _log.severe(
+          LogEvent('a published version has no archive in storage',
+              {'name': name, 'version': version}),
+          error,
+          stackTrace);
+      rethrow;
+    }
+  }
+
+  /// A staged archive that cannot be deleted is reclaimed later.
+  Future<void> _discardStaged((String, String, String) staged) async {
+    final (name, version, claim) = staged;
+    try {
+      await packageStore.discardStaged(name, version, claim);
+    } catch (error, stackTrace) {
+      _log.warning(
+          LogEvent('failed to discard a staged archive',
+              {'name': name, 'version': version}),
+          error,
+          stackTrace);
     }
   }
 

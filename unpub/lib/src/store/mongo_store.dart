@@ -3,6 +3,7 @@ import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:unpub/src/models.dart';
 
+import '../config/config.dart' show uploadReservationTtl;
 import 'meta_store.dart';
 import 'mongo_indexes.dart';
 
@@ -12,10 +13,6 @@ final versionStatsCollection = 'version_stats';
 final uploadReservationsCollection = 'upload_reservations';
 
 const _duplicateKeyCode = 11000;
-
-/// How long a reservation outlives a server that died while holding it. The
-/// archive write and metadata update it covers take far less than this.
-const _uploadReservationTtl = Duration(minutes: 15);
 
 final _log = Logger('unpub.mongo');
 
@@ -126,11 +123,24 @@ class MongoStore extends MetaStore {
       'version': version,
       'reservation': reservation,
       'createdAt': now,
-      'expiresAt': now.add(_uploadReservationTtl),
+      'expiresAt': now.add(uploadReservationTtl),
     });
     if (result.writeError?.code == _duplicateKeyCode) return null;
     _checkWrite(result, 'reserve upload');
     return reservation;
+  }
+
+  @override
+  Future<bool> renewUpload(
+      String name, String version, String reservation) async {
+    final result = await db.collection(uploadReservationsCollection).updateOne(
+        where
+            .eq('name', name)
+            .eq('version', version)
+            .eq('reservation', reservation),
+        modify.set('expiresAt', DateTime.now().add(uploadReservationTtl)));
+    _checkWrite(result, 'renew upload');
+    return result.nMatched == 1;
   }
 
   @override

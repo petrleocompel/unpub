@@ -18,7 +18,14 @@ abstract class MetaStore {
   /// Returns what to pass to [releaseUpload], or null if another request holds
   /// the claim. A store shared by one process can keep this default, because
   /// [App] already serializes publishes within a process.
-  Future<String?> reserveUpload(String name, String version) async => '';
+  Future<String?> reserveUpload(String name, String version) async =>
+      DateTime.now().microsecondsSinceEpoch.toString();
+
+  /// Extends a claim made by [reserveUpload], and returns whether it was still
+  /// held.
+  Future<bool> renewUpload(
+          String name, String version, String reservation) async =>
+      true;
 
   /// Gives up a claim made by [reserveUpload].
   Future<void> releaseUpload(

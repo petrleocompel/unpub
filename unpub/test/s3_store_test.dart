@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:minio/minio.dart';
+import 'package:minio/models.dart' as s3;
 import 'package:path/path.dart' as path;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
@@ -203,6 +204,27 @@ void main() {
     });
   });
 
+  group('committing a staged archive', () {
+    test('quotes the copy source, in which a + would read as a space',
+        () async {
+      var minio = FakeMinio();
+      await S3Store(s3Bucket, minio: minio)
+          .commitStaged('fine', '1.0.0+1', 'r1', replace: true);
+      expect(minio.copies.single, [
+        'fine/fine-1.0.0+1.tar.gz',
+        '/$s3Bucket/staging/fine/fine-1.0.0%2B1-r1.tar.gz',
+      ]);
+      expect(minio.removed.single, 'staging/fine/fine-1.0.0+1-r1.tar.gz');
+    });
+
+    test('a staged object that cannot be removed does not fail it', () async {
+      var minio = FakeMinio()..removeError = MinioError('Access Denied');
+      await S3Store(s3Bucket, minio: minio)
+          .commitStaged('fine', '1.0.0', 'r1', replace: true);
+      expect(minio.copies, hasLength(1));
+    });
+  });
+
   group('object keys', () {
     final store = S3Store(s3Bucket,
         region: 'us-east-1', credentials: mockCredentials, environment: {});
@@ -220,6 +242,13 @@ void main() {
             throwsA(isA<ArgumentError>()));
         await expectLater(store.download(unsafe[0], unsafe[1]).drain<void>(),
             throwsA(isA<ArgumentError>()));
+      });
+    }
+
+    for (var unsafe in ['', '../x', 'a/b']) {
+      test('rejects "$unsafe" as a staging id', () async {
+        await expectLater(
+            store.discardStaged('fine', '1.0.0', unsafe), throwsArgumentError);
       });
     }
 
@@ -295,6 +324,53 @@ void main() {
       expect(await store.upstreamCached(name, '1.0.0', digest), isFalse);
     });
 
+    test('a staged publish is committed to the legacy key', () async {
+      final name = 'staged_${DateTime.now().microsecondsSinceEpoch}';
+      var store = S3Store(s3Bucket, minio: minio);
+
+      await store.stageArchive(name, '1.0.0', 'r1', testPackageData);
+      expect(await store.exists(name, '1.0.0'), isFalse);
+      await minio.statObject(s3Bucket, 'staging/$name/$name-1.0.0-r1.tar.gz');
+
+      await store.commitStaged(name, '1.0.0', 'r1');
+
+      expect(
+          await collectBytes(store.download(name, '1.0.0')), testPackageData);
+      expect(await store.hasCommittedArchive(name, '1.0.0'), isTrue);
+      await minio.statObject(s3Bucket, '$name/$name-1.0.0.tar.gz');
+      var listed =
+          await minio.listAllObjects(s3Bucket, prefix: 'staging/$name/');
+      expect(listed.objects, isEmpty);
+    });
+
+    test('commit never overwrites unless replacing', () async {
+      final name = 'staged_${DateTime.now().microsecondsSinceEpoch}';
+      var store = S3Store(s3Bucket, minio: minio);
+      await store.upload(name, '1.0.0', testPackageData);
+      await store.stageArchive(name, '1.0.0', 'r1', testPackageData2);
+
+      await expectLater(store.commitStaged(name, '1.0.0', 'r1'),
+          throwsA(isA<ArchiveExistsException>()));
+      expect(
+          await collectBytes(store.download(name, '1.0.0')), testPackageData);
+
+      await store.commitStaged(name, '1.0.0', 'r1', replace: true);
+      expect(
+          await collectBytes(store.download(name, '1.0.0')), testPackageData2);
+    });
+
+    test('discarding is safe to repeat', () async {
+      final name = 'staged_${DateTime.now().microsecondsSinceEpoch}';
+      var store = S3Store(s3Bucket, minio: minio);
+      await store.discardStaged(name, '1.0.0', 'r1');
+      await store.stageArchive(name, '1.0.0', 'r1', testPackageData);
+      await store.discardStaged(name, '1.0.0', 'r1');
+      await store.discardStaged(name, '1.0.0', 'r1');
+      var listed =
+          await minio.listAllObjects(s3Bucket, prefix: 'staging/$name/');
+      expect(listed.objects, isEmpty);
+    });
+
     test('exists reflects the stored objects', () async {
       var store = S3Store(s3Bucket, minio: minio);
       await store.upload('exists_package', '1.0.0', testPackageData);
@@ -342,6 +418,7 @@ class FakeMinio extends Minio {
   Object? removeError;
   final written = <String>[];
   final removed = <String>[];
+  final copies = <List<String>>[];
 
   FakeMinio()
       : super(
@@ -367,6 +444,17 @@ class FakeMinio extends Minio {
     if (putError != null) throw putError!;
     written.add(object);
     return 'etag';
+  }
+
+  @override
+  Future<s3.CopyObjectResult> copyObject(
+    String bucket,
+    String object,
+    String srcObject, [
+    s3.CopyConditions? conditions,
+  ]) async {
+    copies.add([object, srcObject]);
+    return s3.CopyObjectResult('etag', DateTime.now());
   }
 
   @override

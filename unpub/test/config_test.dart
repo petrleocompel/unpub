@@ -500,6 +500,7 @@ logging:
       expect(publish.rejectOlderThanLatest, isFalse);
       expect(publish.requireVersionBump, isTrue);
       expect(publish.retractionWindow, const Duration(days: 7));
+      expect(publish.uploadTimeout, const Duration(minutes: 10));
     });
 
     test('reads the file', () {
@@ -511,6 +512,7 @@ publish:
   rejectOlderThanLatest: true
   requireVersionBump: false
   retractionWindow: 30d
+  uploadTimeout: 5m
 ''').publish;
       expect(publish.allowedNamePrefixes, ['acme_', 'corp_']);
       expect(publish.maxArchiveBytes, 1024);
@@ -518,6 +520,7 @@ publish:
       expect(publish.rejectOlderThanLatest, isTrue);
       expect(publish.requireVersionBump, isFalse);
       expect(publish.retractionWindow, const Duration(days: 30));
+      expect(publish.uploadTimeout, const Duration(minutes: 5));
     });
 
     test('reads the environment', () {
@@ -643,6 +646,10 @@ upstream:
       'upstream:\n  timeout: 0\n': 'upstream.timeout',
       'upstream:\n  allowlist: [Not-A-Package]\n': 'upstream.allowlist',
       'publish:\n  maxUnpackedBytes: 0\n': 'publish.maxUnpackedBytes',
+      'publish:\n  uploadTimeout: soon\n': 'publish.uploadTimeout',
+      'publish:\n  uploadTimeout: 0\n': 'publish.uploadTimeout',
+      'publish:\n  uploadTimeout: 15m\n': 'publish.uploadTimeout',
+      'publish:\n  uploadTimeout: 1h\n': 'publish.uploadTimeout',
       'upstream:\n  maxArchiveBytes: 0\n': 'upstream.maxArchiveBytes',
       'upstream:\n  maxConcurrentFetches: 0\n': 'upstream.maxConcurrentFetches',
       'upstream:\n  allowedArchiveHosts: [https://cdn.example.com]\n':

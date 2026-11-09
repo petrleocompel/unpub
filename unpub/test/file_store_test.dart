@@ -133,6 +133,95 @@ void main() {
     });
   });
 
+  group('staging a publish', () {
+    File finalFile(Directory baseDir) =>
+        File(path.join(baseDir.path, 'foo-1.0.0.tar.gz'));
+    File stagedFile(Directory baseDir, [String id = 'r1']) =>
+        File(path.join(baseDir.path, 'foo-1.0.0.tar.gz.$id.staging'));
+
+    test('stages next to the final path without publishing', () async {
+      var baseDir = setupFixture('stage-next');
+      var store = unpub.FileStore(baseDir.path);
+      await store.stageArchive('foo', '1.0.0', 'r1', [1, 2]);
+      expect(stagedFile(baseDir).readAsBytesSync(), [1, 2]);
+      expect(finalFile(baseDir).existsSync(), isFalse);
+      expect(await store.exists('foo', '1.0.0'), isFalse);
+    });
+
+    test('commit moves it to the legacy path and leaves nothing', () async {
+      var baseDir = setupFixture('stage-commit');
+      var store = unpub.FileStore(baseDir.path);
+      await store.stageArchive('foo', '1.0.0', 'r1', [1, 2]);
+      await store.commitStaged('foo', '1.0.0', 'r1');
+      expect(finalFile(baseDir).readAsBytesSync(), [1, 2]);
+      expect(baseDir.listSync(), hasLength(1));
+    });
+
+    test('commit never overwrites unless replacing', () async {
+      var baseDir = setupFixture('stage-conflict');
+      var store = unpub.FileStore(baseDir.path);
+      await store.upload('foo', '1.0.0', [9]);
+      await store.stageArchive('foo', '1.0.0', 'r1', [1, 2]);
+      expect(await store.hasCommittedArchive('foo', '1.0.0'), isTrue);
+
+      await expectLater(store.commitStaged('foo', '1.0.0', 'r1'),
+          throwsA(isA<unpub.ArchiveExistsException>()));
+      expect(finalFile(baseDir).readAsBytesSync(), [9]);
+
+      await store.commitStaged('foo', '1.0.0', 'r1', replace: true);
+      expect(finalFile(baseDir).readAsBytesSync(), [1, 2]);
+    });
+
+    test('discarding is safe to repeat', () async {
+      var baseDir = setupFixture('stage-discard');
+      var store = unpub.FileStore(baseDir.path);
+      await store.discardStaged('foo', '1.0.0', 'r1');
+      await store.stageArchive('foo', '1.0.0', 'r1', [1]);
+      await store.discardStaged('foo', '1.0.0', 'r1');
+      await store.discardStaged('foo', '1.0.0', 'r1');
+      expect(baseDir.listSync(), isEmpty);
+    });
+
+    test('two attempts at one version stage separately', () async {
+      var baseDir = setupFixture('stage-two');
+      var store = unpub.FileStore(baseDir.path);
+      await store.stageArchive('foo', '1.0.0', 'r1', [1]);
+      await store.stageArchive('foo', '1.0.0', 'r2', [2]);
+      expect(stagedFile(baseDir, 'r1').readAsBytesSync(), [1]);
+      expect(stagedFile(baseDir, 'r2').readAsBytesSync(), [2]);
+    });
+
+    test('works with a custom layout', () async {
+      var baseDir = setupFixture('stage-custom');
+      var store = unpub.FileStore(baseDir.path, getFilePath: newFilePathFunc());
+      await store.stageArchive('test_package', '1.0.0', 'r1', [1]);
+      await store.commitStaged('test_package', '1.0.0', 'r1');
+      expect(await collectBytes(store.download('test_package', '1.0.0')), [1]);
+    });
+
+    for (var unsafe in ['', '../x', 'a/b', 'a.b']) {
+      test('refuses "$unsafe" as a staging id', () async {
+        var store = unpub.FileStore(setupFixture('stage-id').path);
+        await expectLater(store.stageArchive('foo', '1.0.0', unsafe, [1]),
+            throwsArgumentError);
+      });
+    }
+
+    test('a store with only upload publishes at commit', () async {
+      var store = _UploadOnlyStore();
+      await store.stageArchive('foo', '1.0.0', 'r1', [1]);
+      expect(store.uploaded, isEmpty);
+      await store.commitStaged('foo', '1.0.0', 'r1');
+      expect(store.uploaded, ['foo@1.0.0']);
+      expect(await store.hasCommittedArchive('foo', '1.0.0'), isFalse);
+
+      await store.stageArchive('foo', '2.0.0', 'r2', [1]);
+      await store.discardStaged('foo', '2.0.0', 'r2');
+      await expectLater(
+          store.commitStaged('foo', '2.0.0', 'r2'), throwsStateError);
+    });
+  });
+
   group('upstream namespace', () {
     const data = [1, 2, 3];
     final digest = digestOf(data);
@@ -242,6 +331,15 @@ void main() {
           throwsArgumentError);
     });
   });
+}
+
+class _UploadOnlyStore extends unpub.PackageStore {
+  final uploaded = <String>[];
+
+  @override
+  Future<void> upload(String name, String version, List<int> content) async {
+    uploaded.add('$name@$version');
+  }
 }
 
 String Function(String, String) newFilePathFunc() {

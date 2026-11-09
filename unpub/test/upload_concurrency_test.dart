@@ -21,12 +21,34 @@ class _PausingStore extends FileStore {
   _PausingStore(super.baseDir);
 
   @override
-  Future<void> upload(String name, String version, List<int> content) async {
-    reached?.complete();
+  Future<void> stageArchive(
+      String name, String version, String id, List<int> content) async {
+    if (reached?.isCompleted == false) reached!.complete();
     await resume?.future;
     final error = failure;
     if (error != null) throw error;
-    await super.upload(name, version, content);
+    await super.stageArchive(name, version, id, content);
+  }
+}
+
+/// A [MongoStore] that always loses the race for a new version.
+class _LosingMetaStore extends MongoStore {
+  _LosingMetaStore(super.db);
+
+  @override
+  Future<bool> addVersion(String name, UnpubVersion version) async => false;
+}
+
+/// Counts how often a reservation is renewed.
+class _RenewalCountingStore extends MongoStore {
+  int renewals = 0;
+
+  _RenewalCountingStore(super.db);
+
+  @override
+  Future<bool> renewUpload(String name, String version, String reservation) {
+    renewals++;
+    return super.renewUpload(name, version, reservation);
   }
 }
 
@@ -43,9 +65,10 @@ void main() {
     PackageStore? packageStore,
     Future<void> Function(Map<String, dynamic>, String)? uploadValidator,
     PublishConfig publish = const PublishConfig(),
+    MetaStore? metaStore,
   }) =>
       App(
-        metaStore: MongoStore(db),
+        metaStore: metaStore ?? MongoStore(db),
         packageStore: packageStore ?? FileStore(storage.path),
         authenticator: const FakeAuthenticator(_token, 'dev@b.c'),
         publishPolicy: PublishPolicy(publish),
@@ -84,6 +107,13 @@ void main() {
       .collection(uploadReservationsCollection)
       .find(where.eq('name', _name))
       .toList();
+
+  File finalFile() => File('${storage.path}/$_name-1.0.0.tar.gz');
+
+  List<String> stagedFiles() => [
+        for (final entity in storage.listSync())
+          if (entity.path.endsWith('.staging')) entity.path,
+      ];
 
   setUpAll(() async {
     db = Db(testMongoUri);
@@ -231,6 +261,25 @@ void main() {
       expect(File('${storage.path}/$_name-1.0.0.tar.gz').existsSync(), isFalse);
     });
 
+    test('only its holder can renew a reservation', () async {
+      final meta = MongoStore(db);
+      final held = await meta.reserveUpload(_name, '1.0.0');
+      final before = (await reservations()).single['expiresAt'] as DateTime;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(await meta.renewUpload(_name, '1.0.0', 'someone-else'), isFalse);
+      expect((await reservations()).single['expiresAt'], before);
+
+      expect(await meta.renewUpload(_name, '1.0.0', held!), isTrue);
+      expect(
+          ((await reservations()).single['expiresAt'] as DateTime)
+              .isAfter(before),
+          isTrue);
+
+      await meta.releaseUpload(_name, '1.0.0', held);
+      expect(await meta.renewUpload(_name, '1.0.0', held), isFalse);
+    });
+
     test('releasing only drops the reservation of that upload', () async {
       final meta = MongoStore(db);
       final held = await meta.reserveUpload(_name, '1.0.0');
@@ -242,6 +291,147 @@ void main() {
 
       await meta.releaseUpload(_name, '1.0.0', held!);
       expect(await reservations(), isEmpty);
+    });
+  });
+
+  group('staging', () {
+    test('a publisher stalled past its reservation cannot replace the winner',
+        () async {
+      final store = _PausingStore(storage.path)
+        ..reached = Completer<void>()
+        ..resume = Completer<void>();
+      final stalled = upload(buildApp(packageStore: store), 'stalled');
+      await store.reached!.future;
+
+      // What the TTL index does once the reservation has run out.
+      await db
+          .collection(uploadReservationsCollection)
+          .deleteMany(where.eq('name', _name));
+      expect(await upload(buildApp(), 'winner'), isNull);
+      final winnerBytes = finalFile().readAsBytesSync();
+
+      store.resume!.complete();
+
+      expect(await stalled, contains('already exists'));
+      expect(finalFile().readAsBytesSync(), winnerBytes);
+      await expectConsistent('winner');
+      expect(stagedFiles(), isEmpty);
+    });
+
+    test('the final path appears only after the metadata is won', () async {
+      final store = _PausingStore(storage.path)
+        ..reached = Completer<void>()
+        ..resume = Completer<void>();
+      final running = upload(buildApp(packageStore: store), 'first');
+      await store.reached!.future;
+      expect(finalFile().existsSync(), isFalse);
+
+      store.resume!.complete();
+
+      expect(await running, isNull);
+      expect(finalFile().existsSync(), isTrue);
+      expect(stagedFiles(), isEmpty);
+    });
+
+    test('losing the metadata write never touches the final path', () async {
+      final error =
+          await upload(buildApp(metaStore: _LosingMetaStore(db)), 'first');
+
+      expect(error, contains('already exists'));
+      expect(finalFile().existsSync(), isFalse);
+      expect(stagedFiles(), isEmpty);
+    });
+
+    test('an archive no version accounts for is reported, not overwritten',
+        () async {
+      finalFile().writeAsStringSync('left behind');
+
+      final error = await upload(buildApp(), 'first');
+
+      expect(error, contains('storage is corrupt'));
+      expect(finalFile().readAsStringSync(), 'left behind');
+      expect(await db.collection(packageCollection).findOne(), isNull);
+      expect(stagedFiles(), isEmpty);
+      expect(await reservations(), isEmpty);
+    });
+
+    test('a failing write leaves nothing staged', () async {
+      final store = _PausingStore(storage.path)..failure = 'disk full';
+      expect(await upload(buildApp(packageStore: store), 'first'),
+          contains('disk full'));
+      expect(stagedFiles(), isEmpty);
+      expect(finalFile().existsSync(), isFalse);
+    });
+
+    test('replacing a version commits over the old archive', () async {
+      final app =
+          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      expect(await upload(app, 'first'), isNull);
+      final first = finalFile().readAsBytesSync();
+      expect(await upload(app, 'second'), isNull);
+      expect(finalFile().readAsBytesSync(), isNot(first));
+      expect(stagedFiles(), isEmpty);
+    });
+  });
+
+  group('publish.uploadTimeout', () {
+    test('fails a stalled write, retryably, and cleans up after it', () async {
+      final store = _PausingStore(storage.path)
+        ..reached = Completer<void>()
+        ..resume = Completer<void>();
+      final app = buildApp(
+          packageStore: store,
+          publish:
+              const PublishConfig(uploadTimeout: Duration(milliseconds: 200)));
+
+      final response =
+          await app.handler(uploadRequest(pubspec('stalled'), _auth));
+
+      final location = Uri.parse(response.headers['location']!);
+      expect(
+          location.queryParameters['error'], contains('publish.uploadTimeout'));
+      expect(location.queryParameters['retryable'], 'true');
+      expect(await reservations(), isEmpty);
+      expect(await db.collection(packageCollection).findOne(), isNull);
+
+      store.resume!.complete();
+      for (var i = 0; i < 100 && stagedFiles().isNotEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(stagedFiles(), isEmpty);
+      expect(finalFile().existsSync(), isFalse);
+    });
+
+    test('renews the reservation once, halfway through', () async {
+      final store = _PausingStore(storage.path)
+        ..reached = Completer<void>()
+        ..resume = Completer<void>();
+      final app = buildApp(
+          packageStore: store,
+          publish:
+              const PublishConfig(uploadTimeout: Duration(milliseconds: 600)));
+
+      final running = upload(app, 'first');
+      await store.reached!.future;
+      final taken = (await reservations()).single['expiresAt'] as DateTime;
+
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      final renewed = (await reservations()).single['expiresAt'] as DateTime;
+      expect(renewed.isAfter(taken), isTrue);
+
+      store.resume!.complete();
+      expect(await running, isNull);
+    });
+
+    test('a write that finishes in time is not renewed', () async {
+      final store = _RenewalCountingStore(db);
+      final app = buildApp(
+          metaStore: store,
+          publish:
+              const PublishConfig(uploadTimeout: Duration(milliseconds: 200)));
+      expect(await upload(app, 'first'), isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      expect(store.renewals, 0);
     });
   });
 
