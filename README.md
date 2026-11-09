@@ -134,7 +134,7 @@ client_max_body_size 100m;
 | Endpoint | Description |
 | --- | --- |
 | `GET /healthz` | Returns 200 while the process is up. |
-| `GET /readyz` | Checks MongoDB and storage. Returns 200, or 503 with JSON details. |
+| `GET /readyz` | Checks MongoDB and that storage accepts writes, by writing and deleting a probe (on S3, under `.unpub/`). Returns 200, or 503 with JSON details. |
 
 The server logs one line per request to stdout, in text or JSON. On SIGINT or SIGTERM it stops accepting connections, drains requests for up to 30 seconds and closes MongoDB. A second signal exits immediately.
 

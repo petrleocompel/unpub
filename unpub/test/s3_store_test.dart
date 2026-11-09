@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:async/async.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:minio/minio.dart';
 import 'package:path/path.dart' as path;
+import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
 
@@ -151,6 +153,55 @@ void main() {
     });
   });
 
+  group('checkHealth', () {
+    test('writes and removes a probe under the reserved prefix', () async {
+      var minio = FakeMinio();
+      await S3Store(s3Bucket, minio: minio).checkHealth();
+      expect(minio.written.single, startsWith('.unpub/readyz-'));
+      expect(minio.removed, minio.written);
+    });
+
+    test('uses a new probe each time', () async {
+      var minio = FakeMinio();
+      var store = S3Store(s3Bucket, minio: minio);
+      await store.checkHealth();
+      await store.checkHealth();
+      expect(minio.written.toSet(), hasLength(2));
+    });
+
+    test('fails when the bucket rejects writes', () async {
+      var minio = FakeMinio()..putError = MinioError('Access Denied');
+      await expectLater(
+        S3Store(s3Bucket, minio: minio).checkHealth(),
+        throwsA(isA<StateError>().having((e) => e.message, 'message',
+            allOf(contains('write'), contains('Access Denied')))),
+      );
+    });
+
+    test('fails when the bucket rejects deletes', () async {
+      var minio = FakeMinio()..removeError = MinioError('Access Denied');
+      await expectLater(
+        S3Store(s3Bucket, minio: minio).checkHealth(),
+        throwsA(isA<StateError>()
+            .having((e) => e.message, 'message', contains('delete'))),
+      );
+    });
+
+    test('a write failure is reported by readyz', () async {
+      var app = App(
+        metaStore: _HealthyMetaStore(),
+        packageStore: S3Store(s3Bucket,
+            minio: FakeMinio()..putError = MinioError('Access Denied')),
+        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+      );
+      var response = await app
+          .handler(shelf.Request('GET', Uri.parse('http://localhost/readyz')));
+      expect(response.statusCode, HttpStatus.serviceUnavailable);
+      var checks = json.decode(await response.readAsString())['checks'];
+      expect(checks['storage']['error'], contains('Access Denied'));
+    });
+  });
+
   group('object keys', () {
     final store = S3Store(s3Bucket,
         region: 'us-east-1', credentials: mockCredentials, environment: {});
@@ -216,8 +267,10 @@ void main() {
           s3Bucket, newFilePathFunc()('test_package', '2.0.0'));
     });
 
-    test('checkHealth passes for an existing bucket', () async {
+    test('checkHealth passes and leaves no probe behind', () async {
       await S3Store(s3Bucket, minio: minio).checkHealth();
+      var listed = await minio.listAllObjects(s3Bucket, prefix: '.unpub/');
+      expect(listed.objects, isEmpty);
     });
 
     test('checkHealth fails for a missing bucket', () async {
@@ -230,6 +283,74 @@ void main() {
       expect(S3Store(s3Bucket, minio: bad).checkHealth(), throwsA(anything));
     });
   }, skip: s3Endpoint == null ? 'UNPUB_TEST_S3_ENDPOINT is not set' : false);
+}
+
+/// A client for a bucket that exists, with optional write or delete failures.
+class FakeMinio extends Minio {
+  Object? putError;
+  Object? removeError;
+  final written = <String>[];
+  final removed = <String>[];
+
+  FakeMinio()
+      : super(
+            endPoint: 'localhost',
+            accessKey: 'key',
+            secretKey: 'secret',
+            useSSL: false,
+            region: 'us-east-1');
+
+  @override
+  Future<bool> bucketExists(String bucket) async => true;
+
+  @override
+  Future<String> putObject(
+    String bucket,
+    String object,
+    Stream<Uint8List> data, {
+    int? size,
+    int? chunkSize,
+    Map<String, String>? metadata,
+    void Function(int)? onProgress,
+  }) async {
+    if (putError != null) throw putError!;
+    written.add(object);
+    return 'etag';
+  }
+
+  @override
+  Future<void> removeObject(String bucket, String object) async {
+    if (removeError != null) throw removeError!;
+    removed.add(object);
+  }
+}
+
+class _HealthyMetaStore extends MetaStore {
+  @override
+  Future<void> addUploader(String name, String email) async {}
+
+  @override
+  Future<void> addVersion(String name, UnpubVersion version) async {}
+
+  @override
+  void increaseDownloads(String name, String version) {}
+
+  @override
+  Future<UnpubPackage?> queryPackage(String name) async => null;
+
+  @override
+  Future<UnpubQueryResult> queryPackages({
+    required int size,
+    required int page,
+    required String sort,
+    String? keyword,
+    String? uploader,
+    String? dependency,
+  }) async =>
+      UnpubQueryResult(0, []);
+
+  @override
+  Future<void> removeUploader(String name, String email) async {}
 }
 
 Minio createMinio(String accessKey, String secretKey) {

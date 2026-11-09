@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:minio/minio.dart';
@@ -100,11 +102,34 @@ class S3Store extends PackageStore {
     yield* await _minio.getObject(bucketName, _getObjectKey(name, version));
   }
 
-  /// Verifies the bucket is reachable with the configured credentials.
+  /// Verifies the bucket exists and accepts writes and deletes, by storing and
+  /// removing a probe object.
+  ///
+  /// The probe lives under `.unpub/`, a prefix no package name can start with.
   @override
   Future<void> checkHealth() async {
     if (!await _minio.bucketExists(bucketName)) {
       throw StateError('bucket "$bucketName" does not exist');
     }
+    final content = Uint8List.fromList(utf8.encode('ok'));
+    final key = '.unpub/readyz-${_randomId()}';
+    try {
+      await _minio.putObject(bucketName, key, Stream.value(content),
+          size: content.length);
+    } catch (error) {
+      throw StateError('cannot write to bucket "$bucketName": $error');
+    }
+    try {
+      await _minio.removeObject(bucketName, key);
+    } catch (error) {
+      throw StateError('cannot delete from bucket "$bucketName": $error');
+    }
+  }
+
+  static String _randomId() {
+    final random = Random.secure();
+    return List.generate(
+            16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'))
+        .join();
   }
 }
