@@ -40,10 +40,23 @@ class FileStore extends PackageStore {
     return _getTarballFile(name, version).openRead();
   }
 
+  /// Creates [baseDir] if it is missing, and returns whether it did.
+  ///
+  /// Call this once at startup, so that [checkHealth] can report a directory
+  /// that has gone missing instead of quietly recreating it.
+  Future<bool> createBaseDir() async {
+    final directory = Directory(baseDir);
+    if (await directory.exists()) return false;
+    await directory.create(recursive: true);
+    return true;
+  }
+
   /// Verifies [baseDir] exists and is writable by writing a probe file.
   @override
   Future<void> checkHealth() async {
-    await Directory(baseDir).create(recursive: true);
+    if (!await Directory(baseDir).exists()) {
+      throw FileSystemException('storage directory does not exist', baseDir);
+    }
     final stamp = '$pid-${DateTime.now().microsecondsSinceEpoch}';
     final probe = File(path.join(baseDir, '.unpub-health-$stamp'));
     await probe.writeAsString('ok');

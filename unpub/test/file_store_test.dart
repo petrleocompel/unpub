@@ -78,14 +78,39 @@ void main() {
     });
   });
 
-  group('checkHealth', () {
-    test('creates the directory and leaves nothing behind', () async {
-      var baseDir = setupFixture('health-create');
-      var nested = Directory(path.join(baseDir.path, 'missing', 'packages'));
-      await unpub.FileStore(nested.path).checkHealth();
-      expect(nested.existsSync(), isTrue);
-      expect(nested.listSync(), isEmpty);
+  group('createBaseDir', () {
+    test('creates a missing directory once', () async {
+      var baseDir = setupFixture('create-base-dir');
+      var nested = path.join(baseDir.path, 'missing', 'packages');
+      var store = unpub.FileStore(nested);
+      expect(await store.createBaseDir(), isTrue);
+      expect(Directory(nested).existsSync(), isTrue);
+      expect(await store.createBaseDir(), isFalse);
     });
+  });
+
+  group('checkHealth', () {
+    test('passes and leaves nothing behind', () async {
+      var baseDir = setupFixture('health-ok');
+      await unpub.FileStore(baseDir.path).checkHealth();
+      expect(baseDir.listSync(), isEmpty);
+    });
+
+    test('fails for a missing directory without creating it', () async {
+      var baseDir = setupFixture('health-missing');
+      var typo = Directory(path.join(baseDir.path, 'missing', 'packages'));
+      await expectLater(unpub.FileStore(typo.path).checkHealth(),
+          throwsA(isA<FileSystemException>()));
+      expect(typo.parent.existsSync(), isFalse);
+    });
+
+    test('fails when the directory is not writable', () async {
+      var baseDir = setupFixture('health-read-only');
+      await Process.run('chmod', ['555', baseDir.path]);
+      addTearDown(() => Process.run('chmod', ['755', baseDir.path]));
+      await expectLater(unpub.FileStore(baseDir.path).checkHealth(),
+          throwsA(isA<FileSystemException>()));
+    }, skip: Platform.isWindows ? 'needs POSIX permissions' : false);
 
     test('fails when the path cannot hold a directory', () async {
       var baseDir = setupFixture('health-blocked');

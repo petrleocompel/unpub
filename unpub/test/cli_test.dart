@@ -177,6 +177,7 @@ logging:
       expect(collected, contains(contains('"stopped"')));
       expect(collected.where((l) => l.contains('"path":"/healthz"')),
           hasLength(1));
+      expect(collected, contains(contains('"created storage directory"')));
     }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }

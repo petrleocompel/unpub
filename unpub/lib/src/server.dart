@@ -7,6 +7,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'app.dart';
 import 'auth/authenticator.dart';
 import 'config/config.dart';
+import 'logging.dart';
 import 'redact.dart';
 import 'store/aws_credentials.dart';
 import 'store/file_store.dart';
@@ -78,7 +79,15 @@ class UnpubServer {
 
   static Future<PackageStore> _createPackageStore(StorageConfig storage) async {
     final s3 = storage.s3;
-    if (s3 == null) return FileStore(storage.file.path);
+    if (s3 == null) {
+      final path = storage.file.path;
+      final store = FileStore(path);
+      final created = await store.createBaseDir();
+      _log.info(LogEvent(
+          created ? 'created storage directory' : 'using storage directory',
+          {'path': path}));
+      return store;
+    }
     return S3Store(
       s3.bucket,
       region: s3.region,

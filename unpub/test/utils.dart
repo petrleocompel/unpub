@@ -32,6 +32,7 @@ Future<HttpServer> createServer(
 }) async {
   final db = Db(testMongoUri);
   await db.open();
+  await Directory(baseDir).create(recursive: true);
 
   final app = unpub.App(
     metaStore: unpub.MongoStore(db),
