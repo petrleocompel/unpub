@@ -71,9 +71,9 @@ class MongoStore extends MetaStore {
       db
           .collection(packageCollection)
           .update(_selectByName(name), modify.inc('download', 1)),
-      db
-          .collection(statsCollection)
-          .update(_selectByName(name), modify.inc('d$today', 1)),
+      db.collection(statsCollection).update(_selectByName(name),
+          modify.inc('d$today', 1).setOnInsert('name', name),
+          upsert: true),
     ]).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
       // Counting is best effort and must not fail the download.
       _log.warning('failed to count download of $name', error, stackTrace);

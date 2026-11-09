@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
@@ -440,6 +441,37 @@ void main() {
         download = (await readMeta(package0))['download'] as int;
       }
       expect(download, 1);
+    });
+
+    test('daily stats are created on a fresh database', () async {
+      Future<Map<String, dynamic>?> findStats() =>
+          db.collection(statsCollection).findOne(where.eq('name', package1));
+
+      await pubPublish(package1, '0.0.1');
+      expect(await findStats(), isNull);
+
+      Future<void> downloadAndWait(int expected) async {
+        await http.get(
+          baseUri.resolve('/packages/$package1/versions/0.0.1.tar.gz'),
+          headers: {'user-agent': 'Dart pub 3.12.0'},
+        );
+        var today = DateFormat('yyyyMMdd').format(DateTime.now());
+        Map<String, dynamic>? stats;
+        for (var i = 0; i < 50 && stats?['d$today'] != expected; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          stats = await findStats();
+        }
+        stats!.remove('_id');
+        expect(stats, {'name': package1, 'd$today': expected});
+      }
+
+      await downloadAndWait(1);
+      await downloadAndWait(2);
+      expect(
+          await db
+              .collection(statsCollection)
+              .count(where.eq('name', package1)),
+          1);
     });
 
     test('dart pub get resolves the published package', () async {
