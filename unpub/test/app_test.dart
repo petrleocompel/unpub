@@ -202,6 +202,38 @@ void main() {
   });
 
   group('uploader requests', () {
+    final requests = [
+      () => shelf.Request(
+          'POST', Uri.parse('http://internal:4000/api/packages/fine/uploaders'),
+          headers: authorized, body: 'email=new%40b.c'),
+      () => shelf.Request(
+          'DELETE',
+          Uri.parse(
+              'http://internal:4000/api/packages/fine/uploaders/new%40b.c'),
+          headers: authorized),
+    ];
+    UnpubPackage packageWith(List<String>? uploaders) => UnpubPackage(
+        'fine', [], true, uploaders, DateTime.now(), DateTime.now(), 0);
+
+    for (var request in requests) {
+      test('${request().method} needs an uploaders list', () async {
+        metaStore.package = packageWith(null);
+        var response = await createApp().handler(request());
+        expect(response.statusCode, HttpStatus.forbidden);
+      });
+
+      test('${request().method} needs an existing package', () async {
+        var response = await createApp().handler(request());
+        expect(response.statusCode, HttpStatus.forbidden);
+      });
+
+      test('${request().method} needs the operator listed', () async {
+        metaStore.package = packageWith(['other@b.c']);
+        var response = await createApp().handler(request());
+        expect(response.statusCode, HttpStatus.forbidden);
+      });
+    }
+
     test('adding without an email is a 400', () async {
       var response = await createApp().handler(shelf.Request(
           'POST', Uri.parse('http://internal:4000/api/packages/fine/uploaders'),

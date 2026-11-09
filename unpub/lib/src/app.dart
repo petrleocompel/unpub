@@ -421,12 +421,12 @@ class App {
     var email = Uri.splitQueryString(await req.readAsString())['email'];
     if (email == null) return _badRequest('email is required');
 
-    var package = await metaStore.queryPackage(name);
+    var uploaders = (await metaStore.queryPackage(name))?.uploaders;
 
-    if (package?.uploaders?.contains(operatorEmail) == false) {
+    if (uploaders == null || !uploaders.contains(operatorEmail)) {
       return _badRequest('no permission', status: HttpStatus.forbidden);
     }
-    if (package?.uploaders?.contains(email) == true) {
+    if (uploaders.contains(email)) {
       return _badRequest('email already exists');
     }
 
@@ -444,13 +444,12 @@ class App {
 
     email = Uri.decodeComponent(email);
 
-    var package = await metaStore.queryPackage(name);
+    var uploaders = (await metaStore.queryPackage(name))?.uploaders;
 
-    // TODO: null
-    if (package?.uploaders?.contains(operatorEmail) == false) {
+    if (uploaders == null || !uploaders.contains(operatorEmail)) {
       return _badRequest('no permission', status: HttpStatus.forbidden);
     }
-    if (package?.uploaders?.contains(email) == false) {
+    if (!uploaders.contains(email)) {
       return _badRequest('email not uploader');
     }
 
