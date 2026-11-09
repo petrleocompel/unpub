@@ -343,7 +343,31 @@ class _HealthyMetaStore extends MetaStore {
   Future<void> addUploader(String name, String email) async {}
 
   @override
-  Future<void> addVersion(String name, UnpubVersion version) async {}
+  Future<bool> addVersion(String name, UnpubVersion version) async => true;
+
+  @override
+  Future<void> replaceVersion(String name, UnpubVersion version) async {}
+
+  @override
+  Future<int> versionDownloads(String name, String version) async => 0;
+
+  @override
+  Future<bool> setVersionRetracted(
+    String name,
+    String version, {
+    required bool retracted,
+    DateTime? retractedAt,
+    String? retractedBy,
+  }) async =>
+      true;
+
+  @override
+  Future<void> setDiscontinued(
+    String name, {
+    required bool discontinued,
+    String? replacedBy,
+    DateTime? discontinuedAt,
+  }) async {}
 
   @override
   void increaseDownloads(String name, String version) {}
@@ -359,6 +383,7 @@ class _HealthyMetaStore extends MetaStore {
     String? keyword,
     String? uploader,
     String? dependency,
+    bool includeDiscontinued = true,
   }) async =>
       UnpubQueryResult(0, []);
 
