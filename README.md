@@ -10,8 +10,8 @@ Unpub is a self-hosted private Dart Pub server for teams, with a simple web inte
 
 ```sh
 cat > .env <<EOT
-UNPUB_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
-UNPUB_PUBLIC_URL=http://localhost:4000
+UNPUB_AUTH_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
+UNPUB_SERVER_PUBLIC_URL=http://localhost:4000
 EOT
 
 docker compose up -d --build
@@ -23,7 +23,7 @@ curl http://localhost:4000/readyz
 Give the Dart client the token and set the server in the package's `pubspec.yaml`:
 
 ```sh
-dart pub token add http://localhost:4000 # paste the value of UNPUB_BOOTSTRAP_TOKEN
+dart pub token add http://localhost:4000 # paste the value of UNPUB_AUTH_BOOTSTRAP_TOKEN
 ```
 
 ```yaml

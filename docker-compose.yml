@@ -1,7 +1,7 @@
 # Runs unpub with MongoDB. Configure it with an .env file next to this one:
 #
-#   UNPUB_BOOTSTRAP_TOKEN=a-long-random-token
-#   UNPUB_PUBLIC_URL=https://pub.example.com
+#   UNPUB_AUTH_BOOTSTRAP_TOKEN=a-long-random-token
+#   UNPUB_SERVER_PUBLIC_URL=https://pub.example.com
 services:
   unpub:
     build: .
@@ -13,9 +13,11 @@ services:
       - "4000:4000"
     environment:
       UNPUB_MONGO_URI: mongodb://mongo:27017/dart_pub
-      UNPUB_SERVER_PUBLIC_URL: ${UNPUB_PUBLIC_URL:-http://localhost:4000}
-      UNPUB_AUTH_BOOTSTRAP_TOKEN: ${UNPUB_BOOTSTRAP_TOKEN:-}
-      UNPUB_AUTH_BOOTSTRAP_EMAIL: ${UNPUB_BOOTSTRAP_EMAIL:-admin@localhost}
+      UNPUB_SERVER_PUBLIC_URL: ${UNPUB_SERVER_PUBLIC_URL:-http://localhost:4000}
+      UNPUB_AUTH_BOOTSTRAP_TOKEN: ${UNPUB_AUTH_BOOTSTRAP_TOKEN:-}
+      UNPUB_AUTH_BOOTSTRAP_EMAIL: ${UNPUB_AUTH_BOOTSTRAP_EMAIL:-admin@localhost}
+      UNPUB_AUTH_READ_ACCESS: ${UNPUB_AUTH_READ_ACCESS:-public}
+      UNPUB_AUTH_READ_TOKENS: ${UNPUB_AUTH_READ_TOKENS:-}
     volumes:
       - unpub-packages:/data/packages
 

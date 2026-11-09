@@ -4,6 +4,7 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
+import 'package:yaml/yaml.dart';
 
 const s3Yaml = '''
 storage:
@@ -264,6 +265,51 @@ logging:
         expect(error.toString(), isNot(contains('hunter2')));
       }
     });
+  });
+
+  group('documented environment variables', () {
+    final repository = path.dirname(Directory.current.path);
+    final compose = loadYaml(
+        File(path.join(repository, 'docker-compose.yml')).readAsStringSync());
+    final environment = (compose['services']['unpub']['environment'] as YamlMap)
+        .cast<String, String>();
+
+    test('compose passes each variable through under its own name', () {
+      for (var entry in environment.entries) {
+        var reference = RegExp(r'^\$\{(\w+)').firstMatch(entry.value);
+        if (reference != null) expect(reference.group(1), entry.key);
+      }
+    });
+
+    test('compose values reach the config', () {
+      var config = parse(null, env: {
+        'UNPUB_SERVER_PUBLIC_URL': 'https://pub.example.com',
+        'UNPUB_AUTH_BOOTSTRAP_TOKEN': 'token',
+        'UNPUB_AUTH_BOOTSTRAP_EMAIL': 'ops@example.com',
+        'UNPUB_AUTH_READ_ACCESS': 'authenticated',
+        'UNPUB_AUTH_READ_TOKENS': 'reader',
+      });
+      expect(
+          environment.keys,
+          containsAll([
+            'UNPUB_SERVER_PUBLIC_URL',
+            'UNPUB_AUTH_BOOTSTRAP_TOKEN',
+            'UNPUB_AUTH_BOOTSTRAP_EMAIL',
+            'UNPUB_AUTH_READ_ACCESS',
+            'UNPUB_AUTH_READ_TOKENS',
+          ]));
+      expect(config.server.publicUrl.toString(), 'https://pub.example.com');
+      expect(config.auth.bootstrapToken, 'token');
+      expect(config.auth.bootstrapEmail, 'ops@example.com');
+      expect(config.auth.readTokens, ['reader']);
+    });
+
+    for (var file in ['docker-compose.yml', 'README.md']) {
+      test('$file uses only canonical names', () {
+        var text = File(path.join(repository, file)).readAsStringSync();
+        expect(text, isNot(matches(RegExp(r'UNPUB_(BOOTSTRAP|PUBLIC)_'))));
+      });
+    }
   });
 
   group('read access', () {
