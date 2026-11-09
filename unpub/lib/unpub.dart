@@ -21,4 +21,6 @@ export 'src/store/mongo_store.dart';
 export 'src/store/mongo_version.dart';
 export 'src/store/package_store.dart';
 export 'src/store/s3_store.dart';
+export 'src/store/upstream_cache_store.dart';
+export 'src/upstream/upstream_proxy.dart';
 export 'src/version.dart';
