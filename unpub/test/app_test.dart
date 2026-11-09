@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
+
+import 'utils.dart' as utils;
 
 class FakeMetaStore extends MetaStore {
   Object? healthError;
@@ -73,36 +74,18 @@ shelf.Request get(String path, {Map<String, String>? headers}) =>
 const authorized = {'authorization': 'Bearer secret'};
 
 /// A `dart pub publish` request for an archive holding [pubspec].
-shelf.Request uploadRequest(String pubspec) {
-  const boundary = 'test-boundary';
-  final archive = Archive()
-    ..addFile(ArchiveFile.string('pubspec.yaml', pubspec));
-  final tarball = GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
-  return shelf.Request(
-    'POST',
-    Uri.parse('http://internal:4000/api/packages/versions/newUpload'),
-    headers: {
-      ...authorized,
-      'content-type': 'multipart/form-data; boundary=$boundary',
-    },
-    body: [
-      ...utf8.encode('--$boundary\r\n'
-          'content-disposition: form-data; name="file"; filename="p.tar.gz"\r\n'
-          'content-type: application/octet-stream\r\n\r\n'),
-      ...tarball,
-      ...utf8.encode('\r\n--$boundary--\r\n'),
-    ],
-  );
-}
+shelf.Request uploadRequest(String pubspec) =>
+    utils.uploadRequest(pubspec, authorized);
 
 void main() {
   late FakeMetaStore metaStore;
   late FakePackageStore packageStore;
 
-  App createApp({Uri? publicUrl}) => App(
+  App createApp({Uri? publicUrl, Authenticator? authenticator}) => App(
         metaStore: metaStore,
         packageStore: packageStore,
-        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+        authenticator: authenticator ??
+            const StaticTokenAuthenticator(bootstrapToken: 'secret'),
         publicUrl: publicUrl,
       );
 
@@ -214,22 +197,24 @@ void main() {
     ];
     UnpubPackage packageWith(List<String>? uploaders) => UnpubPackage(
         'fine', [], true, uploaders, DateTime.now(), DateTime.now(), 0);
+    App publisherApp() => createApp(
+        authenticator: const utils.FakeAuthenticator('secret', 'me@b.c'));
 
     for (var request in requests) {
       test('${request().method} needs an uploaders list', () async {
         metaStore.package = packageWith(null);
-        var response = await createApp().handler(request());
+        var response = await publisherApp().handler(request());
         expect(response.statusCode, HttpStatus.forbidden);
       });
 
       test('${request().method} needs an existing package', () async {
-        var response = await createApp().handler(request());
+        var response = await publisherApp().handler(request());
         expect(response.statusCode, HttpStatus.forbidden);
       });
 
       test('${request().method} needs the operator listed', () async {
         metaStore.package = packageWith(['other@b.c']);
-        var response = await createApp().handler(request());
+        var response = await publisherApp().handler(request());
         expect(response.statusCode, HttpStatus.forbidden);
       });
     }
@@ -254,7 +239,7 @@ void main() {
       app = App(
         metaStore: metaStore,
         packageStore: FileStore(baseDir),
-        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+        authenticator: const StaticTokenAuthenticator(bootstrapToken: 'secret'),
       );
     });
 
@@ -383,7 +368,7 @@ void main() {
       app = App(
         metaStore: metaStore,
         packageStore: FileStore(temp.path),
-        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+        authenticator: const StaticTokenAuthenticator(bootstrapToken: 'secret'),
       );
     });
 
@@ -443,7 +428,7 @@ void main() {
       var app = App(
         metaStore: failing,
         packageStore: packageStore,
-        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+        authenticator: const StaticTokenAuthenticator(bootstrapToken: 'secret'),
       );
       var response = await app.handler(get('/api/packages/foo'));
       expect(response.statusCode, HttpStatus.internalServerError);

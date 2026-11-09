@@ -192,7 +192,7 @@ void main() {
         metaStore: _HealthyMetaStore(),
         packageStore: S3Store(s3Bucket,
             minio: FakeMinio()..putError = MinioError('Access Denied')),
-        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+        authenticator: const StaticTokenAuthenticator(bootstrapToken: 'secret'),
       );
       var response = await app
           .handler(shelf.Request('GET', Uri.parse('http://localhost/readyz')));

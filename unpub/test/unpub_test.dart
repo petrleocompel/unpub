@@ -583,13 +583,6 @@ void main() {
       expect(stored, isNull);
     });
 
-    test('publishing without a configured token explains itself', () async {
-      server = await createServer(email0, token: null);
-      var result = await pubPublish(package0, '0.0.1');
-      expect(result.exitCode, isNot(0));
-      expect(result.stderr, contains('auth.bootstrapToken'));
-    });
-
     test('uploader management requires the token', () async {
       server = await createServer(email0);
       var res = await http.post(
@@ -603,7 +596,7 @@ void main() {
   group('authenticated read access', () {
     setUpAll(() async {
       await cleanUpDb();
-      server = await createServer(email0, readTokens: {testToken});
+      server = await createServer(email0, authenticatedReads: true);
       await addPubToken();
       await pubPublish(package0, '0.0.1');
     });
@@ -640,6 +633,75 @@ void main() {
     test('dart pub get works with the token', () async {
       var result = await pubGetConsumer(package0, '0.0.1');
       expect(result.exitCode, 0, reason: '${result.stdout}${result.stderr}');
+    });
+  });
+
+  group('personal tokens', () {
+    late AccountService accounts;
+
+    setUpAll(() async {
+      await cleanUpDb();
+      for (final name in [userCollection, tokenCollection, sessionCollection]) {
+        await db.dropCollection(name);
+      }
+      final store = AccountStore(db);
+      await store.ensureIndexes();
+      accounts = AccountService(store);
+    });
+
+    Future<HttpServer> serve(ReadAccess readAccess) async {
+      await Directory(baseDir).create(recursive: true);
+      final store = AccountStore(db);
+      return App(
+        metaStore: MongoStore(db),
+        packageStore: FileStore(baseDir),
+        authenticator: ChainAuthenticator([ApiTokenAuthenticator(store)]),
+        readAccess: readAccess,
+      ).serve('0.0.0.0', 4000);
+    }
+
+    tearDownAll(() => addPubToken());
+
+    test('dart pub publish and get work with a user token', () async {
+      server = await serve(ReadAccess.authenticated);
+      addTearDown(() => server.close());
+      final user = await accounts.createUser(
+          email: 'dev@example.com', role: Role.publisher);
+      final created = await accounts.createToken(user, name: 'laptop');
+      await addPubToken(created.secret);
+
+      final published = await pubPublish(package0, '0.0.1');
+      expect(published.exitCode, 0,
+          reason: '${published.stdout}${published.stderr}');
+      expect((await readMeta(package0))['uploaders'], ['dev@example.com']);
+
+      final fetched = await pubGetConsumer(package0, '0.0.1');
+      expect(fetched.exitCode, 0, reason: '${fetched.stdout}${fetched.stderr}');
+    });
+
+    test('dart pub get without a token is refused when reads are protected',
+        () async {
+      server = await serve(ReadAccess.authenticated);
+      addTearDown(() => server.close());
+      await addPubToken('not-a-real-token');
+
+      final fetched = await pubGetConsumer(package0, '0.0.1');
+      expect(fetched.exitCode, isNot(0));
+      expect(fetched.stderr, contains('Invalid Bearer token'));
+    });
+
+    test('a read-only token cannot dart pub publish', () async {
+      server = await serve(ReadAccess.public);
+      addTearDown(() => server.close());
+      final user = await accounts.createUser(
+          email: 'ci@example.com', role: Role.publisher);
+      final created =
+          await accounts.createToken(user, name: 'ci', scopes: {Scope.read});
+      await addPubToken(created.secret);
+
+      final published = await pubPublish(package1, '0.0.1');
+      expect(published.exitCode, isNot(0));
+      expect(published.stderr, contains('read-only'));
     });
   });
 

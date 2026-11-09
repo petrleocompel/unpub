@@ -12,20 +12,35 @@ Request request(String method, String path, {String? authorization}) => Request(
     );
 
 void main() {
-  group('bootstrap token authenticator', () {
-    const authenticator =
-        BootstrapTokenAuthenticator(token: 'secret', email: 'ops@example.com');
+  group('static token authenticator', () {
+    const authenticator = StaticTokenAuthenticator(
+      bootstrapToken: 'secret',
+      bootstrapEmail: 'ops@example.com',
+      readTokens: {'reader-token'},
+    );
 
-    test('accepts the token and returns the configured email', () async {
+    test('the bootstrap token is an admin with the configured email', () async {
       var principal = await authenticator.authenticate(request(
           'GET', 'api/packages/versions/new',
           authorization: 'Bearer secret'));
-      expect(principal.email, 'ops@example.com');
+      expect(principal?.email, 'ops@example.com');
+      expect(principal?.role, Role.admin);
+      expect(principal?.canPublish, isTrue);
+    });
+
+    test('a read token is a reader', () async {
+      var principal = await authenticator.authenticate(
+          request('GET', 'x', authorization: 'Bearer reader-token'));
+      expect(principal?.role, Role.reader);
+      expect(principal?.scopes, {Scope.read});
+      expect(principal?.canPublish, isFalse);
     });
 
     test('the scheme is case insensitive', () async {
-      await authenticator
-          .authenticate(request('GET', 'x', authorization: 'bearer secret'));
+      expect(
+          await authenticator.authenticate(
+              request('GET', 'x', authorization: 'bearer secret')),
+          isNotNull);
     });
 
     for (var header in <String?>[
@@ -37,26 +52,20 @@ void main() {
       // Used to pass when tokens were compared with endsWith.
       'Bearer xsecret',
     ]) {
-      test('rejects authorization header "$header"', () {
+      test('ignores authorization header "$header"', () async {
         expect(
-          authenticator
-              .authenticate(request('GET', 'x', authorization: header)),
-          throwsA(isA<AuthException>().having(
-              (e) => e.statusCode, 'statusCode', HttpStatus.unauthorized)),
-        );
+            await authenticator
+                .authenticate(request('GET', 'x', authorization: header)),
+            isNull);
       });
     }
 
     for (var token in [null, '']) {
-      test('token "$token" disables publishing with a 403', () {
+      test('bootstrap token "$token" matches nothing', () async {
         expect(
-          BootstrapTokenAuthenticator(token: token).authenticate(
-              request('GET', 'x', authorization: 'Bearer anything')),
-          throwsA(isA<AuthException>()
-              .having((e) => e.statusCode, 'statusCode', HttpStatus.forbidden)
-              .having((e) => e.message, 'message',
-                  contains('auth.bootstrapToken'))),
-        );
+            await StaticTokenAuthenticator(bootstrapToken: token).authenticate(
+                request('GET', 'x', authorization: 'Bearer anything')),
+            isNull);
       });
     }
   });
@@ -65,9 +74,9 @@ void main() {
     Principal? seen;
     final handler = const Pipeline()
         .addMiddleware(authMiddleware(
-      const BootstrapTokenAuthenticator(token: 'write-token'),
-      readAuthenticator:
-          const ReadTokenAuthenticator({'read-token', 'write-token'}),
+      const StaticTokenAuthenticator(
+          bootstrapToken: 'write-token', readTokens: {'read-token'}),
+      readAccess: ReadAccess.authenticated,
     ))
         .addHandler((request) {
       seen = principalOf(request);
@@ -107,7 +116,7 @@ void main() {
           var response = await handler(
               request(route[0], route[1], authorization: 'Bearer $token'));
           expect(response.statusCode, HttpStatus.ok);
-          expect(seen, isNull);
+          expect(seen, isNotNull);
         });
       }
     }
@@ -118,6 +127,18 @@ void main() {
       });
     }
 
+    test('the login endpoint stays open', () async {
+      expect((await handler(request('POST', 'webapi/login'))).statusCode,
+          HttpStatus.ok);
+    });
+
+    test('other account routes are not open', () async {
+      expect((await handler(request('POST', 'webapi/logout'))).statusCode,
+          HttpStatus.unauthorized);
+      expect((await handler(request('GET', 'webapi/me'))).statusCode,
+          HttpStatus.unauthorized);
+    });
+
     for (var route in const [
       ['GET', 'api/packages/versions/new'],
       ['POST', 'api/packages/versions/newUpload'],
@@ -126,7 +147,7 @@ void main() {
       test('a read token cannot ${route[0]} ${route[1]}', () async {
         var response = await handler(
             request(route[0], route[1], authorization: 'Bearer read-token'));
-        expect(response.statusCode, HttpStatus.unauthorized);
+        expect(response.statusCode, HttpStatus.forbidden);
         expect(seen, isNull);
       });
 
@@ -142,8 +163,8 @@ void main() {
   group('auth middleware', () {
     Principal? seen;
     final handler = const Pipeline()
-        .addMiddleware(
-            authMiddleware(const BootstrapTokenAuthenticator(token: 'secret')))
+        .addMiddleware(authMiddleware(
+            const StaticTokenAuthenticator(bootstrapToken: 'secret')))
         .addHandler((request) {
       seen = principalOf(request);
       return Response.ok('inner');
@@ -207,14 +228,156 @@ void main() {
         var response = await handler(request(route[0], route[1]));
         expect(response.statusCode, HttpStatus.ok);
       });
+
+      test('${route[0]} ${route[1]} tolerates a wrong token', () async {
+        var response = await handler(
+            request(route[0], route[1], authorization: 'Bearer stale'));
+        expect(response.statusCode, HttpStatus.ok);
+        expect(seen, isNull);
+      });
     }
 
     test('failures carry a challenge the pub client can print', () async {
       var response = await handler(request('GET', 'api/packages/versions/new'));
       expect(response.headers['www-authenticate'],
           allOf(startsWith('Bearer realm="pub"'), contains('message="')));
-      expect(json.decode(await response.readAsString())['error']['message'],
-          contains('Bearer'));
+      var error = json.decode(await response.readAsString())['error'];
+      expect(error['code'], 'unauthorized');
+      expect(error['message'], contains('Bearer'));
+    });
+  });
+
+  group('email handling', () {
+    test('normalizes case and whitespace', () {
+      expect(normalizeEmail('  Foo@Example.COM '), 'foo@example.com');
+    });
+
+    for (var email in ['a@b', 'admin@localhost', 'first.last+tag@ex.co']) {
+      test('accepts $email', () => expect(isValidEmail(email), isTrue));
+    }
+
+    for (var email in ['', 'no-at', '@b', 'a@', 'a@b@c', 'a b@c']) {
+      test('rejects "$email"', () => expect(isValidEmail(email), isFalse));
+    }
+
+    test('matches uploaders ignoring case', () {
+      expect(
+          findEmail(['Foo@Example.com'], 'foo@example.com'), 'Foo@Example.com');
+      expect(findEmail(null, 'foo@example.com'), isNull);
+    });
+  });
+
+  test('parses token lifetimes', () {
+    expect(parseDuration('90s'), const Duration(seconds: 90));
+    expect(parseDuration('12h'), const Duration(hours: 12));
+    expect(parseDuration('30d'), const Duration(days: 30));
+    expect(parseDuration('2w'), const Duration(days: 14));
+    for (var text in ['', '30', 'd', '0d', '-1d', '1y']) {
+      expect(parseDuration(text), isNull, reason: text);
+    }
+  });
+
+  group('password hasher', () {
+    const light = PasswordHasher(memoryKiB: 32, iterations: 1);
+
+    test('matches the reference Argon2id vector', () async {
+      // From the test suite of the reference implementation.
+      expect(
+          await const PasswordHasher().verify(
+              'password',
+              r'$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHQ$'
+                  'CTFhFdXPJO1aFaMaO6Mm5c8y7cJHAph8ArZWb2GRPPc'),
+          isTrue);
+    });
+
+    test('produces a self-describing hash that verifies', () async {
+      var encoded = await light.hash('correct horse');
+      expect(encoded, startsWith(r'$argon2id$v=19$m=32,t=1,p=1$'));
+      expect(await light.verify('correct horse', encoded), isTrue);
+      expect(await light.verify('wrong horse', encoded), isFalse);
+    });
+
+    test('uses a fresh salt', () async {
+      expect(await light.hash('same'), isNot(await light.hash('same')));
+    });
+
+    test('verifies with the parameters stored in the hash', () async {
+      var encoded =
+          await const PasswordHasher(memoryKiB: 64, iterations: 2).hash('pw');
+      expect(await light.verify('pw', encoded), isTrue);
+    });
+
+    for (var encoded in [
+      '',
+      'not a hash',
+      r'$2b$10$abcdefghijklmnopqrstuv',
+      r'$argon2id$v=19$m=999999999,t=2,p=1$c29tZXNhbHQ$AAAA',
+      r'$argon2id$v=19$m=32,t=0,p=1$c29tZXNhbHQ$AAAA',
+      r'$argon2id$v=19$m=32,t=1,p=1$c29tZXNhbHQ$',
+    ]) {
+      test('never matches the hash "$encoded"', () async {
+        expect(await light.verify('password', encoded), isFalse);
+      });
+    }
+  });
+
+  group('login rate limiter', () {
+    late DateTime now;
+    late LoginRateLimiter limiter;
+
+    setUp(() {
+      now = DateTime(2026);
+      limiter = LoginRateLimiter(
+          maxFailures: 3,
+          window: const Duration(minutes: 15),
+          clock: () => now);
+    });
+
+    void fail(String address, String email) =>
+        expect(limiter.acquire(address, email), isNull);
+
+    test('blocks an email after the limit, from any address', () {
+      for (var i = 0; i < 3; i++) {
+        fail('10.0.0.$i', 'a@b.c');
+      }
+      expect(limiter.acquire('10.9.9.9', 'a@b.c'), isNotNull);
+      expect(limiter.acquire('10.9.9.9', 'other@b.c'), isNull);
+    });
+
+    test('blocks an address after the limit, for any email', () {
+      for (var i = 0; i < 3; i++) {
+        fail('10.0.0.1', 'user$i@b.c');
+      }
+      expect(limiter.acquire('10.0.0.1', 'new@b.c'), isNotNull);
+    });
+
+    test('recovers after the window', () {
+      for (var i = 0; i < 3; i++) {
+        fail('10.0.0.1', 'a@b.c');
+      }
+      var wait = limiter.acquire('10.0.0.1', 'a@b.c')!;
+      expect(wait, const Duration(minutes: 15));
+      now = now.add(const Duration(minutes: 15));
+      expect(limiter.acquire('10.0.0.1', 'a@b.c'), isNull);
+    });
+
+    test('success clears the email', () {
+      fail('10.0.0.1', 'a@b.c');
+      fail('10.0.0.2', 'a@b.c');
+      limiter.succeeded('10.0.0.2', 'a@b.c');
+      fail('10.0.0.3', 'a@b.c');
+      fail('10.0.0.4', 'a@b.c');
+      fail('10.0.0.5', 'a@b.c');
+    });
+
+    test('success keeps the failures of the address', () {
+      fail('10.0.0.1', 'victim@b.c');
+      fail('10.0.0.1', 'victim@b.c');
+      fail('10.0.0.1', 'mine@b.c');
+      limiter.succeeded('10.0.0.1', 'mine@b.c');
+      // Only the successful attempt itself is taken back.
+      fail('10.0.0.1', 'other@b.c');
+      expect(limiter.acquire('10.0.0.1', 'another@b.c'), isNotNull);
     });
   });
 }

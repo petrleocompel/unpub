@@ -5,10 +5,15 @@ import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
 import 'app.dart';
+import 'auth/account_api.dart';
+import 'auth/account_service.dart';
 import 'auth/authenticator.dart';
+import 'auth/rate_limiter.dart';
 import 'config/config.dart';
 import 'logging.dart';
 import 'redact.dart';
+import 'store/account_store.dart';
+import 'store/audit_store.dart';
 import 'store/aws_credentials.dart';
 import 'store/file_store.dart';
 import 'store/mongo_store.dart';
@@ -50,14 +55,35 @@ class UnpubServer {
     final db = await Db.create(config.mongo.uri);
     try {
       await db.open().timeout(_mongoConnectTimeout);
+      final accounts = AccountStore(db);
+      final audit = MongoAuditStore(db);
+      await accounts.ensureIndexes();
+      await audit.ensureIndexes();
+      final service = AccountService(accounts, audit: audit);
+      await service.bootstrapAdmin(config.auth.admin);
+      _warnAboutStaticTokens(config.auth);
+
       final app = App(
         metaStore: MongoStore(db),
         packageStore: await _createPackageStore(config.storage),
-        authenticator: BootstrapTokenAuthenticator(
-          token: config.auth.bootstrapToken,
-          email: config.auth.bootstrapEmail,
+        authenticator: ChainAuthenticator([
+          ApiTokenAuthenticator(accounts),
+          SessionAuthenticator(accounts),
+          StaticTokenAuthenticator(
+            bootstrapToken: config.auth.bootstrapToken,
+            bootstrapEmail: config.auth.bootstrapEmail,
+            readTokens: config.auth.readTokens.toSet(),
+          ),
+        ]),
+        readAccess: config.auth.readAccess,
+        accountApi: AccountApi(
+          service,
+          limiter: LoginRateLimiter(),
+          secureCookies: config.server.publicUrl?.scheme == 'https',
+          trustForwardedFor: config.server.trustForwardedFor,
         ),
-        readAuthenticator: _createReadAuthenticator(config.auth),
+        auditStore: audit,
+        trustForwardedFor: config.server.trustForwardedFor,
         upstream: config.upstream.url.toString(),
         publicUrl: config.server.publicUrl,
       );
@@ -69,12 +95,15 @@ class UnpubServer {
     }
   }
 
-  static Authenticator? _createReadAuthenticator(AuthConfig auth) {
-    if (auth.readAccess == ReadAccess.public) return null;
-    return ReadTokenAuthenticator({
-      ...auth.readTokens,
-      if (auth.bootstrapToken != null) auth.bootstrapToken!,
-    });
+  static void _warnAboutStaticTokens(AuthConfig auth) {
+    if (auth.bootstrapToken != null) {
+      _log.warning('auth.bootstrapToken is deprecated, use a personal token '
+          'from unpub admin create-token');
+    }
+    if (auth.readTokens.isNotEmpty) {
+      _log.warning('auth.readTokens is deprecated, use personal tokens with '
+          'the read scope');
+    }
   }
 
   static Future<PackageStore> _createPackageStore(StorageConfig storage) async {

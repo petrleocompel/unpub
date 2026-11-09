@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:path/path.dart' as path;
+import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart' as unpub;
 
@@ -25,11 +27,30 @@ final email3 = 'email3@example.com';
 /// The token the pub client presents in tests.
 const testToken = 'test-bootstrap-token';
 
-/// A server which accepts [token] and records [opEmail] as the operator.
+/// Accepts one Bearer token as a fixed identity, a publisher by default.
+class FakeAuthenticator implements unpub.Authenticator {
+  final String? token;
+  final String email;
+  final unpub.Role role;
+
+  const FakeAuthenticator(
+    this.token,
+    this.email, {
+    this.role = unpub.Role.publisher,
+  });
+
+  @override
+  Future<unpub.Principal?> authenticate(shelf.Request request) async {
+    if (token == null || unpub.bearerToken(request) != token) return null;
+    return unpub.Principal(email, role: role);
+  }
+}
+
+/// A server where [token] authenticates the publisher [opEmail].
 Future<HttpServer> createServer(
   String opEmail, {
   String? token = testToken,
-  Set<String>? readTokens,
+  bool authenticatedReads = false,
 }) async {
   final db = Db(testMongoUri);
   await db.open();
@@ -39,15 +60,36 @@ Future<HttpServer> createServer(
   final app = unpub.App(
     metaStore: unpub.MongoStore(db),
     packageStore: unpub.FileStore(baseDir),
-    authenticator: unpub.BootstrapTokenAuthenticator(
-      token: token,
-      email: opEmail,
-    ),
-    readAuthenticator:
-        readTokens == null ? null : unpub.ReadTokenAuthenticator(readTokens),
+    authenticator: FakeAuthenticator(token, opEmail),
+    readAccess: authenticatedReads
+        ? unpub.ReadAccess.authenticated
+        : unpub.ReadAccess.public,
   );
 
   return app.serve('0.0.0.0', 4000);
+}
+
+/// A `dart pub publish` upload of an archive holding [pubspec].
+shelf.Request uploadRequest(String pubspec, Map<String, String> headers) {
+  const boundary = 'test-boundary';
+  final archive = Archive()
+    ..addFile(ArchiveFile.string('pubspec.yaml', pubspec));
+  final tarball = GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
+  return shelf.Request(
+    'POST',
+    Uri.parse('http://internal:4000/api/packages/versions/newUpload'),
+    headers: {
+      ...headers,
+      'content-type': 'multipart/form-data; boundary=$boundary',
+    },
+    body: [
+      ...utf8.encode('--$boundary\r\n'
+          'content-disposition: form-data; name="file"; filename="p.tar.gz"\r\n'
+          'content-type: application/octet-stream\r\n\r\n'),
+      ...tarball,
+      ...utf8.encode('\r\n--$boundary--\r\n'),
+    ],
+  );
 }
 
 late Directory _pubHome;
@@ -68,14 +110,14 @@ Future<void> setUpPubClient() async {
   await addPubToken();
 }
 
-/// Stores [testToken] in the pub client, which forgets a token after a 401.
-Future<void> addPubToken() async {
+/// Stores [token] in the pub client, which forgets a token after a 401.
+Future<void> addPubToken([String token = testToken]) async {
   final process = await Process.start(
     'dart',
     ['pub', 'token', 'add', pubHostedUrl],
     environment: _pubEnvironment,
   );
-  process.stdin.writeln(testToken);
+  process.stdin.writeln(token);
   await process.stdin.close();
   final out = process.stdout.transform(utf8.decoder).join();
   final err = process.stderr.transform(utf8.decoder).join();

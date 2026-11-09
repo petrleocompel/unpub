@@ -1,11 +1,18 @@
 export 'src/app.dart';
+export 'src/auth/account_api.dart';
+export 'src/auth/account_service.dart';
+export 'src/auth/accounts.dart';
 export 'src/auth/auth_middleware.dart';
 export 'src/auth/authenticator.dart';
+export 'src/auth/password_hasher.dart' show PasswordHasher;
+export 'src/auth/rate_limiter.dart';
 export 'src/config/config.dart';
 export 'src/logging.dart';
 export 'src/models.dart';
 export 'src/redact.dart';
 export 'src/server.dart';
+export 'src/store/account_store.dart';
+export 'src/store/audit_store.dart';
 export 'src/store/aws_credentials.dart';
 export 'src/store/file_store.dart';
 export 'src/store/meta_store.dart';

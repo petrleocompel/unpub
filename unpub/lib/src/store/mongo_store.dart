@@ -42,7 +42,9 @@ class MongoStore extends MetaStore {
         _selectByName(name),
         modify
             .push('versions', version.toJson())
-            .addToSet('uploaders', version.uploader)
+            // Only a new package gets its first uploader. An administrator
+            // publishing to someone else's package must not join it.
+            .setOnInsert('uploaders', [version.uploader])
             .setOnInsert('createdAt', version.createdAt)
             .setOnInsert('private', true)
             .setOnInsert('download', 0)

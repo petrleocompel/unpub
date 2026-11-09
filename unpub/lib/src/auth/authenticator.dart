@@ -1,28 +1,80 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart' as shelf;
+
+import '../store/account_store.dart';
+import 'accounts.dart';
 
 /// The identity behind an authenticated request.
 class Principal {
   /// Email recorded as the uploader and checked against package uploaders.
   final String email;
+  final Role role;
 
-  const Principal(this.email);
+  /// What this credential may do, within [role].
+  final Set<Scope> scopes;
+
+  /// The name recorded in the audit trail.
+  final String actor;
+
+  /// The account behind the request. Null for a legacy static token.
+  final String? userId;
+
+  /// Set when the request was authenticated by a web session.
+  final Session? session;
+
+  /// Set when the request was authenticated by a token that expires.
+  final DateTime? tokenExpiresAt;
+
+  const Principal(
+    this.email, {
+    required this.role,
+    this.scopes = allScopes,
+    String? actor,
+    this.userId,
+    this.session,
+    this.tokenExpiresAt,
+  }) : actor = actor ?? email;
+
+  bool get isAdmin => role == Role.admin;
+
+  /// Whether this credential may take part in publishing at all.
+  bool get canPublish => role != Role.reader && scopes.contains(Scope.publish);
+
+  /// Whether this credential may publish to, or manage the uploaders of, a
+  /// package with these [uploaders].
+  ///
+  /// A package without an uploaders list belongs to no one, so only an
+  /// administrator can change it.
+  bool canChangePackage(List<String>? uploaders) {
+    if (!canPublish) return false;
+    if (isAdmin) return true;
+    return findEmail(uploaders, email) != null;
+  }
+}
+
+/// The entry of [emails] for [email] ignoring case, because existing data can
+/// differ in case from the normalized address of the account.
+String? findEmail(List<String>? emails, String email) {
+  final wanted = normalizeEmail(email);
+  for (final candidate in emails ?? const <String>[]) {
+    if (normalizeEmail(candidate) == wanted) return candidate;
+  }
+  return null;
 }
 
 /// An authentication failure that is reported to the client.
 class AuthException implements Exception {
   final int statusCode;
+  final String code;
   final String message;
 
   /// The request carries no valid credentials.
-  const AuthException.unauthorized(this.message)
+  const AuthException.unauthorized(this.message, {this.code = 'unauthorized'})
       : statusCode = HttpStatus.unauthorized;
 
-  /// The request cannot be authorized, whatever its credentials.
-  const AuthException.forbidden(this.message)
+  /// The credentials are valid but do not allow this request.
+  const AuthException.forbidden(this.message, {this.code = 'forbidden'})
       : statusCode = HttpStatus.forbidden;
 
   @override
@@ -31,70 +83,127 @@ class AuthException implements Exception {
 
 /// Resolves the [Principal] of a request.
 abstract interface class Authenticator {
-  /// Returns the principal of [request], or throws an [AuthException].
-  Future<Principal> authenticate(shelf.Request request);
+  /// Returns the principal of [request], or null if it presents no credential
+  /// this authenticator accepts.
+  Future<Principal?> authenticate(shelf.Request request);
 }
 
-/// Authenticates a single shared Bearer token from `auth.bootstrapToken`.
-class BootstrapTokenAuthenticator implements Authenticator {
-  final String? token;
-  final String email;
+/// Tries each authenticator in turn and returns the first principal.
+class ChainAuthenticator implements Authenticator {
+  final List<Authenticator> authenticators;
 
-  const BootstrapTokenAuthenticator({
-    required this.token,
-    this.email = 'admin@localhost',
+  const ChainAuthenticator(this.authenticators);
+
+  @override
+  Future<Principal?> authenticate(shelf.Request request) async {
+    for (final authenticator in authenticators) {
+      final principal = await authenticator.authenticate(request);
+      if (principal != null) return principal;
+    }
+    return null;
+  }
+}
+
+/// Authenticates personal API tokens sent as `Authorization: Bearer`.
+class ApiTokenAuthenticator implements Authenticator {
+  final AccountStore store;
+  final DateTime Function() clock;
+
+  const ApiTokenAuthenticator(this.store, {this.clock = DateTime.now});
+
+  @override
+  Future<Principal?> authenticate(shelf.Request request) async {
+    final secret = bearerToken(request);
+    if (secret == null) return null;
+    final hash = hashSecret(secret);
+    final token = await store.findTokenByHash(hash);
+    final now = clock();
+    if (token == null ||
+        !constantTimeEquals(token.hash, hash) ||
+        !token.isActiveAt(now)) {
+      return null;
+    }
+    final user = await store.findUserById(token.userId);
+    if (user == null || user.disabled) return null;
+    await store.touchToken(token.id, now);
+    return Principal(
+      user.email,
+      role: user.role,
+      scopes: token.scopes,
+      actor: 'token:${token.prefix}',
+      userId: user.id,
+      tokenExpiresAt: token.expiresAt,
+    );
+  }
+}
+
+/// Authenticates the session cookie of the web UI.
+///
+/// The CSRF token of the session is checked by the auth middleware, because
+/// that may need to read the request body.
+class SessionAuthenticator implements Authenticator {
+  final AccountStore store;
+  final DateTime Function() clock;
+
+  const SessionAuthenticator(this.store, {this.clock = DateTime.now});
+
+  @override
+  Future<Principal?> authenticate(shelf.Request request) async {
+    final cookie = sessionCookie(request);
+    if (cookie == null) return null;
+    final session = await store.findSession(hashSecret(cookie));
+    if (session == null || !session.expiresAt.isAfter(clock())) return null;
+    final user = await store.findUserById(session.userId);
+    if (user == null || user.disabled) return null;
+    return Principal(
+      user.email,
+      role: user.role,
+      userId: user.id,
+      session: session,
+    );
+  }
+}
+
+/// Authenticates the deprecated `auth.bootstrapToken` and `auth.readTokens`.
+class StaticTokenAuthenticator implements Authenticator {
+  /// Acts as an administrator with [bootstrapEmail].
+  final String? bootstrapToken;
+  final String bootstrapEmail;
+
+  /// Each acts as a reader.
+  final Set<String> readTokens;
+
+  const StaticTokenAuthenticator({
+    this.bootstrapToken,
+    this.bootstrapEmail = 'admin@localhost',
+    this.readTokens = const {},
   });
 
   @override
-  Future<Principal> authenticate(shelf.Request request) async {
-    final expected = token;
-    if (expected == null || expected.isEmpty) {
-      throw const AuthException.forbidden(
-          'Publishing is disabled on this server. Set auth.bootstrapToken in '
-          'unpub.yaml or the UNPUB_AUTH_BOOTSTRAP_TOKEN environment variable.');
+  Future<Principal?> authenticate(shelf.Request request) async {
+    final presented = bearerToken(request);
+    if (presented == null) return null;
+
+    final bootstrap = bootstrapToken;
+    if (bootstrap != null &&
+        bootstrap.isNotEmpty &&
+        constantTimeEquals(presented, bootstrap)) {
+      return Principal(bootstrapEmail, role: Role.admin);
     }
 
-    final presented = _bearerToken(request);
-    if (presented == null) {
-      throw const AuthException.unauthorized(
-          'Missing Bearer token. Add one with: dart pub token add <server url>');
-    }
-    if (!_constantTimeEquals(presented, expected)) {
-      throw const AuthException.unauthorized('Invalid Bearer token.');
-    }
-    return Principal(email);
-  }
-}
-
-/// Authenticates readers against a fixed set of Bearer tokens.
-///
-/// Used for `auth.readAccess: authenticated` until user accounts replace it.
-class ReadTokenAuthenticator implements Authenticator {
-  final Set<String> tokens;
-
-  const ReadTokenAuthenticator(this.tokens);
-
-  @override
-  Future<Principal> authenticate(shelf.Request request) async {
-    final presented = _bearerToken(request);
-    if (presented == null) {
-      throw const AuthException.unauthorized(
-          'This server requires a Bearer token to read packages. '
-          'Add one with: dart pub token add <server url>');
-    }
     // Checks every token so the running time does not reveal a match.
     var matched = false;
-    for (final token in tokens) {
-      matched |= _constantTimeEquals(presented, token);
+    for (final token in readTokens) {
+      matched |= constantTimeEquals(presented, token);
     }
-    if (!matched) {
-      throw const AuthException.unauthorized('Invalid Bearer token.');
-    }
-    return const Principal('reader@localhost');
+    if (!matched) return null;
+    return const Principal('reader@localhost',
+        role: Role.reader, scopes: {Scope.read});
   }
 }
 
-String? _bearerToken(shelf.Request request) {
+/// The token of an `Authorization: Bearer` header, if there is one.
+String? bearerToken(shelf.Request request) {
   final header = request.headers[HttpHeaders.authorizationHeader];
   if (header == null) return null;
   final parts = header.trim().split(RegExp(r'\s+'));
@@ -104,13 +213,35 @@ String? _bearerToken(shelf.Request request) {
   return parts.last;
 }
 
-/// Compares digests so the running time reveals nothing about the token.
-bool _constantTimeEquals(String a, String b) {
-  final digestA = sha256.convert(utf8.encode(a)).bytes;
-  final digestB = sha256.convert(utf8.encode(b)).bytes;
-  var difference = 0;
-  for (var i = 0; i < digestA.length; i++) {
-    difference |= digestA[i] ^ digestB[i];
+/// The value of the session cookie of [request], if there is one.
+String? sessionCookie(shelf.Request request) {
+  final header = request.headers[HttpHeaders.cookieHeader];
+  if (header == null) return null;
+  for (final pair in header.split(';')) {
+    final separator = pair.indexOf('=');
+    if (separator < 0) continue;
+    if (pair.substring(0, separator).trim() == sessionCookieName) {
+      final value = pair.substring(separator + 1).trim();
+      return value.isEmpty ? null : value;
+    }
   }
-  return difference == 0;
+  return null;
+}
+
+/// The address of the client, from `X-Forwarded-For` only when trusted.
+///
+/// Takes the last entry, the one added by the nearest proxy, because a client
+/// can put anything in the entries before it.
+String? clientAddress(shelf.Request request, {bool trustForwardedFor = false}) {
+  if (trustForwardedFor) {
+    final forwarded = request.headers['x-forwarded-for'];
+    if (forwarded != null) {
+      final last = forwarded.split(',').last.trim();
+      if (last.isNotEmpty) return last;
+    }
+  }
+  final connection = request.context['shelf.io.connection_info'];
+  return connection is HttpConnectionInfo
+      ? connection.remoteAddress.address
+      : null;
 }

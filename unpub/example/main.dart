@@ -13,8 +13,8 @@ Future<void> main(List<String> args) async {
   final app = unpub.App(
     metaStore: unpub.MongoStore(db),
     packageStore: unpub.FileStore('./unpub-packages'),
-    authenticator: const unpub.BootstrapTokenAuthenticator(
-      token: 'replace-with-a-long-random-token',
+    authenticator: const unpub.StaticTokenAuthenticator(
+      bootstrapToken: 'replace-with-a-long-random-token',
     ),
   );
 

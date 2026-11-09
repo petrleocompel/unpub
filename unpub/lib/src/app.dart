@@ -18,13 +18,17 @@ import 'package:unpub/src/store/meta_store.dart';
 import 'package:unpub/src/store/package_store.dart';
 import 'package:unpub/src/webapi_models.dart';
 
+import 'auth/account_api.dart';
+import 'auth/accounts.dart';
 import 'auth/auth_middleware.dart';
 import 'auth/authenticator.dart';
+import 'config/config.dart';
 import 'logging.dart';
 import 'redact.dart';
 import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
+import 'store/audit_store.dart';
 import 'utils.dart';
 import 'validation.dart';
 
@@ -45,11 +49,21 @@ class App {
   /// upstream url, default: https://pub.dev
   final String upstream;
 
-  /// Establishes the identity behind publishing and uploader requests.
+  /// Establishes the identity behind each request.
   final Authenticator authenticator;
 
-  /// Gates every other request when set, except `/healthz` and `/readyz`.
-  final Authenticator? readAuthenticator;
+  /// Whether reading needs credentials.
+  final ReadAccess readAccess;
+
+  /// The account endpoints under `/webapi`, absent when embedding without
+  /// user accounts.
+  final AccountApi? accountApi;
+
+  /// Records publishes and uploader changes.
+  final AuditStore auditStore;
+
+  /// Whether the client address is taken from `X-Forwarded-For`.
+  final bool trustForwardedFor;
 
   /// External URL of this server. When null, URLs derive from the request.
   final Uri? publicUrl;
@@ -62,7 +76,10 @@ class App {
     required this.metaStore,
     required this.packageStore,
     required this.authenticator,
-    this.readAuthenticator,
+    this.readAccess = ReadAccess.public,
+    this.accountApi,
+    this.auditStore = const NullAuditStore(),
+    this.trustForwardedFor = false,
     this.upstream = 'https://pub.dev',
     this.uploadValidator,
     this.publicUrl,
@@ -114,10 +131,12 @@ class App {
 
   /// The complete request handler, including all middleware.
   shelf.Handler get handler => const shelf.Pipeline()
-      .addMiddleware(corsHeaders())
-      .addMiddleware(requestLogger())
+      // Bearer tokens work cross-origin, but a session cookie must not: this
+      // middleware echoes the origin, so credentialed requests stay disabled.
       .addMiddleware(
-          authMiddleware(authenticator, readAuthenticator: readAuthenticator))
+          corsHeaders(headers: {'Access-Control-Allow-Credentials': 'false'}))
+      .addMiddleware(requestLogger())
+      .addMiddleware(authMiddleware(authenticator, readAccess: readAccess))
       .addHandler(router.call);
 
   Future<HttpServer> serve([String host = '0.0.0.0', int port = 4000]) {
@@ -140,7 +159,26 @@ class App {
     return ua != null && ua.toLowerCase().contains('dart pub');
   }
 
-  Router get router => _$AppRouter(this);
+  Router get router {
+    final router = _$AppRouter(this);
+    accountApi?.addRoutes(router);
+    return router;
+  }
+
+  Future<void> _audit(
+    shelf.Request req,
+    Principal principal,
+    String action,
+    String target, [
+    Map<String, Object?> details = const {},
+  ]) =>
+      auditStore.recordSafely(AuditEvent(
+        actor: principal.actor,
+        ip: clientAddress(req, trustForwardedFor: trustForwardedFor),
+        action: action,
+        target: target,
+        details: details,
+      ));
 
   @Route.get('/healthz')
   Future<shelf.Response> healthz(shelf.Request req) async {
@@ -274,8 +312,9 @@ class App {
 
   @Route.post('/api/packages/versions/newUpload')
   Future<shelf.Response> upload(shelf.Request req) async {
-    var uploader = principalOf(req)?.email;
-    if (uploader == null) return _unauthenticated();
+    final principal = principalOf(req);
+    if (principal == null) return _unauthenticated();
+    final uploader = principal.email;
 
     try {
       var contentType = req.headers['content-type'];
@@ -353,7 +392,7 @@ class App {
         }
 
         // Check uploaders
-        if (package.uploaders?.contains(uploader) == false) {
+        if (!principal.canChangePackage(package.uploaders)) {
           throw '$uploader is not an uploader of $name';
         }
 
@@ -388,6 +427,9 @@ class App {
         DateTime.now(),
       );
       await metaStore.addVersion(name, unpubVersion);
+      await _audit(req, principal, 'package.published', '$name@$version', {
+        'uploader': uploader,
+      });
 
       // TODO: Upload docs
       return shelf.Response.found(
@@ -411,26 +453,43 @@ class App {
     return _successMessage('Successfully uploaded package.');
   }
 
+  /// The package when [principal] may manage its uploaders, or the response
+  /// refusing it.
+  ///
+  /// Only an administrator learns that a package does not exist.
+  Future<(UnpubPackage?, shelf.Response?)> _packageForUploaderChange(
+      String name, Principal principal) async {
+    final package = await metaStore.queryPackage(name);
+    if (package == null && principal.canPublish && principal.isAdmin) {
+      return (null, _notFound());
+    }
+    if (package == null || !principal.canChangePackage(package.uploaders)) {
+      return (null, _badRequest('no permission', status: HttpStatus.forbidden));
+    }
+    return (package, null);
+  }
+
   @Route.post('/api/packages/<name>/uploaders')
   Future<shelf.Response> addUploader(shelf.Request req, String name) async {
     if (!isValidPackageName(name)) return _notFound();
 
-    var operatorEmail = principalOf(req)?.email;
-    if (operatorEmail == null) return _unauthenticated();
+    final principal = principalOf(req);
+    if (principal == null) return _unauthenticated();
 
     var email = Uri.splitQueryString(await req.readAsString())['email'];
     if (email == null) return _badRequest('email is required');
+    email = normalizeEmail(email);
+    if (!isValidEmail(email)) return _badRequest('email is invalid');
 
-    var uploaders = (await metaStore.queryPackage(name))?.uploaders;
+    final (package, refusal) = await _packageForUploaderChange(name, principal);
+    if (refusal != null) return refusal;
 
-    if (uploaders == null || !uploaders.contains(operatorEmail)) {
-      return _badRequest('no permission', status: HttpStatus.forbidden);
-    }
-    if (uploaders.contains(email)) {
+    if (findEmail(package!.uploaders, email) != null) {
       return _badRequest('email already exists');
     }
 
     await metaStore.addUploader(name, email);
+    await _audit(req, principal, 'uploader.added', name, {'email': email});
     return _successMessage('uploader added');
   }
 
@@ -439,21 +498,19 @@ class App {
       shelf.Request req, String name, String email) async {
     if (!isValidPackageName(name)) return _notFound();
 
-    var operatorEmail = principalOf(req)?.email;
-    if (operatorEmail == null) return _unauthenticated();
+    final principal = principalOf(req);
+    if (principal == null) return _unauthenticated();
 
     email = Uri.decodeComponent(email);
 
-    var uploaders = (await metaStore.queryPackage(name))?.uploaders;
+    final (package, refusal) = await _packageForUploaderChange(name, principal);
+    if (refusal != null) return refusal;
 
-    if (uploaders == null || !uploaders.contains(operatorEmail)) {
-      return _badRequest('no permission', status: HttpStatus.forbidden);
-    }
-    if (!uploaders.contains(email)) {
-      return _badRequest('email not uploader');
-    }
+    final stored = findEmail(package!.uploaders, email);
+    if (stored == null) return _badRequest('email not uploader');
 
-    await metaStore.removeUploader(name, email);
+    await metaStore.removeUploader(name, stored);
+    await _audit(req, principal, 'uploader.removed', name, {'email': stored});
     return _successMessage('uploader removed');
   }
 
