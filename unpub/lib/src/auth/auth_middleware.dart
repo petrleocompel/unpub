@@ -86,7 +86,7 @@ shelf.Middleware authMiddleware(
         if (session != null && !_safeMethods.contains(request.method)) {
           authorized = await _checkCsrf(request, session.csrfToken);
         }
-        return inner(principal == null
+        return await inner(principal == null
             ? authorized
             : authorized.change(context: {_principalContextKey: principal}));
       } on AuthException catch (error) {
