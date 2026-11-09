@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:yaml/yaml.dart';
 
+import '../auth/accounts.dart';
 import '../logging.dart';
 
 /// Raised when the configuration cannot be loaded or is invalid.
@@ -25,6 +26,7 @@ const _schema = <String, _ValueKind>{
   'server.host': _ValueKind.string,
   'server.port': _ValueKind.integer,
   'server.publicUrl': _ValueKind.string,
+  'server.trustForwardedFor': _ValueKind.boolean,
   'mongo.uri': _ValueKind.string,
   'storage.type': _ValueKind.string,
   'storage.file.path': _ValueKind.string,
@@ -42,6 +44,8 @@ const _schema = <String, _ValueKind>{
   'auth.bootstrapEmail': _ValueKind.string,
   'auth.readAccess': _ValueKind.string,
   'auth.readTokens': _ValueKind.stringList,
+  'auth.admin.email': _ValueKind.string,
+  'auth.admin.password': _ValueKind.string,
   'logging.level': _ValueKind.string,
   'logging.format': _ValueKind.string,
 };
@@ -53,6 +57,7 @@ const _secretKeys = {
   'storage.s3.sessionToken',
   'auth.bootstrapToken',
   'auth.readTokens',
+  'auth.admin.password',
   'mongo.uri',
 };
 
@@ -135,10 +140,15 @@ class ServerConfig {
   /// When null, URLs are derived from the request.
   final Uri? publicUrl;
 
+  /// Whether the client address is taken from `X-Forwarded-For`. Only safe
+  /// behind a reverse proxy that sets the header.
+  final bool trustForwardedFor;
+
   const ServerConfig({
     required this.host,
     required this.port,
     required this.publicUrl,
+    this.trustForwardedFor = false,
   });
 }
 
@@ -203,24 +213,35 @@ class UpstreamConfig {
 /// Who may read packages.
 enum ReadAccess { public, authenticated }
 
+/// The administrator created at startup when there are no users yet.
+class AdminBootstrapConfig {
+  final String email;
+  final String password;
+
+  const AdminBootstrapConfig({required this.email, required this.password});
+}
+
 class AuthConfig {
-  /// Bearer token that may publish. Publishing is disabled when null.
+  /// Deprecated static Bearer token that acts as an administrator.
   final String? bootstrapToken;
 
-  /// Uploader email recorded for publishes using [bootstrapToken].
+  /// Email of the identity behind [bootstrapToken].
   final String bootstrapEmail;
 
   final ReadAccess readAccess;
 
-  /// Bearer tokens that may read when [readAccess] is `authenticated`, in
-  /// addition to [bootstrapToken]. They cannot publish.
+  /// Deprecated static Bearer tokens that act as a reader.
   final List<String> readTokens;
+
+  /// Set when `auth.admin.email` and `auth.admin.password` are configured.
+  final AdminBootstrapConfig? admin;
 
   const AuthConfig({
     required this.bootstrapToken,
     required this.bootstrapEmail,
     this.readAccess = ReadAccess.public,
     this.readTokens = const [],
+    this.admin,
   });
 }
 
@@ -483,6 +504,7 @@ class _ConfigReader {
       host: _string('server.host') ?? '0.0.0.0',
       port: _port(),
       publicUrl: _publicUrl(),
+      trustForwardedFor: _boolean('server.trustForwardedFor') ?? false,
     );
     final mongo = MongoConfig(uri: _mongoUri());
     final storage = _storage();
@@ -628,18 +650,34 @@ class _ConfigReader {
       _problems.add('${_describe('auth.readTokens')} may only contain tokens '
           'with the characters a-z A-Z 0-9 . _ ~ + / = -');
     }
-    if (readAccess == ReadAccess.authenticated &&
-        readTokens.isEmpty &&
-        token == null) {
-      _problems.add('auth.readAccess is authenticated, so at least one of '
-          'auth.readTokens and auth.bootstrapToken must be set');
-    }
     return AuthConfig(
       bootstrapToken: token,
       bootstrapEmail: email,
       readAccess: readAccess ?? ReadAccess.public,
       readTokens: readTokens,
+      admin: _adminBootstrap(),
     );
+  }
+
+  AdminBootstrapConfig? _adminBootstrap() {
+    final email = _string('auth.admin.email');
+    final password = _string('auth.admin.password');
+    if (email == null && password == null) return null;
+    if (email == null || password == null) {
+      _problems.add('auth.admin.email and auth.admin.password must be set '
+          'together');
+      return null;
+    }
+    final normalized = normalizeEmail(email);
+    if (!isValidEmail(normalized)) {
+      _problems.add('${_describe('auth.admin.email')} must be an email '
+          'address, got ${_shown('auth.admin.email')}');
+    }
+    final problem = passwordProblem(password);
+    if (problem != null) {
+      _problems.add('${_describe('auth.admin.password')} is invalid: $problem');
+    }
+    return AdminBootstrapConfig(email: normalized, password: password);
   }
 
   LoggingConfig _logging() {

@@ -24,6 +24,67 @@ Matcher problemsContaining(List<Object> matchers) =>
         .having((e) => e.problems, 'problems', containsAll(matchers)));
 
 void main() {
+  group('admin bootstrap', () {
+    test('is absent by default', () {
+      expect(parse(null).auth.admin, isNull);
+    });
+
+    test('reads the file and normalizes the email', () {
+      var admin = parse('auth:\n  admin:\n    email: Root@Example.com\n'
+              '    password: long-enough\n')
+          .auth
+          .admin!;
+      expect(admin.email, 'root@example.com');
+      expect(admin.password, 'long-enough');
+    });
+
+    test('reads the environment', () {
+      var admin = parse(null, env: {
+        'UNPUB_AUTH_ADMIN_EMAIL': 'root@example.com',
+        'UNPUB_AUTH_ADMIN_PASSWORD': 'long-enough',
+      }).auth.admin!;
+      expect(admin.email, 'root@example.com');
+    });
+
+    test('needs both values', () {
+      expect(() => parse(null, env: {'UNPUB_AUTH_ADMIN_EMAIL': 'a@b.c'}),
+          problemsContaining([contains('must be set together')]));
+      expect(
+          () => parse(null, env: {'UNPUB_AUTH_ADMIN_PASSWORD': 'long-enough'}),
+          problemsContaining([contains('must be set together')]));
+    });
+
+    test('rejects a bad email and a short password without printing it', () {
+      try {
+        parse('auth:\n  admin:\n    email: nobody\n    password: hunter\n');
+        fail('expected a ConfigException');
+      } on ConfigException catch (error) {
+        expect(error.toString(), contains('auth.admin.email'));
+        expect(error.toString(), contains('at least 8'));
+        expect(error.toString(), isNot(contains('hunter')));
+      }
+    });
+  });
+
+  group('forwarded address', () {
+    test('is not trusted by default', () {
+      expect(parse(null).server.trustForwardedFor, isFalse);
+    });
+
+    test('can be enabled', () {
+      expect(
+          parse('server:\n  trustForwardedFor: true\n')
+              .server
+              .trustForwardedFor,
+          isTrue);
+      expect(
+          parse(null, env: {'UNPUB_SERVER_TRUST_FORWARDED_FOR': 'true'})
+              .server
+              .trustForwardedFor,
+          isTrue);
+    });
+  });
+
   group('defaults', () {
     test('apply without a file', () {
       var config = parse(null);
@@ -335,13 +396,10 @@ logging:
           problemsContaining([contains('auth.readAccess')]));
     });
 
-    test('authenticated needs some token', () {
-      expect(() => parse('auth:\n  readAccess: authenticated\n'),
-          problemsContaining([contains('at least one')]));
-    });
-
-    test('the bootstrap token is enough', () {
-      parse('auth:\n  readAccess: authenticated\n  bootstrapToken: abc\n');
+    test('authenticated needs no static token, users can exist', () {
+      var auth = parse('auth:\n  readAccess: authenticated\n').auth;
+      expect(auth.readAccess, ReadAccess.authenticated);
+      expect(auth.readTokens, isEmpty);
     });
 
     test('rejects invalid tokens without printing them', () {
