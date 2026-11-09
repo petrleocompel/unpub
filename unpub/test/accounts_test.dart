@@ -511,6 +511,12 @@ void main() {
       expect((await send('GET', '/healthz', using: private)).status,
           HttpStatus.ok);
     });
+
+    test('a probe with a trailing slash reaches the router', () async {
+      // The router has no such route, but must be the one to say so.
+      expect((await send('GET', '/healthz/', using: private)).status,
+          HttpStatus.notFound);
+    });
   });
 
   group('token validity', () {

@@ -94,7 +94,8 @@ void main() {
       ['GET', 'webapi/packages'],
       ['HEAD', 'webapi/packages'],
       ['GET', 'badge/v/foo'],
-      ['GET', 'healthz/'],
+      ['GET', 'healthzx'],
+      ['GET', 'healthz/x'],
     ];
 
     for (var route in readRoutes) {
@@ -122,7 +123,13 @@ void main() {
       }
     }
 
-    for (var path in ['healthz', 'readyz']) {
+    for (var path in [
+      'healthz',
+      'readyz',
+      'healthz/',
+      'readyz/',
+      'healthz//',
+    ]) {
       test('$path stays open', () async {
         expect((await handler(request('GET', path))).statusCode, HttpStatus.ok);
       });

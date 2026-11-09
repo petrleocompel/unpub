@@ -39,7 +39,7 @@ bool isWriteRequest(shelf.Request request) {
 
 /// Whether [request] targets a probe that stays open in every read mode.
 bool isHealthRequest(shelf.Request request) {
-  final path = request.url.path;
+  final path = request.url.path.replaceFirst(RegExp(r'/+$'), '');
   return path == 'healthz' || path == 'readyz';
 }
 
