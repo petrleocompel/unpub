@@ -257,6 +257,19 @@ void main() {
       expect(stat.size, testPackageData.length);
     });
 
+    test('exists reflects the stored objects', () async {
+      var store = S3Store(s3Bucket, minio: minio);
+      await store.upload('exists_package', '1.0.0', testPackageData);
+      expect(await store.exists('exists_package', '1.0.0'), isTrue);
+      expect(await store.exists('exists_package', '9.9.9'), isFalse);
+    });
+
+    test('exists surfaces failures other than not found', () async {
+      var bad = createMinio('wrong-access-key', 'wrong-secret-key');
+      expect(S3Store(s3Bucket, minio: bad).exists('exists_package', '1.0.0'),
+          throwsA(isA<MinioError>()));
+    });
+
     test('upload and download with a custom path', () async {
       var store =
           S3Store(s3Bucket, minio: minio, getObjectPath: newFilePathFunc());

@@ -98,6 +98,18 @@ class S3Store extends PackageStore {
   }
 
   @override
+  Future<bool> exists(String name, String version) async {
+    try {
+      await _minio.statObject(bucketName, _getObjectKey(name, version),
+          retrieveAcls: false);
+      return true;
+    } on MinioS3Error catch (error) {
+      if (error.response?.statusCode == HttpStatus.notFound) return false;
+      rethrow;
+    }
+  }
+
+  @override
   Stream<List<int>> download(String name, String version) async* {
     yield* await _minio.getObject(bucketName, _getObjectKey(name, version));
   }

@@ -36,6 +36,14 @@ void main() {
         isTrue);
   });
 
+  test('exists reflects the stored archives', () async {
+    var baseDir = setupFixture('exists');
+    var store = unpub.FileStore(baseDir.path);
+    expect(await store.exists('test_package', '1.0.0'), isFalse);
+    await store.upload('test_package', '1.0.0', testPackageData);
+    expect(await store.exists('test_package', '1.0.0'), isTrue);
+  });
+
   group('stays inside its directory', () {
     test('a name cannot climb out', () async {
       var baseDir = setupFixture('traversal-name');

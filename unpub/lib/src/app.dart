@@ -244,6 +244,15 @@ class App {
           .toString());
     }
 
+    if (!package.versions.any((item) => item.version == version)) {
+      return _notFound();
+    }
+    if (!await packageStore.exists(name, version)) {
+      _log.warning(LogEvent(
+          'archive missing from storage', {'name': name, 'version': version}));
+      return _notFound();
+    }
+
     if (isPubClient(req)) {
       metaStore.increaseDownloads(name, version);
     }

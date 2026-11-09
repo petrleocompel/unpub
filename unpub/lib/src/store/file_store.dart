@@ -32,6 +32,10 @@ class FileStore extends PackageStore {
   }
 
   @override
+  Future<bool> exists(String name, String version) =>
+      _getTarballFile(name, version).exists();
+
+  @override
   Stream<List<int>> download(String name, String version) {
     return _getTarballFile(name, version).openRead();
   }

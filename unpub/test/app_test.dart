@@ -13,6 +13,7 @@ class FakeMetaStore extends MetaStore {
   UnpubPackage? package;
   final queried = <String>[];
   final added = <String>[];
+  final downloads = <String>[];
 
   @override
   Future<void> checkHealth() async {
@@ -28,7 +29,9 @@ class FakeMetaStore extends MetaStore {
   }
 
   @override
-  void increaseDownloads(String name, String version) {}
+  void increaseDownloads(String name, String version) {
+    downloads.add('$name@$version');
+  }
 
   @override
   Future<UnpubPackage?> queryPackage(String name) async {
@@ -293,6 +296,70 @@ void main() {
             headers: authorized, body: 'email=a%40b.c'));
         expect(response.statusCode, HttpStatus.notFound);
         expect(metaStore.queried, isEmpty);
+      });
+    }
+  });
+
+  group('download', () {
+    late Directory temp;
+    late App app;
+    final pubClient = {'user-agent': 'Dart pub 3.12.0'};
+
+    UnpubVersion version(String version) => UnpubVersion(
+        version, {'name': 'fine'}, null, null, null, null, DateTime.now());
+
+    setUp(() async {
+      temp = await Directory.systemTemp.createTemp('unpub-download-');
+      metaStore.package = UnpubPackage(
+        'fine',
+        [version('1.0.0'), version('1.0.0+1')],
+        true,
+        ['a@b.c'],
+        DateTime.now(),
+        DateTime.now(),
+        0,
+      );
+      app = App(
+        metaStore: metaStore,
+        packageStore: FileStore(temp.path),
+        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+      );
+    });
+
+    tearDown(() => temp.delete(recursive: true));
+
+    test('a version missing from the metadata is a 404', () async {
+      var response = await app.handler(
+          get('/packages/fine/versions/9.9.9.tar.gz', headers: pubClient));
+      expect(response.statusCode, HttpStatus.notFound);
+      expect(metaStore.downloads, isEmpty);
+    });
+
+    test('an archive missing from storage is an uncounted 404', () async {
+      var response = await app.handler(
+          get('/packages/fine/versions/1.0.0.tar.gz', headers: pubClient));
+      expect(response.statusCode, HttpStatus.notFound);
+      expect(metaStore.downloads, isEmpty);
+      expect(json.decode(await response.readAsString())['error'], isNotNull);
+    });
+
+    test('a stored archive is streamed and counted', () async {
+      File(path.join(temp.path, 'fine-1.0.0.tar.gz'))
+          .writeAsBytesSync([1, 2, 3]);
+      var response = await app.handler(
+          get('/packages/fine/versions/1.0.0.tar.gz', headers: pubClient));
+      expect(response.statusCode, HttpStatus.ok);
+      expect(
+          await response.read().expand((bytes) => bytes).toList(), [1, 2, 3]);
+      expect(metaStore.downloads, ['fine@1.0.0']);
+    });
+
+    for (var segment in ['1.0.0+1', '1.0.0%2B1']) {
+      test('the version segment $segment finds the archive', () async {
+        File(path.join(temp.path, 'fine-1.0.0+1.tar.gz')).writeAsBytesSync([1]);
+        var response =
+            await app.handler(get('/packages/fine/versions/$segment.tar.gz'));
+        expect(response.statusCode, HttpStatus.ok);
       });
     }
   });
