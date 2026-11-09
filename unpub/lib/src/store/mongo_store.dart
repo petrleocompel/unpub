@@ -9,8 +9,13 @@ import 'mongo_indexes.dart';
 final packageCollection = 'packages';
 final statsCollection = 'stats';
 final versionStatsCollection = 'version_stats';
+final uploadReservationsCollection = 'upload_reservations';
 
 const _duplicateKeyCode = 11000;
+
+/// How long a reservation outlives a server that died while holding it. The
+/// archive write and metadata update it covers take far less than this.
+const _uploadReservationTtl = Duration(minutes: 15);
 
 final _log = Logger('unpub.mongo');
 
@@ -29,6 +34,18 @@ class MongoStore extends MetaStore {
         'key': {'name': 1, 'version': 1},
         'name': 'name_version',
         'unique': true,
+      },
+    ]);
+    await createIndexes(db, uploadReservationsCollection, [
+      {
+        'key': {'name': 1, 'version': 1},
+        'name': 'name_version',
+        'unique': true,
+      },
+      {
+        'key': {'expiresAt': 1},
+        'name': 'expires_at_ttl',
+        'expireAfterSeconds': 0,
       },
     ]);
   }
@@ -98,6 +115,31 @@ class MongoStore extends MetaStore {
       throw StateError('cannot $action: '
           '${result.writeError?.errmsg ?? result.errmsg}');
     }
+  }
+
+  @override
+  Future<String?> reserveUpload(String name, String version) async {
+    final reservation = ObjectId().oid;
+    final now = DateTime.now();
+    final result = await db.collection(uploadReservationsCollection).insertOne({
+      'name': name,
+      'version': version,
+      'reservation': reservation,
+      'createdAt': now,
+      'expiresAt': now.add(_uploadReservationTtl),
+    });
+    if (result.writeError?.code == _duplicateKeyCode) return null;
+    _checkWrite(result, 'reserve upload');
+    return reservation;
+  }
+
+  @override
+  Future<void> releaseUpload(
+      String name, String version, String reservation) async {
+    await db.collection(uploadReservationsCollection).deleteOne(where
+        .eq('name', name)
+        .eq('version', version)
+        .eq('reservation', reservation));
   }
 
   @override

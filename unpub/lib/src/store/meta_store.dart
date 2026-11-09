@@ -12,6 +12,18 @@ abstract class MetaStore {
   /// what publishing over an existing version does.
   Future<void> replaceVersion(String name, UnpubVersion version);
 
+  /// Claims the right to store the archive of [name] [version], so that a
+  /// concurrent publish, also from another server, cannot overwrite it.
+  ///
+  /// Returns what to pass to [releaseUpload], or null if another request holds
+  /// the claim. A store shared by one process can keep this default, because
+  /// [App] already serializes publishes within a process.
+  Future<String?> reserveUpload(String name, String version) async => '';
+
+  /// Gives up a claim made by [reserveUpload].
+  Future<void> releaseUpload(
+      String name, String version, String reservation) async {}
+
   Future<void> addUploader(String name, String email);
 
   Future<void> removeUploader(String name, String email);

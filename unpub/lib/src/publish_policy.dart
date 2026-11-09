@@ -83,6 +83,12 @@ class PublishPolicy {
       PublishPolicyViolation('version invalid: $name@$version already exists. '
           '(publish.requireVersionBump)');
 
+  /// The refusal of a version that a concurrent request is publishing.
+  static PublishPolicyViolation concurrentPublish(
+          String name, String version) =>
+      PublishPolicyViolation(
+          'version is being published by another request: $name@$version');
+
   /// Whether the retraction window has closed for a version published at
   /// [publishedAt].
   bool retractionWindowClosed(DateTime publishedAt, DateTime now) {

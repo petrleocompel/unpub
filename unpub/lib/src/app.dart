@@ -104,8 +104,9 @@ class App {
   final Future<void> Function(
       Map<String, dynamic> pubspec, String uploaderEmail)? uploadValidator;
 
-  /// Uploads being stored. Two uploads of one version writing the same archive
-  /// could otherwise leave bytes that do not match the stored hash.
+  /// Uploads being processed in this process, from the first look at the
+  /// package to the end. Two uploads of one version could otherwise leave
+  /// bytes that do not match the stored hash.
   final _uploadsInProgress = <String>{};
 
   App({
@@ -536,6 +537,7 @@ class App {
     final uploader = principal.email;
 
     String? uploadKey;
+    (String, String, String)? reservation;
     try {
       var tarballBytes = await _readUploadedArchive(req);
       var tarBytes = GZipDecoder().decodeBytes(tarballBytes);
@@ -579,19 +581,16 @@ class App {
             '1.2.3.';
       }
 
-      var package = await metaStore.queryPackage(name);
-
-      // Package already exists
-      if (package != null) {
-        if (package.private == false) {
-          throw '$name is not a private package. Please upload it to https://pub.dev';
-        }
-
-        // Check uploaders
-        if (!principal.canChangePackage(package.uploaders)) {
-          throw '$uploader is not an uploader of $name';
-        }
+      // Serializing here, before reading anything about the package, means an
+      // upload cannot act on checks that a concurrent one has outdated.
+      final key = '$name@$version';
+      if (!_uploadsInProgress.add(key)) {
+        throw PublishPolicy.concurrentPublish(name, version);
       }
+      uploadKey = key;
+
+      var package = await metaStore.queryPackage(name);
+      _checkMayPublish(package, principal, name);
 
       publishPolicy.checkName(name);
       publishPolicy.checkRequiredFiles(
@@ -602,11 +601,16 @@ class App {
       final callback = uploadValidator;
       if (callback != null) await callback(pubspec, uploader);
 
-      final key = '$name@$version';
-      if (!_uploadsInProgress.add(key)) {
-        throw PublishPolicy.duplicateVersion(name, version);
-      }
-      uploadKey = key;
+      // The guard above holds in this process only. Taking this before the
+      // archive is written keeps other server instances from writing it too.
+      final claim = await metaStore.reserveUpload(name, version);
+      if (claim == null) throw PublishPolicy.concurrentPublish(name, version);
+      reservation = (name, version, claim);
+
+      // Another server may have finished publishing while the checks ran.
+      package = await metaStore.queryPackage(name);
+      _checkMayPublish(package, principal, name);
+      if (package != null) publishPolicy.checkVersion(package, version);
 
       final isReplacement =
           package?.versions.any((item) => item.version == version) ?? false;
@@ -656,7 +660,34 @@ class App {
           '?error=${Uri.encodeQueryComponent('$err')}'
           '${err is _UploadRetryLater ? '&retryable=true' : ''}'));
     } finally {
+      if (reservation != null) await _releaseReservation(reservation);
       if (uploadKey != null) _uploadsInProgress.remove(uploadKey);
+    }
+  }
+
+  /// Refuses an upload to [package] that [principal] may not make.
+  void _checkMayPublish(
+      UnpubPackage? package, Principal principal, String name) {
+    if (package == null) return;
+    if (package.private == false) {
+      throw '$name is not a private package. Please upload it to https://pub.dev';
+    }
+    if (!principal.canChangePackage(package.uploaders)) {
+      throw '${principal.email} is not an uploader of $name';
+    }
+  }
+
+  /// A reservation that cannot be given up expires by itself.
+  Future<void> _releaseReservation((String, String, String) reservation) async {
+    final (name, version, claim) = reservation;
+    try {
+      await metaStore.releaseUpload(name, version, claim);
+    } catch (error, stackTrace) {
+      _log.warning(
+          LogEvent('failed to release an upload reservation',
+              {'name': name, 'version': version}),
+          error,
+          stackTrace);
     }
   }
 
