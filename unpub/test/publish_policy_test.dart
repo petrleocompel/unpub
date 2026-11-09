@@ -14,6 +14,7 @@ const _timeout = Timeout(Duration(minutes: 3));
 
 void main() {
   late Db db;
+  late Directory storage;
   HttpServer? running;
 
   Future<void> serve(PublishConfig publish,
@@ -39,6 +40,19 @@ void main() {
         .toList();
   }
 
+  App appWith(PublishConfig publish) => App(
+        metaStore: MongoStore(db),
+        packageStore: FileStore(storage.path),
+        authenticator: const FakeAuthenticator(testToken, 'dev@b.c'),
+        publishPolicy: PublishPolicy(publish),
+      );
+
+  Future<String?> uploadError(App app, Archive archive) async {
+    final response = await app.handler(
+        uploadRequestOf(archive, const {'authorization': 'Bearer $testToken'}));
+    return Uri.parse(response.headers['location']!).queryParameters['error'];
+  }
+
   setUpAll(() async {
     db = Db(testMongoUri);
     await db.open();
@@ -53,6 +67,8 @@ void main() {
   setUp(() async {
     await db.dropCollection(packageCollection);
     await db.dropCollection(statsCollection);
+    storage = await Directory.systemTemp.createTemp('unpub-policy-');
+    addTearDown(() => storage.delete(recursive: true));
   });
 
   tearDown(() async {
@@ -97,12 +113,7 @@ void main() {
       bomb = GZipEncoder().encodeBytes(Uint8List(32 * 1024 * 1024));
     });
 
-    App buildApp(int limit) => App(
-          metaStore: MongoStore(db),
-          packageStore: FileStore(Directory.systemTemp.path),
-          authenticator: const FakeAuthenticator(testToken, 'dev@b.c'),
-          publishPolicy: PublishPolicy(PublishConfig(maxUnpackedBytes: limit)),
-        );
+    App buildApp(int limit) => appWith(PublishConfig(maxUnpackedBytes: limit));
 
     Archive archiveWithPadding(int padding) => Archive()
       ..addFile(ArchiveFile.string(
@@ -183,6 +194,48 @@ void main() {
       expect(result.stderr, isNot(contains('readme.md')));
       expect(await versionsOf('documented'), isEmpty);
     }, timeout: _timeout);
+
+    group('needs a regular file', () {
+      Archive withLicense(ArchiveFile license) => Archive()
+        ..addFile(ArchiveFile.string(
+            'pubspec.yaml', 'name: linked\nversion: 1.0.0\n'))
+        ..addFile(license);
+
+      test('a dangling symbolic link does not count', () async {
+        final error = await uploadError(
+            appWith(const PublishConfig(requiredFiles: ['LICENSE'])),
+            withLicense(ArchiveFile.symlink('LICENSE', 'nowhere')));
+
+        expect(error, contains('publish.requiredFiles'));
+        expect(await versionsOf('linked'), isEmpty);
+      });
+
+      test('a link to a real file does not count either', () async {
+        final error = await uploadError(
+            appWith(const PublishConfig(requiredFiles: ['LICENSE'])),
+            withLicense(ArchiveFile.symlink('LICENSE', 'pubspec.yaml')));
+
+        expect(error, contains('publish.requiredFiles'));
+      });
+
+      test('a hard link does not count', () async {
+        final error = await uploadError(
+            appWith(const PublishConfig(requiredFiles: ['LICENSE'])),
+            withLicense(ArchiveFile.symlink('LICENSE', 'pubspec.yaml')
+              ..isHardLink = true));
+
+        expect(error, contains('publish.requiredFiles'));
+      });
+
+      test('a regular file counts', () async {
+        final error = await uploadError(
+            appWith(const PublishConfig(requiredFiles: ['LICENSE'])),
+            withLicense(ArchiveFile.string('LICENSE', 'MIT')));
+
+        expect(error, isNull);
+        expect(await versionsOf('linked'), ['1.0.0']);
+      });
+    });
 
     test('only files at the archive root count', () {
       final policy =

@@ -593,8 +593,9 @@ class App {
       _checkMayPublish(package, principal, name);
 
       publishPolicy.checkName(name);
-      publishPolicy.checkRequiredFiles(
-          archive.files.where((file) => file.isFile).map((file) => file.name));
+      publishPolicy.checkRequiredFiles(archive.files
+          .where((file) => file.isFile && !file.isSymbolicLink)
+          .map((file) => file.name));
       if (package != null) publishPolicy.checkVersion(package, version);
       if (package == null) await _rejectUpstreamPackage(name);
 
