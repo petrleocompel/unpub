@@ -5,6 +5,18 @@ import 'package:shelf/shelf.dart' as shelf;
 import '../store/account_store.dart';
 import 'accounts.dart';
 
+/// How a request proved who it is.
+enum CredentialKind {
+  /// A web session started by a password login.
+  session,
+
+  /// A personal API token.
+  apiToken,
+
+  /// A deprecated token from the configuration.
+  staticToken,
+}
+
 /// The identity behind an authenticated request.
 class Principal {
   /// Email recorded as the uploader and checked against package uploaders.
@@ -20,6 +32,11 @@ class Principal {
   /// The account behind the request. Null for a legacy static token.
   final String? userId;
 
+  /// How this request was authenticated. A custom [Authenticator] that does
+  /// not say gets [CredentialKind.apiToken], the kind with the least authority
+  /// over accounts.
+  final CredentialKind credentialKind;
+
   /// Set when the request was authenticated by a web session.
   final Session? session;
 
@@ -32,6 +49,7 @@ class Principal {
     this.scopes = allScopes,
     String? actor,
     this.userId,
+    this.credentialKind = CredentialKind.apiToken,
     this.session,
     this.tokenExpiresAt,
   }) : actor = actor ?? email;
@@ -132,6 +150,7 @@ class ApiTokenAuthenticator implements Authenticator {
       scopes: token.scopes,
       actor: 'token:${token.prefix}',
       userId: user.id,
+      credentialKind: CredentialKind.apiToken,
       tokenExpiresAt: token.expiresAt,
     );
   }
@@ -159,6 +178,7 @@ class SessionAuthenticator implements Authenticator {
       user.email,
       role: user.role,
       userId: user.id,
+      credentialKind: CredentialKind.session,
       session: session,
     );
   }
@@ -188,7 +208,11 @@ class StaticTokenAuthenticator implements Authenticator {
     if (bootstrap != null &&
         bootstrap.isNotEmpty &&
         constantTimeEquals(presented, bootstrap)) {
-      return Principal(bootstrapEmail, role: Role.admin);
+      return Principal(
+        bootstrapEmail,
+        role: Role.admin,
+        credentialKind: CredentialKind.staticToken,
+      );
     }
 
     // Checks every token so the running time does not reveal a match.
@@ -197,8 +221,12 @@ class StaticTokenAuthenticator implements Authenticator {
       matched |= constantTimeEquals(presented, token);
     }
     if (!matched) return null;
-    return const Principal('reader@localhost',
-        role: Role.reader, scopes: {Scope.read});
+    return const Principal(
+      'reader@localhost',
+      role: Role.reader,
+      scopes: {Scope.read},
+      credentialKind: CredentialKind.staticToken,
+    );
   }
 }
 

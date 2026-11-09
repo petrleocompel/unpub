@@ -1046,9 +1046,9 @@ void main() {
 
     test('wrong current passwords are limited too', () async {
       final publisher = await user('p@b.c', Role.publisher);
-      final secret = await token(publisher);
+      final browser = await login(publisher, using: limited);
       Future<Reply> change() => send('POST', '/webapi/me/password',
-              bearer: secret,
+              browser: browser,
               using: limited,
               body: {
                 'currentPassword': 'wrong-password',
@@ -1219,15 +1219,169 @@ void main() {
           HttpStatus.ok);
     });
 
-    test('a placeholder has no current password to give', () async {
-      final placeholder = await user('q@b.c', Role.publisher, password: null);
-      final reply = await send('POST', '/webapi/me/password',
-          bearer: await token(placeholder),
-          body: {
-            'currentPassword': 'anything-long',
-            'newPassword': 'a-new-password',
-          });
+    test('an account without a password has no current password to give',
+        () async {
+      await db.collection(userCollection).updateOne(
+          where.eq('email', 'p@b.c'), modify.set('passwordHash', null));
+      final reply = await change('anything-long', 'a-new-password');
       expect(reply.status, HttpStatus.forbidden);
+      expect(reply.errorCode, 'invalid_credentials');
+    });
+  });
+
+  group('credential management needs a password login', () {
+    const stolenPassword = 'chosen-by-the-attacker';
+
+    void expectSessionRequired(Reply reply) {
+      expect(reply.status, HttpStatus.forbidden, reason: '${reply.body}');
+      expect(reply.errorCode, 'session_required');
+    }
+
+    Future<int> loginStatus(String email, String password) async =>
+        (await send('POST', '/webapi/login',
+                body: {'email': email, 'password': password}))
+            .status;
+
+    test('a narrowed, expiring admin token cannot trade itself for more',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final limited = await accounts.createToken(admin,
+          name: 'ci',
+          scopes: {Scope.publish},
+          expiresAt: DateTime.now().add(const Duration(minutes: 1)));
+      final secret = limited.secret;
+
+      expect((await send('GET', '/webapi/users', bearer: secret)).status,
+          HttpStatus.forbidden);
+      expectSessionRequired(await send(
+          'POST', '/webapi/users/${admin.id}/password',
+          bearer: secret, body: {'password': stolenPassword}));
+      expectSessionRequired(await send('POST', '/webapi/me/password',
+          bearer: secret,
+          body: {'currentPassword': _password, 'newPassword': stolenPassword}));
+
+      expect(
+          await loginStatus('a@b.c', stolenPassword), HttpStatus.unauthorized);
+      expect((await store.findUserById(admin.id))!.passwordHash,
+          admin.passwordHash);
+
+      // The token keeps what it has, and no more.
+      final wider = await send('POST', '/webapi/tokens', bearer: secret, body: {
+        'name': 'wider',
+        'scopes': ['read', 'publish'],
+      });
+      expect(wider.status, HttpStatus.forbidden);
+      final longer = await send('POST', '/webapi/tokens',
+          bearer: secret, body: {'name': 'longer', 'expiresIn': '30d'});
+      expect(longer.status, HttpStatus.badRequest);
+      final narrow = await send('POST', '/webapi/tokens',
+          bearer: secret, body: {'name': 'narrow'});
+      expect(narrow.status, HttpStatus.created);
+      expect(narrow.body['token']['scopes'], ['publish']);
+      expect(narrow.body['token']['expiresAt'], isNotNull);
+    });
+
+    for (final (name, scopes) in [
+      ('a full', allScopes),
+      ('a publish-only', const {Scope.publish}),
+    ]) {
+      test('$name admin token cannot create a user', () async {
+        final admin = await user('a@b.c', Role.admin);
+        final reply = await send('POST', '/webapi/users',
+            bearer: await token(admin, scopes: scopes),
+            body: {
+              'email': 'new@b.c',
+              'role': 'admin',
+              'password': stolenPassword,
+            });
+        expectSessionRequired(reply);
+        expect(await store.findUserByEmail('new@b.c'), isNull);
+      });
+    }
+
+    test('an admin token cannot change a role or the disabled state', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final other = await user('o@b.c', Role.reader);
+      final secret = await token(admin);
+      for (final body in <Map<String, Object?>>[
+        {'role': 'admin'},
+        {'disabled': true},
+      ]) {
+        expectSessionRequired(await send('PATCH', '/webapi/users/${other.id}',
+            bearer: secret, body: body));
+      }
+      final unchanged = (await store.findUserById(other.id))!;
+      expect(unchanged.role, Role.reader);
+      expect(unchanged.disabled, isFalse);
+    });
+
+    test('the bootstrap token is refused as well', () async {
+      final bootstrap = buildApp(bootstrapToken: 'bootstrap-secret');
+      final target = await user('o@b.c', Role.reader);
+      Future<Reply> asBootstrap(
+              String method, String route, Map<String, Object?> body) =>
+          send(method, route,
+              bearer: 'bootstrap-secret', body: body, using: bootstrap);
+
+      expectSessionRequired(await asBootstrap(
+          'POST', '/webapi/users', {'email': 'new@b.c', 'role': 'admin'}));
+      expectSessionRequired(await asBootstrap(
+          'PATCH', '/webapi/users/${target.id}', {'role': 'admin'}));
+      expectSessionRequired(await asBootstrap('POST',
+          '/webapi/users/${target.id}/password', {'password': stolenPassword}));
+    });
+
+    test('a token sent along with a session cookie counts as the token',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final browser = await login(admin);
+      expectSessionRequired(await send('POST', '/webapi/users',
+          bearer: await token(admin),
+          browser: browser,
+          body: {'email': 'new@b.c', 'role': 'reader'}));
+    });
+
+    test('a session of a non-admin is refused for lacking the role', () async {
+      final publisher = await login(await user('p@b.c', Role.publisher));
+      final reply = await send('POST', '/webapi/users',
+          browser: publisher, body: {'email': 'new@b.c', 'role': 'reader'});
+      expect(reply.status, HttpStatus.forbidden);
+      expect(reply.errorCode, 'forbidden');
+    });
+
+    test('a token of a non-admin is refused for lacking the role', () async {
+      final publisher = await user('p@b.c', Role.publisher);
+      final reply = await send('POST', '/webapi/users',
+          bearer: await token(publisher),
+          body: {'email': 'new@b.c', 'role': 'reader'});
+      expect(reply.status, HttpStatus.forbidden);
+      expect(reply.errorCode, 'forbidden');
+    });
+
+    test('a session can still do all of it', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final browser = await login(admin);
+      final created = await send('POST', '/webapi/users',
+          browser: browser, body: {'email': 'new@b.c', 'role': 'reader'});
+      expect(created.status, HttpStatus.created);
+      final id = created.body['user']['id'];
+      expect(
+          (await send('PATCH', '/webapi/users/$id',
+                  browser: browser, body: {'role': 'publisher'}))
+              .status,
+          HttpStatus.ok);
+      expect(
+          (await send('POST', '/webapi/users/$id/password',
+                  browser: browser, body: {'password': 'a-new-password'}))
+              .status,
+          HttpStatus.ok);
+      expect(
+          (await send('POST', '/webapi/me/password', browser: browser, body: {
+            'currentPassword': _password,
+            'newPassword': 'a-new-password',
+          }))
+              .status,
+          HttpStatus.ok);
     });
   });
 

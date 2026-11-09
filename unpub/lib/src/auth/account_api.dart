@@ -161,6 +161,21 @@ class AccountApi {
     return principal;
   }
 
+  /// Rejects everything except a password login.
+  ///
+  /// Changing credentials or roles would let a narrowed or expiring token
+  /// trade itself for full access, so no token may do it. The command line
+  /// goes through [AccountService] directly and is not affected.
+  static Principal _requireSession(Principal principal) {
+    if (principal.credentialKind != CredentialKind.session) {
+      throw const AuthException.forbidden(
+          'Log in with a password to do this. API tokens cannot change '
+          'credentials or roles.',
+          code: 'session_required');
+    }
+    return principal;
+  }
+
   /// Rejects a token that was not granted [Scope.read].
   static void _requireRead(Principal principal) {
     if (!principal.scopes.contains(Scope.read)) {
@@ -252,7 +267,7 @@ class AccountApi {
   }
 
   Future<shelf.Response> _changeOwnPassword(shelf.Request request) async {
-    final principal = _principal(request);
+    final principal = _requireSession(_principal(request));
     final user = await _account(principal);
     final body = await _readJson(request);
     final current = _requiredString(body, 'currentPassword');
@@ -374,7 +389,7 @@ class AccountApi {
   }
 
   Future<shelf.Response> _createUser(shelf.Request request) async {
-    final principal = _admin(request);
+    final principal = _requireSession(_admin(request));
     final body = await _readJson(request);
     final role = _optionalRole(body);
     if (role == null) {
@@ -391,7 +406,7 @@ class AccountApi {
   }
 
   Future<shelf.Response> _updateUser(shelf.Request request, String id) async {
-    final principal = _admin(request);
+    final principal = _requireSession(_admin(request));
     final body = await _readJson(request);
     final disabled = body['disabled'];
     if (disabled != null && disabled is! bool) {
@@ -410,7 +425,7 @@ class AccountApi {
 
   Future<shelf.Response> _setUserPassword(
       shelf.Request request, String id) async {
-    final principal = _admin(request);
+    final principal = _requireSession(_admin(request));
     final body = await _readJson(request);
     final password = _requiredString(body, 'password');
     final user = await accounts.requireUserById(id);
