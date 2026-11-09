@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:path/path.dart' as path;
 import 'package:shelf/shelf.dart' as shelf;
@@ -12,6 +13,7 @@ import 'package:unpub/unpub.dart';
 import 'utils.dart';
 
 const _password = 'correct-horse-battery';
+const _pubClient = {'user-agent': 'Dart pub 3.12.0'};
 
 /// A response with its body decoded.
 class Reply {
@@ -306,6 +308,215 @@ void main() {
       expect(response.statusCode, HttpStatus.found);
       expect(response.headers['location'],
           'https://pub.dev/api/packages/nope/advisories');
+    });
+  });
+
+  group('http caching', () {
+    const route = '/api/packages/$name';
+    const tarball = '/packages/$name/versions/1.0.0.tar.gz';
+
+    test('a listing has a validator and can be revalidated', () async {
+      await publish('1.0.0');
+
+      final first = await send('GET', route);
+      final etag = first.headers['etag']!;
+      expect(first.headers['cache-control'], 'public, max-age=60');
+
+      final second = await send('GET', route, headers: {'if-none-match': etag});
+      expect(second.status, 304);
+      expect(second.headers['etag'], etag);
+      expect(second.headers['cache-control'], 'public, max-age=60');
+    });
+
+    test('a validator made weak by a proxy still matches', () async {
+      await publish('1.0.0');
+      final etag = (await send('GET', route)).headers['etag']!;
+      final weak = etag.startsWith('W/') ? etag : 'W/$etag';
+      final reply = await send('GET', route, headers: {'if-none-match': weak});
+      expect(reply.status, 304);
+    });
+
+    test('* and a list of validators are understood', () async {
+      await publish('1.0.0');
+      final etag = (await send('GET', route)).headers['etag']!;
+      expect((await send('GET', route, headers: {'if-none-match': '*'})).status,
+          304);
+      expect(
+          (await send('GET', route,
+                  headers: {'if-none-match': '"other", $etag'}))
+              .status,
+          304);
+      expect(
+          (await send('GET', route, headers: {'if-none-match': '"other"'}))
+              .status,
+          200);
+    });
+
+    test('the validator changes with new versions and flags', () async {
+      await publish('1.0.0');
+      Future<String> current() async =>
+          (await send('GET', route)).headers['etag']!;
+
+      final seen = {await current()};
+      Future<void> expectNew() async =>
+          expect(seen.add(await current()), isTrue);
+
+      await publish('1.1.0');
+      await expectNew();
+      await send('POST', '$route/versions/1.1.0/retract', bearer: ownerToken);
+      await expectNew();
+      await send('PUT', '$route/discontinue',
+          bearer: ownerToken, jsonBody: {'isDiscontinued': true});
+      await expectNew();
+    });
+
+    test('undoing a retraction brings back the same validator', () async {
+      await publish('1.0.0');
+      final before = (await send('GET', route)).headers['etag'];
+      await send('POST', '$route/versions/1.0.0/retract', bearer: ownerToken);
+      expect((await send('GET', route)).headers['etag'], isNot(before));
+      await send('POST', '$route/versions/1.0.0/unretract', bearer: ownerToken);
+      expect((await send('GET', route)).headers['etag'], before);
+    });
+
+    test('backfilling a hash changes the validator', () async {
+      await publish('1.0.0');
+      final before = (await send('GET', route)).headers['etag'];
+      await db.collection(packageCollection).updateOne(
+          where.eq('name', name), modify.unset(r'versions.0.sha256'));
+      expect((await send('GET', route)).headers['etag'], isNot(before));
+    });
+
+    test('the validator of a listing depends on the origin in it', () async {
+      await publish('1.0.0');
+      final other = App(
+        metaStore: MongoStore(db),
+        packageStore: FileStore(storage.path),
+        authenticator: ChainAuthenticator([ApiTokenAuthenticator(store)]),
+        publicUrl: Uri.parse('https://pub.example.com'),
+      );
+      expect((await send('GET', route, using: other)).headers['etag'],
+          isNot((await send('GET', route)).headers['etag']));
+    });
+
+    test('a private registry forbids caching listings', () async {
+      await publish('1.0.0');
+      final private = buildApp(readAccess: ReadAccess.authenticated);
+      final reply =
+          await send('GET', route, bearer: ownerToken, using: private);
+      expect(reply.status, 200);
+      expect(reply.headers['cache-control'], 'private, no-store');
+      expect(reply.headers['etag'], isNotNull);
+    });
+
+    test('an archive has a strong validator and can be revalidated', () async {
+      await publish('1.0.0');
+      final hash = (await storedVersion('1.0.0'))['sha256'];
+
+      final first = await send('GET', tarball);
+      expect(first.status, 200);
+      expect(first.headers['etag'], '"$hash"');
+      expect(first.headers['cache-control'],
+          'public, max-age=31536000, immutable');
+
+      final second =
+          await send('GET', tarball, headers: {'if-none-match': '"$hash"'});
+      expect(second.status, 304);
+      expect(second.headers['etag'], '"$hash"');
+    });
+
+    test('an archive without a stored hash has no validator', () async {
+      await publish('1.0.0');
+      await db.collection(packageCollection).updateOne(
+          where.eq('name', name), modify.unset(r'versions.0.sha256'));
+      final reply = await send('GET', tarball);
+      expect(reply.status, 200);
+      expect(reply.headers.containsKey('etag'), isFalse);
+    });
+
+    test('a private registry marks archives private', () async {
+      await publish('1.0.0');
+      final private = buildApp(readAccess: ReadAccess.authenticated);
+      final reply =
+          await send('GET', tarball, bearer: ownerToken, using: private);
+      expect(reply.headers['cache-control'], 'private');
+    });
+
+    Future<int?> countOf(String field) async {
+      final stats = await db
+          .collection(versionStatsCollection)
+          .findOne(where.eq('name', name).eq('version', '1.0.0'));
+      return stats?[field] as int?;
+    }
+
+    Future<void> waitForCount(int expected) async {
+      for (var i = 0; i < 100 && await countOf('count') != expected; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(await countOf('count'), expected);
+    }
+
+    test('a 304 is not counted as a download', () async {
+      await publish('1.0.0');
+      final hash = (await storedVersion('1.0.0'))['sha256'];
+
+      await send('GET', tarball, headers: _pubClient);
+      await waitForCount(1);
+
+      final reply = await send('GET', tarball,
+          headers: {..._pubClient, 'if-none-match': '"$hash"'});
+      expect(reply.status, 304);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      await waitForCount(1);
+      final package = await db
+          .collection(packageCollection)
+          .findOne(where.eq('name', name));
+      expect(package!['download'], 1);
+    });
+
+    test('only pub clients are counted', () async {
+      await publish('1.0.0');
+      await send('GET', tarball);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(await countOf('count'), isNull);
+    });
+
+    test('a HEAD request is not counted', () async {
+      await publish('1.0.0');
+      final reply = await send('HEAD', tarball, headers: _pubClient);
+      expect(reply.status, 200);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(await countOf('count'), isNull);
+    });
+
+    test('per version counts keep daily counters and a total', () async {
+      await publish('1.0.0');
+      await send('GET', tarball, headers: _pubClient);
+      await waitForCount(1);
+      await send('GET', tarball, headers: _pubClient);
+      await waitForCount(2);
+
+      final today = DateFormat('yyyyMMdd').format(DateTime.now());
+      expect(await countOf('d$today'), 2);
+      expect(
+          await db
+              .collection(versionStatsCollection)
+              .count(where.eq('name', name)),
+          1);
+    });
+
+    test('the detail view reports version and package downloads', () async {
+      await publish('1.0.0');
+      await publish('1.1.0');
+      await send('GET', tarball, headers: _pubClient);
+      await waitForCount(1);
+
+      final detail = await send('GET', '/webapi/package/$name/1.0.0');
+      expect(detail.body['data']['downloads'], {'version': 1, 'package': 1});
+
+      final other = await send('GET', '/webapi/package/$name/1.1.0');
+      expect(other.body['data']['downloads'], {'version': 0, 'package': 1});
     });
   });
 

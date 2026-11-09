@@ -24,6 +24,7 @@ import 'auth/accounts.dart';
 import 'auth/auth_middleware.dart';
 import 'auth/authenticator.dart';
 import 'config/config.dart';
+import 'http_cache.dart';
 import 'logging.dart';
 import 'publish_policy.dart';
 import 'redact.dart';
@@ -46,6 +47,10 @@ const _multipartOverhead = 64 * 1024;
 
 /// Largest JSON body read by the package management routes.
 const _maxJsonBodyBytes = 64 * 1024;
+
+/// Changes when the listing format does, so that a client's validator from an
+/// older server does not match.
+const _listingFormat = 'listing-v2';
 
 class App {
   /// meta information store
@@ -177,6 +182,54 @@ class App {
     };
   }
 
+  bool get _isPublicRead => readAccess == ReadAccess.public;
+
+  /// A validator for a JSON response built from [parts], which also varies
+  /// with the origin in its URLs.
+  String _listingEtag(shelf.Request req, Iterable<Object?> parts) {
+    final input = [_listingFormat, _resolveUrl(req, '/'), ...parts].join('|');
+    final digest = sha256.convert(utf8.encode(input)).toString();
+    return 'W/"${digest.substring(0, 32)}"';
+  }
+
+  /// The validator of the listing of [package].
+  ///
+  /// Retracting or discontinuing does not touch `updatedAt`, which orders the
+  /// package list, so the flags are part of the input.
+  String _packageEtag(shelf.Request req, UnpubPackage package) =>
+      _listingEtag(req, [
+        package.updatedAt.millisecondsSinceEpoch,
+        package.isDiscontinued,
+        package.replacedBy,
+        for (final item in package.versions)
+          '${item.version}:${item.isRetracted}:${item.sha256}',
+      ]);
+
+  /// [body] as a JSON listing, or a 304 if the client already has [etag].
+  shelf.Response _listingResponse(
+      shelf.Request req, String etag, Map<String, dynamic> Function() body) {
+    final headers = {
+      HttpHeaders.etagHeader: etag,
+      HttpHeaders.cacheControlHeader:
+          _isPublicRead ? 'public, max-age=60' : 'private, no-store',
+    };
+    if (etagMatches(req.headers[HttpHeaders.ifNoneMatchHeader], etag)) {
+      return shelf.Response.notModified(headers: headers);
+    }
+    return _okWithJson(body(), headers: headers);
+  }
+
+  /// The headers of an archive whose hash is [hash], if known.
+  Map<String, String> _archiveHeaders(String? hash) => {
+        HttpHeaders.cacheControlHeader:
+            _isPublicRead ? 'public, max-age=31536000, immutable' : 'private',
+        if (hash != null) HttpHeaders.etagHeader: '"$hash"',
+      };
+
+  static bool _clientHasArchive(shelf.Request req, String? hash) =>
+      hash != null &&
+      etagMatches(req.headers[HttpHeaders.ifNoneMatchHeader], '"$hash"');
+
   bool isPubClient(shelf.Request req) {
     var ua = req.headers[HttpHeaders.userAgentHeader];
     return ua != null && ua.toLowerCase().contains('dart pub');
@@ -254,13 +307,15 @@ class App {
           semver.Version.parse(a.version), semver.Version.parse(b.version));
     });
 
-    return _okWithJson({
-      'name': name,
-      'latest': _versionToJson(package.latest, req),
-      'versions':
-          package.versions.map((item) => _versionToJson(item, req)).toList(),
-      'isDiscontinued': package.isDiscontinued,
-      if (package.replacedBy != null) 'replacedBy': package.replacedBy,
+    return _listingResponse(req, _packageEtag(req, package), () {
+      return {
+        'name': name,
+        'latest': _versionToJson(package.latest, req),
+        'versions':
+            package.versions.map((item) => _versionToJson(item, req)).toList(),
+        'isDiscontinued': package.isDiscontinued,
+        if (package.replacedBy != null) 'replacedBy': package.replacedBy,
+      };
     });
   }
 
@@ -298,7 +353,9 @@ class App {
       return shelf.Response.notFound('Not Found');
     }
 
-    return _okWithJson(_versionToJson(packageVersion, req));
+    final found = packageVersion;
+    return _listingResponse(
+        req, _packageEtag(req, package), () => _versionToJson(found, req));
   }
 
   @Route.get('/packages/<name>/versions/<version>.tar.gz')
@@ -326,6 +383,12 @@ class App {
       return _notFound();
     }
 
+    final hash = packageVersion.sha256;
+    final headers = _archiveHeaders(hash);
+    if (_clientHasArchive(req, hash)) {
+      return shelf.Response.notModified(headers: headers);
+    }
+
     if (isPubClient(req) && req.method == 'GET') {
       metaStore.increaseDownloads(name, version);
     }
@@ -336,7 +399,10 @@ class App {
     } else {
       return shelf.Response.ok(
         packageStore.download(name, version),
-        headers: {HttpHeaders.contentTypeHeader: ContentType.binary.mimeType},
+        headers: {
+          HttpHeaders.contentTypeHeader: ContentType.binary.mimeType,
+          ...headers,
+        },
       );
     }
   }
