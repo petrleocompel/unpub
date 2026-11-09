@@ -663,6 +663,9 @@ void main() {
     });
 
     Future<HttpServer> serve(ReadAccess readAccess) async {
+      if (Directory(baseDir).existsSync()) {
+        await Directory(baseDir).delete(recursive: true);
+      }
       await Directory(baseDir).create(recursive: true);
       final store = AccountStore(db);
       return App(

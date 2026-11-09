@@ -97,6 +97,10 @@ void main() {
   });
 
   setUp(() async {
+    // Cleared with the database, since archives are tied to its versions.
+    for (final entity in storage.listSync()) {
+      await entity.delete(recursive: true);
+    }
     await clean();
     store = AccountStore(db);
     audit = MongoAuditStore(db);

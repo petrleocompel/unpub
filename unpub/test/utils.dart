@@ -58,6 +58,11 @@ Future<HttpServer> createServer(
   final db = Db(testMongoUri);
   await db.open();
   addTearDown(db.close);
+  // The database of a test starts empty, and an archive with no published
+  // version would be reported as corrupt storage.
+  if (Directory(baseDir).existsSync()) {
+    await Directory(baseDir).delete(recursive: true);
+  }
   await Directory(baseDir).create(recursive: true);
 
   final app = unpub.App(
