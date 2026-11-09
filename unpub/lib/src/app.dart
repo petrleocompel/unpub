@@ -33,6 +33,7 @@ import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
 import 'store/audit_store.dart';
+import 'store/object_locks.dart';
 import 'upstream/upstream_proxy.dart';
 import 'utils.dart';
 import 'validation.dart';
@@ -657,34 +658,43 @@ class App {
       // Nothing can reach this object until the metadata names its digest, so
       // a publish that stalled past its reservation cannot change an archive.
       // A crash from here on leaves only an object that nothing refers to.
+      final lock =
+          await _lockAndStore(name, version, claim, archiveHash, tarballBytes);
       unpublished = (name, version, archiveHash);
-      await _storeArchive(name, version, claim, archiveHash, tarballBytes);
+      try {
+        if (!await lock.confirm()) {
+          throw const _UploadRetryLater(
+              'lost the lock on the archive while storing it, try again');
+        }
 
-      // Write package meta to database
-      var unpubVersion = UnpubVersion(
-        version,
-        pubspec,
-        pubspecYaml,
-        uploader,
-        readme,
-        changelog,
-        DateTime.now(),
-        sha256: archiveHash,
-      );
-      if (previous != null) {
-        if (!await metaStore.replaceVersion(name, unpubVersion,
-            expectedSha256: previous.sha256)) {
-          throw PublishPolicy.concurrentPublish(name, version);
+        // Write package meta to database
+        var unpubVersion = UnpubVersion(
+          version,
+          pubspec,
+          pubspecYaml,
+          uploader,
+          readme,
+          changelog,
+          DateTime.now(),
+          sha256: archiveHash,
+        );
+        if (previous != null) {
+          if (!await metaStore.replaceVersion(name, unpubVersion,
+              expectedSha256: previous.sha256)) {
+            throw PublishPolicy.concurrentPublish(name, version);
+          }
+        } else {
+          try {
+            await metaStore.addVersion(name, unpubVersion);
+          } on VersionExistsException {
+            throw PublishPolicy.duplicateVersion(name, version);
+          }
         }
-      } else {
-        try {
-          await metaStore.addVersion(name, unpubVersion);
-        } on VersionExistsException {
-          throw PublishPolicy.duplicateVersion(name, version);
-        }
+        unpublished = null;
+        await _restoreIfGone(name, version, archiveHash, tarballBytes);
+      } finally {
+        await lock.release();
       }
-      unpublished = null;
-      await _restoreIfGone(name, version, archiveHash, tarballBytes);
       await _audit(req, principal, 'package.published', '$name@$version', {
         'uploader': uploader,
       });
@@ -707,12 +717,16 @@ class App {
     }
   }
 
-  /// Stores [content] for publishing, within `publish.uploadTimeout` so that
-  /// a stalled write fails before its reservation can expire. The reservation
+  /// Takes the lock of [digest] and stores [content] for publishing, and
+  /// returns the lock for the caller to keep through its metadata write.
+  ///
+  /// Waiting for the lock and writing share `publish.uploadTimeout`, so that a
+  /// stalled publish fails before its reservation can expire. The reservation
   /// is renewed once, halfway through.
-  Future<void> _storeArchive(String name, String version, String claim,
+  Future<ObjectLock> _lockAndStore(String name, String version, String claim,
       String digest, List<int> content) async {
     final limit = publishPolicy.config.uploadTimeout;
+    final elapsed = Stopwatch()..start();
     final renewal = Timer(limit ~/ 2, () {
       metaStore.renewUpload(name, version, claim).then((held) {
         if (!held) {
@@ -727,16 +741,29 @@ class App {
             stackTrace);
       });
     });
-    final write = packageStore.storeObject(name, version, digest, content);
+    ObjectLock? lock;
     try {
-      await write.timeout(limit);
-    } on TimeoutException {
-      // A write that is still running can create its object after the caller
-      // has cleaned up, so it gets cleaned up again when it ends.
-      unawaited(write.then((_) => _discardUnpublished((name, version, digest)),
-          onError: (_) {}));
-      throw const _UploadRetryLater(
-          'storing the archive exceeded publish.uploadTimeout, try again');
+      lock = await metaStore.objectLocks.lock(digest, timeout: limit);
+      if (lock == null) {
+        throw const _UploadRetryLater('the archive stayed locked for longer '
+            'than publish.uploadTimeout, try again');
+      }
+      final write = packageStore.storeObject(name, version, digest, content);
+      try {
+        await write.timeout(limit - elapsed.elapsed);
+      } on TimeoutException {
+        // A write that is still running can create its object after the caller
+        // has cleaned up, so it gets cleaned up again when it ends.
+        unawaited(write.then(
+            (_) => _discardUnpublished((name, version, digest)),
+            onError: (_) {}));
+        throw const _UploadRetryLater(
+            'storing the archive exceeded publish.uploadTimeout, try again');
+      }
+      return lock;
+    } catch (_) {
+      await lock?.release();
+      rethrow;
     } finally {
       renewal.cancel();
     }

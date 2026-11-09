@@ -61,9 +61,11 @@ class TemporaryReclaimer {
   /// Deletes digest-addressed objects older than [maxAge] that no version and
   /// no upstream archive record names, and returns how many.
   ///
-  /// [maxAge] keeps this away from a publish or fetch still in progress, which
-  /// writes its object before the metadata that names it. Storing a digest
-  /// again makes its object new, so an identical publish is safe too.
+  /// Every candidate is decided and deleted under the lock of its digest,
+  /// which everything writing that digest holds too, and a candidate whose
+  /// lock is busy waits for the next run. So nothing is deleted while a lock
+  /// is live, and [maxAge] covers a holder that crashed and whose lock has
+  /// expired: nothing younger than that is ever deleted.
   Future<int> reclaimOrphans(
       {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
     final references = this.references;
@@ -77,9 +79,7 @@ class TemporaryReclaimer {
         continue;
       }
       try {
-        if (!await _isOrphan(object, cutoff, references)) continue;
-        await store.removeObject(object);
-        count++;
+        if (await _reclaimUnderLock(object, cutoff, references)) count++;
       } catch (error, stackTrace) {
         _log.warning(
             LogEvent('failed to reclaim an orphan object',
@@ -89,6 +89,21 @@ class TemporaryReclaimer {
       }
     }
     return count;
+  }
+
+  /// Deletes [object] if it still is an orphan, and returns whether it did.
+  Future<bool> _reclaimUnderLock(StoredObject object, DateTime cutoff,
+      ArchiveReferences references) async {
+    final lock = await references.objectLocks.tryLock(object.digest);
+    if (lock == null) return false;
+    try {
+      if (!await _isOrphan(object, cutoff, references)) return false;
+      if (!await lock.confirm()) return false;
+      await store.removeObject(object);
+      return true;
+    } finally {
+      await lock.release();
+    }
   }
 
   /// Asks again for the one object about to go, because the listing above can

@@ -1,5 +1,7 @@
 import 'package:unpub/src/models.dart';
 
+import 'object_locks.dart';
+
 /// The version being added is already published.
 class VersionExistsException implements Exception {
   final String name;
@@ -12,6 +14,11 @@ class VersionExistsException implements Exception {
 }
 
 abstract class MetaStore {
+  /// The locks that publishing takes around an object and the version naming
+  /// it. A store shared between instances has to override this with locks they
+  /// share too.
+  late final ObjectLocks objectLocks = LocalObjectLocks();
+
   Future<UnpubPackage?> queryPackage(String name);
 
   /// Adds [version] to the package [name], creating the package if needed.

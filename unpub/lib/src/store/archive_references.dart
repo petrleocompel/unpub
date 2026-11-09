@@ -1,10 +1,15 @@
 import 'package:mongo_dart/mongo_dart.dart';
 
 import 'mongo_store.dart';
+import 'object_locks.dart';
 import 'upstream_cache_store.dart';
 
 /// Says which stored objects something still points to.
 abstract class ArchiveReferences {
+  /// The locks shared with whatever writes the references, which reclamation
+  /// has to hold while it decides that an object has none.
+  ObjectLocks get objectLocks;
+
   /// Every digest a version or an upstream archive record names.
   Future<Set<String>> digests();
 
@@ -17,6 +22,9 @@ class MongoArchiveReferences implements ArchiveReferences {
   final Db db;
 
   const MongoArchiveReferences(this.db);
+
+  @override
+  ObjectLocks get objectLocks => MongoObjectLocks(db);
 
   DbCollection get _packages => db.collection(packageCollection);
   DbCollection get _archives => db.collection(upstreamArchivesCollection);

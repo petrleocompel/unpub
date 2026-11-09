@@ -99,6 +99,45 @@ class _StallingStore extends PackageStore {
       inner.download(name, version);
 }
 
+/// A [FileStore] that stops while reclamation hashes a candidate, which is
+/// after its reference check and before its deletion.
+class _PausingHashStore extends FileStore {
+  final reached = Completer<void>();
+  final resume = Completer<void>();
+
+  _PausingHashStore(super.baseDir);
+
+  @override
+  Stream<List<int>> readObject(StoredObject object) async* {
+    yield* super.readObject(object);
+    if (!reached.isCompleted) reached.complete();
+    await resume.future;
+  }
+}
+
+/// A [FileStore] whose objects cannot be hashed.
+class _UnreadableStore extends FileStore {
+  _UnreadableStore(super.baseDir);
+
+  @override
+  Stream<List<int>> readObject(StoredObject object) =>
+      Stream.error(const FileSystemException('unreadable'));
+}
+
+/// Records whether the object lock is held while the version is written.
+class _LockWatchingMetaStore extends MongoStore {
+  List<Map<String, dynamic>> locksDuringWrite = const [];
+
+  _LockWatchingMetaStore(super.db);
+
+  @override
+  Future<void> addVersion(String name, UnpubVersion version) async {
+    locksDuringWrite =
+        await db.collection(objectLocksCollection).find().toList();
+    await super.addVersion(name, version);
+  }
+}
+
 /// Fails to write the version, with the write either lost or applied.
 class _FailingMetaStore extends MongoStore {
   final bool applied;
@@ -155,6 +194,7 @@ void main() {
   Future<void> clean() async {
     await db.dropCollection(packageCollection);
     await db.dropCollection(uploadReservationsCollection);
+    await db.dropCollection(objectLocksCollection);
   }
 
   App buildApp({
@@ -589,20 +629,21 @@ void main() {
       await expectConsistent('first');
     });
 
-    test('an identical loser leaves the object of the winner', () async {
+    test('an identical publish waits for the lock, and then loses', () async {
       final store = _PausingStore(storage.path)
         ..reached = Completer<void>()
         ..resume = Completer<void>();
-      final stalled = upload(buildApp(packageStore: store), 'same');
+      final first = upload(buildApp(packageStore: store), 'same');
       await store.reached!.future;
       await db
           .collection(uploadReservationsCollection)
           .deleteMany(where.eq('name', _name));
-      expect(await upload(buildApp(), 'same'), isNull);
+      final second = upload(buildApp(), 'same');
 
       store.resume!.complete();
 
-      expect(await stalled, contains('already exists'));
+      expect(await first, isNull);
+      expect(await second, contains('already exists'));
       await expectConsistent('same');
     });
 
@@ -702,6 +743,162 @@ void main() {
         ]);
         expect(results.where((won) => won), hasLength(1));
       });
+    });
+  });
+
+  group('the digest lock', () {
+    final twoHoursAgo = DateTime.now().subtract(const Duration(hours: 2));
+
+    Future<List<Map<String, dynamic>>> locks() =>
+        db.collection(objectLocksCollection).find().toList();
+
+    /// Publishes 'same' and forgets it, leaving an old object nothing refers
+    /// to, which is what publishing those bytes again races with.
+    Future<String> orphan() async {
+      expect(await upload(buildApp(), 'same'), isNull);
+      final digest = (await storedVersion())['sha256'] as String;
+      await db.dropCollection(packageCollection);
+      await MongoStore(db).ensureIndexes();
+      objectFile(digest).setLastModifiedSync(twoHoursAgo);
+      return digest;
+    }
+
+    TemporaryReclaimer reclaimer(PackageStore store) =>
+        TemporaryReclaimer(store, references: MongoArchiveReferences(db));
+
+    test('a publish waits out reclamation of that digest and stays served',
+        () async {
+      final digest = await orphan();
+      final store = _PausingHashStore(storage.path);
+      final reclaiming = reclaimer(store).reclaimOrphans();
+      await store.reached.future;
+
+      var finished = false;
+      final app = buildApp();
+      final publishing =
+          upload(app, 'same').whenComplete(() => finished = true);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(finished, isFalse, reason: 'the digest is locked by reclamation');
+
+      store.resume.complete();
+
+      expect(await reclaiming, 1);
+      expect(await publishing, isNull);
+      expect((await storedVersion())['sha256'], digest);
+      expect(objectFile(digest).existsSync(), isTrue);
+      await expectServedConsistent(app);
+      expect(await locks(), isEmpty);
+    });
+
+    test('reclamation skips a candidate that a publish has locked', () async {
+      final digest = await orphan();
+      final store = _PausingStore(storage.path)
+        ..reached = Completer<void>()
+        ..resume = Completer<void>();
+      final app = buildApp(packageStore: store);
+      final publishing = upload(app, 'same');
+      await store.reached!.future;
+
+      expect(await reclaimer(FileStore(storage.path)).reclaimOrphans(), 0);
+
+      expect(objectFile(digest).existsSync(), isTrue);
+      store.resume!.complete();
+      expect(await publishing, isNull);
+      await expectServedConsistent(app);
+    });
+
+    test('a publish fails, retryably, if the lock stays busy', () async {
+      final digest = await orphan();
+      final held = await MongoObjectLocks(db).tryLock(digest);
+      final app = buildApp(
+          publish:
+              const PublishConfig(uploadTimeout: Duration(milliseconds: 200)));
+
+      final response = await app.handler(uploadRequest(pubspec('same'), _auth));
+
+      final location = Uri.parse(response.headers['location']!);
+      expect(
+          location.queryParameters['error'], contains('publish.uploadTimeout'));
+      expect(location.queryParameters['retryable'], 'true');
+      expect(await db.collection(packageCollection).findOne(), isNull);
+      expect(objectFile(digest).existsSync(), isTrue);
+      await held!.release();
+    });
+
+    test('a lock from a crashed server does not block once expired', () async {
+      final digest = await orphan();
+      await db.collection(objectLocksCollection).insertOne({
+        '_id': digest,
+        'owner': 'crashed',
+        'expiresAt': DateTime.now().subtract(const Duration(seconds: 1)),
+      });
+
+      final app = buildApp();
+      expect(await upload(app, 'same'), isNull);
+
+      await expectServedConsistent(app);
+      expect(await locks(), isEmpty);
+    });
+
+    test('a publish that lost the lock writes no metadata', () async {
+      final store = _PausingStore(storage.path)
+        ..reached = Completer<void>()
+        ..resume = Completer<void>();
+      final response = buildApp(packageStore: store)
+          .handler(uploadRequest(pubspec('same'), _auth));
+      await store.reached!.future;
+      await db.dropCollection(objectLocksCollection);
+
+      store.resume!.complete();
+
+      final location = Uri.parse((await response).headers['location']!);
+      expect(location.queryParameters['error'], contains('lost the lock'));
+      expect(location.queryParameters['retryable'], 'true');
+      expect(await db.collection(packageCollection).findOne(), isNull);
+    });
+
+    test('is held while the object and the metadata are written', () async {
+      final meta = _LockWatchingMetaStore(db);
+      expect(await upload(buildApp(metaStore: meta), 'same'), isNull);
+
+      final digest = (await storedVersion())['sha256'] as String;
+      expect(meta.locksDuringWrite.single['_id'], digest);
+      expect(await locks(), isEmpty);
+    });
+
+    test('is released after a failed write', () async {
+      final store = _PausingStore(storage.path)..failure = 'disk full';
+      expect(await upload(buildApp(packageStore: store), 'same'),
+          contains('disk full'));
+      expect(await locks(), isEmpty);
+    });
+
+    test('is released after a failed metadata write', () async {
+      final error = await upload(
+          buildApp(metaStore: _FailingMetaStore(db, applied: false)), 'same');
+      expect(error, contains('connection lost'));
+      expect(await locks(), isEmpty);
+    });
+
+    test('is released when reclamation fails', () async {
+      final digest = await orphan();
+      expect(
+          await reclaimer(_UnreadableStore(storage.path)).reclaimOrphans(), 0);
+      expect(objectFile(digest).existsSync(), isTrue);
+      expect(await locks(), isEmpty);
+    });
+
+    test('lost during reclamation stops the deletion', () async {
+      final digest = await orphan();
+      final store = _PausingHashStore(storage.path);
+      final reclaiming = reclaimer(store).reclaimOrphans();
+      await store.reached.future;
+      await db.dropCollection(objectLocksCollection);
+
+      store.resume.complete();
+
+      expect(await reclaiming, 0);
+      expect(objectFile(digest).existsSync(), isTrue);
     });
   });
 

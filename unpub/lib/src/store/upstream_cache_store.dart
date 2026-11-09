@@ -1,6 +1,7 @@
 import 'package:mongo_dart/mongo_dart.dart';
 
 import 'mongo_indexes.dart';
+import 'object_locks.dart';
 
 final upstreamCacheCollection = 'upstream_cache';
 final upstreamArchivesCollection = 'upstream_archives';
@@ -65,6 +66,10 @@ class UpstreamArchiveRecord {
 
 /// Where upstream metadata is kept between requests.
 abstract class UpstreamCacheStore {
+  /// The locks held around storing an object and recording it, shared with
+  /// anything that may delete objects.
+  ObjectLocks get objectLocks;
+
   Future<UpstreamCacheEntry?> read(String key);
 
   /// Stores [entry], to be forgotten after [expiresAt].
@@ -91,6 +96,9 @@ class MongoUpstreamCacheStore implements UpstreamCacheStore {
   final Db db;
 
   const MongoUpstreamCacheStore(this.db);
+
+  @override
+  ObjectLocks get objectLocks => MongoObjectLocks(db);
 
   DbCollection get _collection => db.collection(upstreamCacheCollection);
 

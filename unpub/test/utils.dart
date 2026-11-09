@@ -79,16 +79,30 @@ Future<HttpServer> createServer(
   return app.serve('0.0.0.0', 4000);
 }
 
+final _tarballs = <String, List<int>>{};
+
 /// A `dart pub publish` upload of an archive holding [pubspec].
+///
+/// The same [pubspec] always gives the same bytes, and so the same digest,
+/// because gzip records the time and a test may cross a second boundary.
 shelf.Request uploadRequest(String pubspec, Map<String, String> headers) =>
-    uploadRequestOf(
-        Archive()..addFile(ArchiveFile.string('pubspec.yaml', pubspec)),
+    _uploadRequestOfBytes(
+        _tarballs.putIfAbsent(
+            pubspec,
+            () => _pack(Archive()
+              ..addFile(ArchiveFile.string('pubspec.yaml', pubspec)))),
         headers);
 
 /// A `dart pub publish` upload of [archive], packed as a `.tar.gz`.
-shelf.Request uploadRequestOf(Archive archive, Map<String, String> headers) {
+shelf.Request uploadRequestOf(Archive archive, Map<String, String> headers) =>
+    _uploadRequestOfBytes(_pack(archive), headers);
+
+List<int> _pack(Archive archive) =>
+    GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
+
+shelf.Request _uploadRequestOfBytes(
+    List<int> tarball, Map<String, String> headers) {
   const boundary = 'test-boundary';
-  final tarball = GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
   return shelf.Request(
     'POST',
     Uri.parse('http://internal:4000/api/packages/versions/newUpload'),

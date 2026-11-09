@@ -11,6 +11,7 @@ import 'package:logging/logging.dart';
 import '../config/config.dart';
 import '../logging.dart';
 import '../pub_listing.dart';
+import '../store/object_locks.dart';
 import '../store/package_store.dart';
 import '../store/upstream_cache_store.dart';
 import '../validation.dart';
@@ -628,10 +629,37 @@ class UpstreamProxy {
   /// Hands a verified archive to the store and records it, and returns whether
   /// the store has it. A store that fails does not fail the download, because
   /// the client can still have the verified archive.
+  ///
+  /// Both happen under the lock of the digest, so that reclamation cannot take
+  /// the object between them.
   Future<bool> _keep(
       String name, String version, File temporary, int size, String digest,
       {required bool verified}) async {
     final event = {'name': name, 'version': version};
+    final ObjectLock? lock;
+    try {
+      lock = await cache.objectLocks.lock(digest, timeout: timeout);
+    } catch (error, stackTrace) {
+      _log.warning(LogEvent('failed to lock upstream archive', event), error,
+          stackTrace);
+      return false;
+    }
+    if (lock == null) {
+      _log.warning(
+          LogEvent('upstream archive stayed locked, not keeping it', event));
+      return false;
+    }
+    try {
+      return await _commit(name, version, temporary, size, digest,
+          verified: verified, event: event);
+    } finally {
+      await lock.release();
+    }
+  }
+
+  Future<bool> _commit(
+      String name, String version, File temporary, int size, String digest,
+      {required bool verified, required Map<String, Object> event}) async {
     try {
       if (!await archives.commitUpstream(
           name, version, digest, temporary, size)) {
@@ -682,7 +710,17 @@ class UpstreamProxy {
     final record = await cache.readArchive(name, version);
     if (record == null || expected == null || record.sha256 == expected) return;
     await cache.deleteArchive(name, version);
-    await archives.deleteUpstream(name, version, record.sha256);
+    final lock = await cache.objectLocks.tryLock(record.sha256);
+    // Reclamation gets the object later, if something else is using it now.
+    if (lock == null) return;
+    try {
+      final current = await cache.readArchive(name, version);
+      if (current?.sha256 != record.sha256) {
+        await archives.deleteUpstream(name, version, record.sha256);
+      }
+    } finally {
+      await lock.release();
+    }
   }
 
   Future<_Response?> _getJson(String path, {String? etag}) =>

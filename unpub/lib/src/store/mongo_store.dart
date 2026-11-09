@@ -6,6 +6,7 @@ import 'package:unpub/src/models.dart';
 import '../config/config.dart' show uploadReservationTtl;
 import 'meta_store.dart';
 import 'mongo_indexes.dart';
+import 'object_locks.dart';
 
 final packageCollection = 'packages';
 final statsCollection = 'stats';
@@ -22,6 +23,9 @@ class MongoStore extends MetaStore {
   Db db;
 
   MongoStore(this.db);
+
+  @override
+  ObjectLocks get objectLocks => MongoObjectLocks(db);
 
   /// Creates the indexes the store relies on, which is safe to repeat.
   ///
@@ -46,6 +50,13 @@ class MongoStore extends MetaStore {
         'name': 'name_version',
         'unique': true,
       },
+      {
+        'key': {'expiresAt': 1},
+        'name': 'expires_at_ttl',
+        'expireAfterSeconds': 0,
+      },
+    ]);
+    await createIndexes(db, objectLocksCollection, [
       {
         'key': {'expiresAt': 1},
         'name': 'expires_at_ttl',

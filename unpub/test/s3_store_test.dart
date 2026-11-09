@@ -533,6 +533,9 @@ class _Held implements ArchiveReferences {
   const _Held(this.held);
 
   @override
+  ObjectLocks get objectLocks => LocalObjectLocks();
+
+  @override
   Future<Set<String>> digests() async => held;
 
   @override

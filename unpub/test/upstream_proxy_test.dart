@@ -214,6 +214,9 @@ class _PausingRecords implements UpstreamCacheStore {
   _PausingRecords(this.inner);
 
   @override
+  ObjectLocks get objectLocks => inner.objectLocks;
+
+  @override
   Future<UpstreamCacheEntry?> read(String key) => inner.read(key);
 
   @override
@@ -273,6 +276,7 @@ void main() {
       upstreamCacheCollection,
       upstreamArchivesCollection,
       auditCollection,
+      objectLocksCollection,
     ]) {
       await db.dropCollection(name);
     }
@@ -1123,6 +1127,62 @@ void main() {
             reason: 'the record names an object that is gone');
         expect(revalidated.headers['etag'], 'W/"$digestB"');
         await bytesOf(revalidated);
+      });
+
+      group('the digest lock', () {
+        test('is held from storing an archive to recording it', () async {
+          final stalled = _PausingRecords(MongoUpstreamCacheStore(db));
+          final slow = buildProxy(cache: stalled);
+          addTearDown(slow.close);
+          final running = get(route, using: buildApp(using: slow));
+          await stalled.reached.future;
+          final digest = upstream.sha(_name, '1.0.0');
+
+          final reclaimed = await TemporaryReclaimer(FileStore(storage.path),
+                  references: MongoArchiveReferences(db))
+              .reclaimOrphans(
+                  now: DateTime.now().add(const Duration(hours: 2)));
+
+          expect(reclaimed, 0);
+          expect(objectFile('1.0.0', digest).existsSync(), isTrue);
+          stalled.resume.complete();
+          expect(await expectMatchesValidator(await running), digest);
+          expect(await db.collection(objectLocksCollection).findOne(), isNull);
+        });
+
+        test('that stays busy leaves the archive served but not kept',
+            () async {
+          final digest = upstream.sha(_name, '1.0.0');
+          final held = await MongoObjectLocks(db).tryLock(digest);
+          final busy = buildProxy(timeout: const Duration(milliseconds: 200));
+          addTearDown(busy.close);
+
+          final response = await get(route, using: buildApp(using: busy));
+
+          expect(response.statusCode, 200);
+          expect(await expectMatchesValidator(response), digest);
+          expect(objectFile('1.0.0', digest).existsSync(), isFalse);
+          expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+              isNull);
+          await held!.release();
+        });
+
+        test('that is busy leaves a forgotten copy to reclamation', () async {
+          await bytesOf(await get(route));
+          final old = upstream.sha(_name, '1.0.0');
+          final held = await MongoObjectLocks(db).tryLock(old);
+
+          upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
+          await MongoUpstreamCacheStore(db).delete(_name);
+          await bytesOf(await get('/api/packages/$_name'));
+          await bytesOf(await get(route));
+
+          expect(objectFile('1.0.0', old).existsSync(), isTrue);
+          final record =
+              await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0');
+          expect(record!.sha256, upstream.sha(_name, '1.0.0'));
+          await held!.release();
+        });
       });
 
       group('shared by two instances that interleave', () {

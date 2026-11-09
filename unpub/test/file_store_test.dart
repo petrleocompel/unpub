@@ -687,6 +687,9 @@ class _Held implements unpub.ArchiveReferences {
   const _Held(this.held);
 
   @override
+  unpub.ObjectLocks get objectLocks => unpub.LocalObjectLocks();
+
+  @override
   Future<Set<String>> digests() async => held;
 
   @override
@@ -698,6 +701,9 @@ class _LateHeld implements unpub.ArchiveReferences {
   final String digest;
 
   const _LateHeld(this.digest);
+
+  @override
+  unpub.ObjectLocks get objectLocks => unpub.LocalObjectLocks();
 
   @override
   Future<Set<String>> digests() async => const {};
