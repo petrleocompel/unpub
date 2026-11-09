@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:mongo_dart/mongo_dart.dart' show Db, where;
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
@@ -36,19 +37,340 @@ void main() {
     });
   }
 
-  for (var name in ['migrate', 'admin']) {
-    test('$name is reserved', () async {
-      var result = await unpub([name]);
-      expect(result.exitCode, 2);
-      expect(
-          result.stderr, contains('not implemented yet, see docs/ROADMAP.md'));
-    });
-  }
-
   test('an unknown command is a usage error', () async {
     var result = await unpub(['nope']);
     expect(result.exitCode, 64);
     expect(result.stderr, contains('Could not find a command'));
+  });
+
+  group('admin and migrate', () {
+    late Directory directory;
+    late String configPath;
+    late Db db;
+
+    Future<ProcessResult> run(List<String> args) =>
+        unpub([args.first, ...args.skip(1), '--config', configPath]);
+
+    Future<ProcessResult> admin(List<String> args) =>
+        unpub(['admin', args.first, ...args.skip(1), '--config', configPath]);
+
+    Future<ProcessResult> adminWithStdin(
+        List<String> args, String input) async {
+      final process = await Process.start(Platform.resolvedExecutable, [
+        'run',
+        'bin/unpub.dart',
+        'admin',
+        ...args,
+        '--config',
+        configPath,
+      ]);
+      final out = process.stdout.transform(utf8.decoder).join();
+      final err = process.stderr.transform(utf8.decoder).join();
+      process.stdin.writeln(input);
+      await process.stdin.close();
+      final code = await process.exitCode;
+      return ProcessResult(process.pid, code, await out, await err);
+    }
+
+    Future<void> clean() async {
+      for (final name in [
+        'users',
+        'tokens',
+        'sessions',
+        'audit',
+        'migrations',
+        'packages'
+      ]) {
+        await db.dropCollection(name);
+      }
+    }
+
+    Future<Map<String, dynamic>?> findUser(String email) =>
+        db.collection('users').findOne(where.eq('email', email));
+
+    setUpAll(() async {
+      db = Db(testMongoUri);
+      await db.open();
+    });
+
+    tearDownAll(() => db.close());
+
+    setUp(() async {
+      directory = await Directory.systemTemp.createTemp('unpub-cli-admin-');
+      configPath = path.join(directory.path, 'unpub.yaml');
+      File(configPath).writeAsStringSync('mongo:\n  uri: $testMongoUri\n'
+          'auth:\n  bootstrapEmail: ops@example.com\n');
+      await clean();
+    });
+
+    tearDown(() async {
+      await directory.delete(recursive: true);
+      await clean();
+    });
+
+    test('create-user with --password makes a user that can log in', () async {
+      var result = await admin([
+        'create-user',
+        '--email',
+        'Root@Example.com',
+        '--role',
+        'admin',
+        '--display-name',
+        'The Root',
+        '--password',
+        'long-enough-password',
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect(result.stdout, contains('root@example.com'));
+      expect('${result.stdout}${result.stderr}',
+          isNot(contains('long-enough-password')));
+
+      var user = (await findUser('root@example.com'))!;
+      expect(user['role'], 'admin');
+      expect(user['displayName'], 'The Root');
+      expect(user['disabled'], false);
+      expect(user['passwordHash'], startsWith(r'$argon2id$'));
+      expect(user['createdAt'], isA<DateTime>());
+      expect(user['updatedAt'], isA<DateTime>());
+      expect(user['lastLoginAt'], isNull);
+
+      expect(
+          await const PasswordHasher()
+              .verify('long-enough-password', user['passwordHash'] as String),
+          isTrue);
+    });
+
+    test('create-user without a password makes a placeholder', () async {
+      var result =
+          await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      var user = (await findUser('a@b.c'))!;
+      expect(user['passwordHash'], isNull);
+      expect(user['displayName'], 'a');
+    });
+
+    test('create-user --password-stdin reads the password', () async {
+      var result = await adminWithStdin(
+        [
+          'create-user',
+          '--email',
+          'a@b.c',
+          '--role',
+          'publisher',
+          '--password-stdin'
+        ],
+        'from-standard-input',
+      );
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      var user = (await findUser('a@b.c'))!;
+      expect(
+          await const PasswordHasher()
+              .verify('from-standard-input', user['passwordHash'] as String),
+          isTrue);
+    });
+
+    test('create-user reports a duplicate and an invalid role', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var duplicate =
+          await admin(['create-user', '--email', 'A@B.C', '--role', 'reader']);
+      expect(duplicate.exitCode, 1);
+      expect(duplicate.stderr, contains('already exists'));
+
+      var badRole =
+          await admin(['create-user', '--email', 'd@e.f', '--role', 'owner']);
+      expect(badRole.exitCode, 64);
+    });
+
+    test('--password and --password-stdin conflict', () async {
+      var result = await admin([
+        'create-user',
+        '--email',
+        'a@b.c',
+        '--role',
+        'reader',
+        '--password',
+        'long-enough',
+        '--password-stdin'
+      ]);
+      expect(result.exitCode, 64);
+      expect(await findUser('a@b.c'), isNull);
+    });
+
+    test('set-password replaces the password', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var result = await adminWithStdin(
+          ['set-password', '--email', 'a@b.c', '--password-stdin'],
+          'brand-new-password');
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      var user = (await findUser('a@b.c'))!;
+      expect(
+          await const PasswordHasher()
+              .verify('brand-new-password', user['passwordHash'] as String),
+          isTrue);
+    });
+
+    test('set-password without a terminal asks for --password-stdin', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var result = await admin(['set-password', '--email', 'a@b.c']);
+      expect(result.exitCode, 64);
+      expect(result.stderr, contains('--password-stdin'));
+    });
+
+    test('set-password rejects a short password', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var result = await adminWithStdin(
+          ['set-password', '--email', 'a@b.c', '--password-stdin'], 'short');
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('at least 8'));
+    });
+
+    test('set-role, disable, enable and list-users', () async {
+      await admin(['create-user', '--email', 'admin@b.c', '--role', 'admin']);
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+
+      var result =
+          await admin(['set-role', '--email', 'a@b.c', '--role', 'publisher']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect((await findUser('a@b.c'))!['role'], 'publisher');
+
+      result = await admin(['disable', '--email', 'a@b.c']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect((await findUser('a@b.c'))!['disabled'], true);
+
+      var listed = await admin(['list-users']);
+      expect(listed.exitCode, 0, reason: '${listed.stderr}');
+      expect(listed.stdout, contains('a@b.c\tpublisher\tdisabled\tnone'));
+      expect(listed.stdout, contains('admin@b.c\tadmin\tenabled'));
+
+      result = await admin(['enable', '--email', 'a@b.c']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect((await findUser('a@b.c'))!['disabled'], false);
+    });
+
+    test('the last administrator cannot be removed', () async {
+      await admin(['create-user', '--email', 'admin@b.c', '--role', 'admin']);
+      var result = await admin(['disable', '--email', 'admin@b.c']);
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('last enabled administrator'));
+    });
+
+    test('an unknown user is reported', () async {
+      var result = await admin(['disable', '--email', 'nobody@b.c']);
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('nobody@b.c'));
+    });
+
+    test('create-token prints the secret once and stores only its hash',
+        () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'publisher']);
+      var result = await admin([
+        'create-token',
+        '--email',
+        'a@b.c',
+        '--name',
+        'ci',
+        '--scopes',
+        'read,publish',
+        '--expires-in',
+        '30d'
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      final secret = (result.stdout as String).trim();
+      expect(secret.length, greaterThanOrEqualTo(43));
+
+      final token = (await db.collection('tokens').findOne())!;
+      expect(token['hash'], hashSecret(secret));
+      expect(token['prefix'], secret.substring(0, 8));
+      expect(token['scopes'], unorderedEquals(['read', 'publish']));
+      expect(token.values, isNot(contains(secret)));
+      final expiresAt = token['expiresAt'] as DateTime;
+      expect(expiresAt.difference(DateTime.now()).inDays, closeTo(30, 1));
+    });
+
+    test('create-token defaults to the scopes of the role', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var result =
+          await admin(['create-token', '--email', 'a@b.c', '--name', 'laptop']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      expect((await db.collection('tokens').findOne())!['scopes'], ['read']);
+    });
+
+    test('a reader cannot get a publish token', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var result = await admin([
+        'create-token',
+        '--email',
+        'a@b.c',
+        '--name',
+        'x',
+        '--scopes',
+        'publish'
+      ]);
+      expect(result.exitCode, 1);
+      expect(await db.collection('tokens').findOne(), isNull);
+    });
+
+    test('create-token rejects a bad duration', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      var result = await admin([
+        'create-token',
+        '--email',
+        'a@b.c',
+        '--name',
+        'x',
+        '--expires-in',
+        'soon'
+      ]);
+      expect(result.exitCode, 64);
+    });
+
+    test('commands record who did what', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      final event = (await db.collection('audit').findOne())!;
+      expect(event['actor'], 'system');
+      expect(event['action'], 'user.created');
+      expect(event['target'], 'a@b.c');
+    });
+
+    test('migrate creates users once and dry-run writes nothing', () async {
+      await db.collection('packages').insertOne({
+        'name': 'p',
+        'uploaders': ['dev@b.c', 'OPS@example.com'],
+        'versions': [],
+      });
+
+      var dry = await run(['migrate', '--dry-run']);
+      expect(dry.exitCode, 0, reason: '${dry.stderr}');
+      expect(dry.stdout, contains('would apply'));
+      expect(dry.stdout, contains('dev@b.c'));
+      expect(await findUser('dev@b.c'), isNull);
+      expect(await db.collection('migrations').findOne(), isNull);
+
+      var first = await run(['migrate']);
+      expect(first.exitCode, 0, reason: '${first.stderr}');
+      expect(first.stdout, contains('0001_users_from_uploaders: applied'));
+      expect((await findUser('dev@b.c'))!['role'], 'publisher');
+      expect((await findUser('ops@example.com'))!['role'], 'admin');
+
+      var second = await run(['migrate']);
+      expect(second.exitCode, 0, reason: '${second.stderr}');
+      expect(second.stdout, contains('already applied'));
+    });
+
+    test('a bad config is reported', () async {
+      var result =
+          await unpub(['admin', 'list-users', '--config', '/nonexistent.yaml']);
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('config file not found'));
+    });
+
+    test('an unreachable database does not print the password', () async {
+      File(configPath).writeAsStringSync(
+          'mongo:\n  uri: mongodb://user:hunter2@127.0.0.1:1/db\n');
+      var result = await admin(['list-users']);
+      expect(result.exitCode, 1);
+      expect('${result.stdout}${result.stderr}', isNot(contains('hunter2')));
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 
   group('serve', () {

@@ -8,9 +8,7 @@ import '../config/config.dart';
 import '../logging.dart';
 import '../server.dart';
 import '../version.dart';
-
-/// Exit code for a reserved command that does not exist yet.
-const exitNotImplemented = 2;
+import 'account_commands.dart';
 
 /// Exit code for wrong usage, following sysexits.h.
 const exitUsage = 64;
@@ -25,8 +23,8 @@ Future<int> runCli(List<String> args) async {
   )
     ..addCommand(_ServeCommand())
     ..addCommand(_VersionCommand())
-    ..addCommand(_ReservedCommand('migrate', 'Migrate stored data.'))
-    ..addCommand(_ReservedCommand('admin', 'Administer users and tokens.'));
+    ..addCommand(MigrateCommand())
+    ..addCommand(AdminCommand());
 
   try {
     return await runner.run(args) ?? 0;
@@ -98,9 +96,6 @@ class _ServeCommand extends Command<int> {
       'port': server.port,
       'readAccess': config.auth.readAccess.name,
     }));
-    if (config.auth.bootstrapToken == null) {
-      _log.warning('auth.bootstrapToken is not set, publishing is disabled');
-    }
     await server.waitForShutdown();
     return 0;
   }
@@ -120,23 +115,5 @@ class _VersionCommand extends Command<int> {
   int run() {
     stdout.writeln('unpub $packageVersion');
     return 0;
-  }
-}
-
-/// Holds the name of a command that a later phase implements.
-class _ReservedCommand extends Command<int> {
-  @override
-  final String name;
-
-  @override
-  final String description;
-
-  _ReservedCommand(this.name, String description)
-      : description = '$description Not implemented yet.';
-
-  @override
-  int run() {
-    stderr.writeln('not implemented yet, see docs/ROADMAP.md');
-    return exitNotImplemented;
   }
 }
