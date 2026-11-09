@@ -51,7 +51,7 @@ Goal: real authentication and authorization.
 - Collections `users` (email, displayName, passwordHash argon2id or bcrypt, role, createdAt, disabled), `tokens` (userId, name, hashed secret, prefix, scopes, expiresAt, lastUsedAt, createdAt), `sessions` or signed cookies for the web UI.
 - Roles: `admin` (everything), `publisher` (publish, manage own packages' uploaders), `reader` (read only).
 - Package uploaders remain a list of user emails for compatibility. Authorization checks resolve the authenticated user's email against it.
-- Admin bootstrap: `auth.admin.email` + `auth.admin.password` in config or env creates the first admin at startup if no users exist. CLI `unpub admin create-user`, `unpub admin reset-password`.
+- Admin bootstrap: `auth.admin.email` + `auth.admin.password` in config or env creates the first admin at startup if no users exist. CLI `unpub admin create-user`, `unpub admin set-password`.
 - Tokens: created in the web UI (phase 4) and via `POST /webapi/tokens`. Shown once. Stored hashed. Used as `Authorization: Bearer <token>` by `dart pub`. Document `dart pub token add <url>` flow in README.
 - Read protection: config `auth.readAccess: public | authenticated`. In `authenticated` mode every pub API, tarball download and web page requires a token or session. Pub client sends the token for `pub get` when added via `dart pub token add`.
 - `unpub migrate` step: create placeholder users (role `publisher`, no password, must be set by admin) for every email found in existing `uploaders` arrays.
