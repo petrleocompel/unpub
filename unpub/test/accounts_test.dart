@@ -1789,15 +1789,36 @@ void main() {
 
     /// An [AccountService] whose next demotion stops between its two writes,
     /// as a process does when it is suspended or loses its CPU.
-    (AccountService, Future<void>, void Function()) stalled() {
+    ///
+    /// With [afterRead] it stops earlier, once it has read the user and before
+    /// it has written anything.
+    (AccountService, Future<void>, void Function()) stalled({
+      bool afterRead = false,
+    }) {
       final entered = Completer<void>();
       final resume = Completer<void>();
-      final service = AccountService(store, beforeAdminUserWrite: () async {
-        entered.complete();
+      Future<void> pause() async {
+        if (!entered.isCompleted) entered.complete();
         await resume.future;
-      });
+      }
+
+      final service = AccountService(store,
+          beforeAdminUserWrite: afterRead ? null : pause,
+          afterAdminClassified: afterRead ? pause : null);
       return (service, entered.future, resume.complete);
     }
+
+    Future<String?> codeOf(Future<User> Function() change) async {
+      try {
+        await change();
+        return null;
+      } on AccountException catch (error) {
+        return error.code;
+      }
+    }
+
+    Future<Map<dynamic, dynamic>> markers() async =>
+        (await adminSet())?['removing'] as Map? ?? const {};
 
     test('a stalled demotion cannot be overtaken by another one', () async {
       final first = await user('a@b.c', Role.admin);
@@ -2030,6 +2051,262 @@ void main() {
 
       expect(await setIds(), unorderedEquals([first.id, second.id]));
       expect((await store.findUserById(first.id))!.role, Role.admin);
+    });
+
+    test('a promotion cannot undo a removal under way, and the demotion wins',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.reader);
+      final (promoting, promotionRead, resumePromotion) =
+          stalled(afterRead: true);
+      final promotion =
+          codeOf(() => promoting.updateUser(target, role: Role.admin));
+      await promotionRead;
+
+      await accounts.updateUser(target, role: Role.admin);
+      final (demoting, demotionClaimed, resumeDemotion) = stalled();
+      final demotion = demoting.updateUser(target, role: Role.reader);
+      await demotionClaimed;
+      final marker = (await markers())[target.id];
+      expect(marker, isNotNull);
+
+      resumePromotion();
+      expect(await promotion, 'admin_change_in_progress');
+      expect(await setIds(), [admin.id]);
+      expect((await markers())[target.id], marker);
+
+      expect(await codeOf(() => accounts.updateUser(admin, role: Role.reader)),
+          'last_admin');
+      resumeDemotion();
+      await demotion;
+
+      expect(await enabledAdmins(), [admin.id]);
+      expect(await setIds(), [admin.id]);
+      expect(await markers(), isEmpty);
+    });
+
+    test('a second removal of someone being removed is not called the last',
+        () async {
+      await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.admin);
+      final (demoting, claimed, resume) = stalled();
+      final demotion = demoting.updateUser(target, role: Role.reader);
+      await claimed;
+
+      expect(await codeOf(() => accounts.updateUser(target, disabled: true)),
+          'admin_change_in_progress');
+
+      resume();
+      await demotion;
+    });
+
+    test('a promotion overtaken by a demotion runs again and wins', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.publisher);
+      final (promoting, setWritten, resume) = stalled();
+      final promotion = promoting.updateUser(target, role: Role.admin);
+      await setWritten;
+      expect(await setIds(), unorderedEquals([admin.id, target.id]));
+
+      await accounts.updateUser(target, role: Role.reader);
+      resume();
+      final promoted = await promotion;
+
+      expect(promoted.role, Role.admin);
+      expect(await enabledAdmins(), unorderedEquals([admin.id, target.id]));
+      expect(await setIds(), unorderedEquals([admin.id, target.id]));
+      expect(await markers(), isEmpty);
+    });
+
+    test('a stale decision about a disabled admin goes through the guard',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.admin);
+      await accounts.updateUser(target, disabled: true);
+      final (demoting, paused, resume) = stalled();
+      final demotion =
+          codeOf(() => demoting.updateUser(target, role: Role.reader));
+      await paused;
+
+      await accounts.updateUser(target, disabled: false);
+      await accounts.updateUser(admin, role: Role.reader);
+      resume();
+
+      expect(await demotion, 'last_admin');
+      expect(await enabledAdmins(), [target.id]);
+      expect(await setIds(), [target.id]);
+    });
+
+    test('a demotion of a disabled admin overtaken by enabling it runs again',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.admin);
+      await accounts.updateUser(target, disabled: true);
+      final (demoting, paused, resume) = stalled();
+      final demotion = demoting.updateUser(target, role: Role.reader);
+      await paused;
+
+      await accounts.updateUser(target, disabled: false);
+      expect(await setIds(), unorderedEquals([admin.id, target.id]));
+      resume();
+      await demotion;
+
+      final latest = (await store.findUserById(target.id))!;
+      expect(latest.role, Role.reader);
+      expect(latest.disabled, isFalse);
+      expect(await enabledAdmins(), [admin.id]);
+      expect(await setIds(), [admin.id]);
+      expect(await markers(), isEmpty);
+    });
+
+    test('enabling an admin overtaken by its demotion leaves no admin behind',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.admin);
+      await accounts.updateUser(target, disabled: true);
+      final (enabling, setWritten, resume) = stalled();
+      final enabled = enabling.updateUser(target, disabled: false);
+      await setWritten;
+
+      await accounts.updateUser(target, role: Role.reader);
+      resume();
+      await enabled;
+
+      final latest = (await store.findUserById(target.id))!;
+      expect(latest.role, Role.reader);
+      expect(latest.disabled, isFalse);
+      expect(await enabledAdmins(), [admin.id]);
+      expect(await setIds(), [admin.id]);
+    });
+
+    test('someone still being promoted does not count as the remaining admin',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.reader);
+      final (promoting, setWritten, resume) = stalled();
+      final promotion = promoting.updateUser(target, role: Role.admin);
+      await setWritten;
+
+      expect(await codeOf(() => accounts.updateUser(admin, role: Role.reader)),
+          'last_admin');
+      expect(await enabledAdmins(), [admin.id]);
+
+      resume();
+      await promotion;
+      expect(await enabledAdmins(), unorderedEquals([admin.id, target.id]));
+
+      await accounts.updateUser(admin, role: Role.reader);
+      expect(await enabledAdmins(), [target.id]);
+      expect(await setIds(), [target.id]);
+    });
+
+    test('a user that keeps changing gives up with a conflict', () async {
+      final target = await user('t@b.c', Role.publisher);
+      var writes = 0;
+      final raced = AccountService(store, beforeAdminUserWrite: () async {
+        writes++;
+        await store.updateUser(target.id, DateTime.now(),
+            disabled: writes.isOdd);
+      });
+
+      expect(await codeOf(() => raced.updateUser(target, role: Role.reader)),
+          'conflict');
+
+      expect(writes, 3);
+      expect((await store.findUserById(target.id))!.role, Role.publisher);
+    });
+
+    test('a removal that finds the user changed clears its marker and retries',
+        () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.admin);
+      var interfered = false;
+      final raced = AccountService(store, beforeAdminUserWrite: () async {
+        if (interfered) return;
+        interfered = true;
+        await store.updateUser(target.id, DateTime.now(), disabled: true);
+      });
+
+      final updated = await raced.updateUser(target, role: Role.reader);
+
+      expect(updated.role, Role.reader);
+      expect(updated.disabled, isTrue);
+      expect(await setIds(), [admin.id]);
+      expect(await markers(), isEmpty);
+    });
+
+    test('a marker can only be cleared by the operation that set it', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final now = DateTime.now();
+      expect(await store.takeFromAdminSet(first.id, now, operation: 'mine'),
+          isTrue);
+
+      await store.finishAdminRemoval(first.id, 'other');
+      expect(await markers(), contains(first.id));
+      await store.reconcileAdminSet(now, abandoned: 'other');
+      expect(await markers(), contains(first.id));
+      expect(await setIds(), [second.id]);
+
+      await store.finishAdminRemoval(first.id, 'mine');
+      expect(await markers(), isEmpty);
+    });
+
+    test('an addition is refused while a removal is marked', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      expect(await store.takeFromAdminSet(first.id, DateTime.now()), isTrue);
+      final before = await adminSet();
+
+      expect(await store.addToAdminSet(first.id), isFalse);
+
+      expect(await adminSet(), before);
+      expect(await setIds(), [second.id]);
+    });
+
+    test(
+        'the marker of a process that died after the user write does not '
+        'block a later promotion', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.admin);
+      expect(await store.takeFromAdminSet(target.id, DateTime.now()), isTrue);
+      await store.updateUser(target.id, DateTime.now(), role: Role.reader);
+
+      await accounts.updateUser(target, role: Role.admin);
+
+      expect(await setIds(), unorderedEquals([admin.id, target.id]));
+      expect(await markers(), isEmpty);
+    });
+
+    test('a failed promotion leaves nothing in the set', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.reader);
+      final failing = AccountService(store,
+          beforeAdminUserWrite: () => Future.error(StateError('write lost')));
+
+      await expectLater(failing.updateUser(target, role: Role.admin),
+          throwsA(isA<StateError>()));
+
+      expect(await setIds(), [admin.id]);
+      expect((await store.findUserById(target.id))!.role, Role.reader);
+    });
+
+    test('the compare-and-set reads old documents the way the model does',
+        () async {
+      await user('a@b.c', Role.admin);
+      final noFlag = await user('n@b.c', Role.publisher);
+      final oddRole = await user('o@b.c', Role.publisher);
+      await db.collection(userCollection).updateOne(
+          where.id(ObjectId.fromHexString(noFlag.id)),
+          modify.unset('disabled'));
+      await db.collection(userCollection).updateOne(
+          where.id(ObjectId.fromHexString(oddRole.id)),
+          modify.set('role', 'retired'));
+
+      expect((await accounts.updateUser(noFlag, role: Role.reader)).role,
+          Role.reader);
+      expect((await accounts.updateUser(oddRole, role: Role.publisher)).role,
+          Role.publisher);
     });
   });
 

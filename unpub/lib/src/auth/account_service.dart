@@ -42,6 +42,19 @@ class CreatedToken {
   const CreatedToken(this.token, this.secret);
 }
 
+/// What [AccountService.updateUser] was asked to change.
+class _UserChange {
+  final String? displayName;
+  final Role? role;
+  final bool? disabled;
+  final AuditContext by;
+
+  const _UserChange(this.displayName, this.role, this.disabled, this.by);
+}
+
+/// How often [AccountService.updateUser] runs after finding the user changed.
+const _updateAttempts = 3;
+
 /// The account rules, shared by the HTTP API and the command line.
 class AccountService {
   final AccountStore store;
@@ -49,9 +62,13 @@ class AccountService {
   final PasswordHasher hasher;
   final DateTime Function() clock;
 
-  /// Called after the admin set changed and before the user is written, to
-  /// let tests stall or fail between the two.
+  /// Called right before a write of the role or disabled state of a user, so
+  /// after any change of the admin set, to let tests stall or fail there.
   final Future<void> Function()? beforeAdminUserWrite;
+
+  /// Called after the user was read and before anything is written, on every
+  /// attempt, to let tests make what was read stale.
+  final Future<void> Function()? afterAdminClassified;
 
   AccountService(
     this.store, {
@@ -59,6 +76,7 @@ class AccountService {
     this.hasher = const PasswordHasher(),
     this.clock = DateTime.now,
     this.beforeAdminUserWrite,
+    this.afterAdminClassified,
   });
 
   /// Compared against when a login has no hash to check, to take the same
@@ -135,9 +153,10 @@ class AccountService {
   ///
   /// Refuses to leave the registry without an enabled administrator. MongoDB
   /// has no transaction across the `users` collection and the admin set, so
-  /// the writes come in the order that keeps the rule when a process stalls or
-  /// dies between them: the set first when an administrator goes away, the
-  /// user first when one is added.
+  /// every change that affects the set writes it first and the user second,
+  /// and the user only if it still has the role and disabled state this
+  /// decision was based on. Otherwise the whole operation runs again on what
+  /// the user is now.
   Future<User> updateUser(
     User user, {
     String? displayName,
@@ -149,67 +168,99 @@ class AccountService {
     if (newName != null && newName.isEmpty) {
       throw const AccountException.invalid('displayName must not be empty');
     }
-    final current = await requireUserById(user.id);
-    final staysAdmin =
-        (role ?? current.role) == Role.admin && !(disabled ?? current.disabled);
-
-    if (current.isEnabledAdmin && !staysAdmin) {
-      return _removeEnabledAdmin(current,
-          displayName: newName, role: role, disabled: disabled, by: by);
+    final change = _UserChange(newName, role, disabled, by);
+    for (var attempt = 0; attempt < _updateAttempts; attempt++) {
+      final current = await requireUserById(user.id);
+      await afterAdminClassified?.call();
+      final updated = await _updateOnce(current, change);
+      if (updated != null) return updated;
     }
-    final updated = await _applyChanges(current,
-        displayName: newName, role: role, disabled: disabled, by: by);
-    if (!current.isEnabledAdmin && staysAdmin) {
-      await _recordEnabledAdmin(updated.id);
-    }
-    return updated;
+    throw const AccountException.conflict('the user keeps changing, try again');
   }
 
-  Future<User> _removeEnabledAdmin(
-    User user, {
-    required String? displayName,
-    required Role? role,
-    required bool? disabled,
-    required AuditContext by,
-  }) async {
+  /// One attempt of [updateUser], or null if [current] turned out to be stale.
+  Future<User?> _updateOnce(User current, _UserChange change) {
+    final staysAdmin = (change.role ?? current.role) == Role.admin &&
+        !(change.disabled ?? current.disabled);
+    if (current.isEnabledAdmin && !staysAdmin) {
+      return _removeEnabledAdmin(current, change);
+    }
+    if (!current.isEnabledAdmin && staysAdmin) {
+      return _addEnabledAdmin(current, change);
+    }
+    return _applyChanges(current, change);
+  }
+
+  Future<User?> _removeEnabledAdmin(User current, _UserChange change) async {
+    final operation = generateSecret();
     final bool claimed;
     try {
-      claimed = await _claimAdminRemoval(user.id);
+      claimed = await _claimAdminRemoval(current.id, operation);
     } catch (_) {
-      await _reconcileAfterFailure(abandoned: user.id);
+      await _reconcileAfterFailure(abandoned: operation);
       rethrow;
     }
     if (!claimed) {
-      final latest = await requireUserById(user.id);
-      if (latest.isEnabledAdmin) throw const AccountException.lastAdmin();
-      // Another request removed this administrator first.
-      return _applyChanges(latest,
-          displayName: displayName, role: role, disabled: disabled, by: by);
+      final latest = await requireUserById(current.id);
+      if (!latest.isEnabledAdmin) return null;
+      if (await store.isAdminRemovalMarked(current.id)) {
+        throw const AccountException.adminChangeInProgress();
+      }
+      throw const AccountException.lastAdmin();
     }
     try {
-      await beforeAdminUserWrite?.call();
-      final updated = await _applyChanges(user,
-          displayName: displayName, role: role, disabled: disabled, by: by);
-      await store.finishAdminRemoval(user.id);
+      final updated = await _applyChanges(current, change);
+      await store.finishAdminRemoval(current.id, operation);
       return updated;
     } catch (_) {
-      await _reconcileAfterFailure(abandoned: user.id);
+      await _reconcileAfterFailure(abandoned: operation);
       rethrow;
     }
   }
 
   /// Takes the user out of the admin set. The set can be behind the `users`
   /// collection after a crash, so it is rebuilt before refusing.
-  Future<bool> _claimAdminRemoval(String userId) async {
-    if (await store.takeFromAdminSet(userId, clock())) return true;
+  Future<bool> _claimAdminRemoval(String userId, String operation) async {
+    if (await store.takeFromAdminSet(userId, clock(), operation: operation)) {
+      return true;
+    }
     await store.reconcileAdminSet(clock());
-    return store.takeFromAdminSet(userId, clock());
+    return store.takeFromAdminSet(userId, clock(), operation: operation);
   }
 
-  /// Adds a user who has just become an enabled administrator to the set.
+  Future<User?> _addEnabledAdmin(User current, _UserChange change) async {
+    if (!await _reserveAdminAddition(current.id)) {
+      throw const AccountException.adminChangeInProgress();
+    }
+    try {
+      final updated = await _applyChanges(current, change);
+      if (updated == null) {
+        final latest = await store.findUserById(current.id);
+        if (latest == null || !latest.isEnabledAdmin) {
+          await store.dropFromAdminSet(current.id);
+        }
+      }
+      return updated;
+    } catch (_) {
+      await _reconcileAfterFailure();
+      rethrow;
+    }
+  }
+
+  /// Puts the user in the admin set, unless a removal is under way. A marker
+  /// left by a process that died after writing the user only goes away in a
+  /// rebuild, so one runs before refusing.
+  Future<bool> _reserveAdminAddition(String userId) async {
+    if (await store.addToAdminSet(userId)) return true;
+    await store.reconcileAdminSet(clock());
+    return store.addToAdminSet(userId);
+  }
+
+  /// Adds a user who was just created as an administrator to the set.
   ///
   /// Afterwards the user is read again, as a demotion cannot see someone who
-  /// is not in the set yet and could have run in between.
+  /// is not in the set yet and could have run in between. A created user has
+  /// no id to put in the set beforehand.
   Future<void> _recordEnabledAdmin(String userId) async {
     try {
       await store.addToAdminSet(userId);
@@ -234,37 +285,43 @@ class AccountService {
     }
   }
 
-  Future<User> _applyChanges(
-    User user, {
-    required String? displayName,
-    required Role? role,
-    required bool? disabled,
-    required AuditContext by,
-  }) async {
+  /// Writes what differs from [current], or returns null if a change of the
+  /// role or disabled state found the user no longer as in [current].
+  Future<User?> _applyChanges(User current, _UserChange change) async {
+    final _UserChange(:displayName, :role, :disabled) = change;
     final changes = <String, Object?>{
-      if (displayName != null && displayName != user.displayName)
+      if (displayName != null && displayName != current.displayName)
         'displayName': displayName,
-      if (role != null && role != user.role) 'role': role.name,
-      if (disabled != null && disabled != user.disabled) 'disabled': disabled,
+      if (role != null && role != current.role) 'role': role.name,
+      if (disabled != null && disabled != current.disabled)
+        'disabled': disabled,
     };
-    if (changes.isEmpty) return user;
+    if (changes.isEmpty) return current;
 
-    await store.updateUser(
-      user.id,
+    final affectsAdmins =
+        changes.containsKey('role') || changes.containsKey('disabled');
+    if (affectsAdmins) await beforeAdminUserWrite?.call();
+    final written = await store.updateUser(
+      current.id,
       clock(),
       displayName: changes.containsKey('displayName') ? displayName : null,
       role: changes.containsKey('role') ? role : null,
       disabled: changes.containsKey('disabled') ? disabled : null,
+      expected: affectsAdmins
+          ? (role: current.role, disabled: current.disabled)
+          : null,
     );
-    if (disabled == true) await store.deleteSessionsOfUser(user.id);
+    if (!written) return null;
+
+    if (disabled == true) await store.deleteSessionsOfUser(current.id);
     await audit.recordSafely(AuditEvent(
-      actor: by.actor,
-      ip: by.ip,
+      actor: change.by.actor,
+      ip: change.by.ip,
       action: 'user.updated',
-      target: user.email,
+      target: current.email,
       details: changes,
     ));
-    return requireUserById(user.id);
+    return requireUserById(current.id);
   }
 
   /// Sets the password and ends the sessions of [user], except

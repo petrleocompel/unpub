@@ -237,6 +237,11 @@ class AccountException implements Exception {
         code = 'last_admin',
         message = 'this is the last enabled administrator';
 
+  const AccountException.adminChangeInProgress()
+      : statusCode = 409,
+        code = 'admin_change_in_progress',
+        message = 'a change of this administrator is in progress, try again';
+
   @override
   String toString() => message;
 }

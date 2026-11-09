@@ -233,12 +233,17 @@ class AccountStore {
   }
 
   /// Takes [userId] out of the set of enabled administrators, unless that
-  /// would empty it, and records that the removal is under way.
+  /// would empty it, and marks the removal as under way for [operation].
   ///
   /// This one atomic update is what upholds the last-administrator rule, so a
   /// caller that is suspended afterwards cannot break it: nobody else can take
   /// the last remaining id. Returns false if the set does not allow it.
-  Future<bool> takeFromAdminSet(String userId, DateTime now) async {
+  Future<bool> takeFromAdminSet(
+    String userId,
+    DateTime now, {
+    String? operation,
+  }) async {
+    final id = operation ?? generateSecret();
     final remaining = await _modifyAdminSet(
       {
         '_id': _adminSetId,
@@ -247,43 +252,73 @@ class AccountStore {
       },
       {
         r'$pull': {'userIds': userId},
-        r'$set': {'removing.$userId': now},
+        r'$set': {
+          'removing.$userId': {'op': id, 'at': now},
+        },
         r'$inc': {'version': 1},
       },
     );
     if (remaining == null) return false;
 
-    // An id left in the set by something outside this class must not count
-    // as the administrator who remains.
+    // An id left in the set by something outside this class, or by a promotion
+    // that has not written the user yet, must not count as the administrator
+    // who remains.
     final others = [
       for (final id in remaining['userIds'] as List)
         if (_objectId(id as String) case final objectId?) objectId,
     ];
     final another = await _users.findOne(_enabledAdmins.oneFrom('_id', others));
     if (another != null) return true;
-    await addToAdminSet(userId);
+
+    await _modifyAdminSet(
+      {'_id': _adminSetId, 'removing.$userId.op': id},
+      {
+        r'$addToSet': {'userIds': userId},
+        r'$unset': {'removing.$userId': ''},
+        r'$inc': {'version': 1},
+      },
+    );
     return false;
   }
 
+  /// Whether a removal of [userId] from the set is marked as under way.
+  Future<bool> isAdminRemovalMarked(String userId) async {
+    final current = await _adminSet.findOne(where.eq('_id', _adminSetId));
+    return _hasMarker(current, userId);
+  }
+
+  static bool _hasMarker(Map<String, dynamic>? set, String userId) =>
+      switch (set?['removing']) {
+        final Map<String, dynamic> removing => removing.containsKey(userId),
+        _ => false,
+      };
+
   /// Adds [userId] to the set of enabled administrators.
-  Future<void> addToAdminSet(String userId) async {
+  ///
+  /// Returns false, changing nothing, while the removal of this user is under
+  /// way: the markers of other operations are not this one's to clear.
+  Future<bool> addToAdminSet(String userId) async {
     for (var attempt = 1;; attempt++) {
       try {
         await _modifyAdminSet(
-          {'_id': _adminSetId},
+          {
+            '_id': _adminSetId,
+            'removing.$userId': {r'$exists': false},
+          },
           {
             r'$addToSet': {'userIds': userId},
-            r'$unset': {'removing.$userId': ''},
             r'$inc': {'version': 1},
           },
           upsert: true,
         );
-        return;
+        return true;
       } on AdminSetException catch (error) {
-        // Two first inserts of the document can collide.
+        // The upsert also collides when the document exists but the filter
+        // did not match it, and when two first inserts race.
         if (error.code != _duplicateKeyCode || attempt == _adminSetAttempts) {
           rethrow;
         }
+        if (await isAdminRemovalMarked(userId)) return false;
       }
     }
   }
@@ -295,18 +330,18 @@ class AccountStore {
       {'_id': _adminSetId},
       {
         r'$pull': {'userIds': userId},
-        r'$unset': {'removing.$userId': ''},
         r'$inc': {'version': 1},
       },
     );
   }
 
-  /// Forgets that the removal of [userId] is under way. The record ages out
-  /// by itself, so a failure here must not replace the outcome of the removal.
-  Future<void> finishAdminRemoval(String userId) async {
+  /// Forgets the removal of [userId] marked by [operation], and does nothing
+  /// if another operation holds the marker now. The record ages out by itself,
+  /// so a failure here must not replace the outcome of the removal.
+  Future<void> finishAdminRemoval(String userId, String operation) async {
     try {
       await _modifyAdminSet(
-        {'_id': _adminSetId},
+        {'_id': _adminSetId, 'removing.$userId.op': operation},
         {
           r'$unset': {'removing.$userId': ''},
           r'$inc': {'version': 1},
@@ -320,9 +355,10 @@ class AccountStore {
   /// Rebuilds the admin set from the `users` collection.
   ///
   /// Users with a removal started in the last [adminRemovalGrace] stay out,
-  /// except [abandoned], whose removal the caller knows has failed. Every
-  /// change of the set increases `version`, and the set is only replaced at
-  /// the version it was read at, so that a concurrent change is not undone.
+  /// except the one marked by [abandoned], an operation the caller knows has
+  /// failed. Every change of the set increases `version`, and the set is only
+  /// replaced at the version it was read at, so that a concurrent change is
+  /// not undone.
   ///
   /// [beforeReplace] runs after the reads, to let tests change the set in
   /// between.
@@ -338,13 +374,13 @@ class AccountStore {
           .find(_enabledAdmins)
           .map((doc) => (doc['_id'] as ObjectId).oid)
           .toSet();
-      final removing = <String, DateTime>{
+      final removing = <String, Object?>{
         if (current?['removing'] case final Map<String, dynamic> started)
           for (final MapEntry(:key, :value) in started.entries)
-            if (key != abandoned &&
-                enabled.contains(key) &&
-                value is DateTime &&
-                now.difference(value) < adminRemovalGrace)
+            if (value case {'op': final String op, 'at': final DateTime at}
+                when op != abandoned &&
+                    enabled.contains(key) &&
+                    now.difference(at) < adminRemovalGrace)
               key: value,
       };
       await beforeReplace?.call();
@@ -372,22 +408,45 @@ class AccountStore {
     }
   }
 
-  Future<void> updateUser(
+  /// Writes the given fields of the user.
+  ///
+  /// With [expected], only if the user still has that role and disabled state,
+  /// matched the way [_userFromDocument] reads them. Returns false if it did
+  /// not, or if there is no such user.
+  Future<bool> updateUser(
     String id,
     DateTime now, {
     String? displayName,
     Role? role,
     bool? disabled,
+    ({Role role, bool disabled})? expected,
   }) async {
     var update = modify.set('updatedAt', now);
     if (displayName != null) update = update.set('displayName', displayName);
     if (role != null) update = update.set('role', role.name);
     if (disabled != null) update = update.set('disabled', disabled);
-    final result = await _users.updateOne(where.id(_objectId(id)!), update);
+    final result = await _users.updateOne(
+      {
+        '_id': _objectId(id)!,
+        if (expected != null) ...{
+          'role': expected.role == Role.reader
+              ? {
+                  r'$nin': [
+                    for (final other in Role.values)
+                      if (other != Role.reader) other.name,
+                  ],
+                }
+              : expected.role.name,
+          'disabled': expected.disabled ? true : {r'$ne': true},
+        },
+      },
+      update,
+    );
     if (result.hasWriteErrors || !result.operationSucceeded) {
       throw StateError('cannot update user: '
           '${result.writeError?.errmsg ?? result.errmsg}');
     }
+    return result.nMatched == 1;
   }
 
   Future<void> setPasswordHash(String id, String hash, DateTime now) async {
