@@ -7,14 +7,23 @@ import 'authenticator.dart';
 
 const _principalContextKey = 'unpub.principal';
 
-final _publishPath = RegExp(r'^api/packages/versions/new(Upload(Finish)?)?$');
-final _uploadersPath = RegExp(r'^api/packages/[^/]+/uploaders(/[^/]+)?$');
+const _readMethods = {'GET', 'HEAD'};
 
-/// Whether [request] targets publishing or uploader management.
+/// The read-only steps of `dart pub publish`. Checking the token here rejects
+/// a bad one before the client uploads anything.
+const _publishSteps = {
+  'api/packages/versions/new',
+  'api/packages/versions/newUploadFinish',
+};
+
+/// Whether [request] must carry the credentials to change the registry.
+///
+/// Denies by default: every method other than GET, HEAD and OPTIONS is a
+/// write, so a new route cannot be left unprotected by omission.
 bool isWriteRequest(shelf.Request request) {
   if (request.method == 'OPTIONS') return false;
-  final path = request.url.path;
-  return _publishPath.hasMatch(path) || _uploadersPath.hasMatch(path);
+  return !_readMethods.contains(request.method) ||
+      _publishSteps.contains(request.url.path);
 }
 
 /// Whether [request] targets a probe that stays open in every read mode.
@@ -49,7 +58,7 @@ shelf.Middleware authMiddleware(
         try {
           await readAuthenticator.authenticate(request);
         } on AuthException catch (error) {
-          return _denied(error);
+          return authFailureResponse(error);
         }
         return inner(request);
       }
@@ -57,14 +66,15 @@ shelf.Middleware authMiddleware(
       try {
         principal = await authenticator.authenticate(request);
       } on AuthException catch (error) {
-        return _denied(error);
+        return authFailureResponse(error);
       }
       return inner(request.change(context: {_principalContextKey: principal}));
     };
   };
 }
 
-shelf.Response _denied(AuthException error) => shelf.Response(
+/// The JSON response, with a challenge, reporting [error] to the client.
+shelf.Response authFailureResponse(AuthException error) => shelf.Response(
       error.statusCode,
       headers: {
         HttpHeaders.contentTypeHeader: ContentType.json.mimeType,

@@ -107,14 +107,10 @@ class App {
     return (publicUrl ?? req.requestedUri).resolve(reference).toString();
   }
 
-  /// The uploader email of a request that passed [authMiddleware].
-  ///
-  /// Throws when a route is missing authentication, so it fails closed.
-  String _getUploaderEmail(shelf.Request req) {
-    var principal = principalOf(req);
-    if (principal == null) throw 'request is not authenticated';
-    return principal.email;
-  }
+  /// The response for a request that reached a route unauthenticated, which
+  /// happens only if the [router] is mounted without [authMiddleware].
+  static shelf.Response _unauthenticated() => authFailureResponse(
+      const AuthException.unauthorized('Authentication is required.'));
 
   /// The complete request handler, including all middleware.
   shelf.Handler get handler => const shelf.Pipeline()
@@ -278,9 +274,10 @@ class App {
 
   @Route.post('/api/packages/versions/newUpload')
   Future<shelf.Response> upload(shelf.Request req) async {
-    try {
-      var uploader = _getUploaderEmail(req);
+    var uploader = principalOf(req)?.email;
+    if (uploader == null) return _unauthenticated();
 
+    try {
       var contentType = req.headers['content-type'];
       if (contentType == null) throw 'invalid content type';
 
@@ -418,9 +415,12 @@ class App {
   Future<shelf.Response> addUploader(shelf.Request req, String name) async {
     if (!isValidPackageName(name)) return _notFound();
 
-    var body = await req.readAsString();
-    var email = Uri.splitQueryString(body)['email']!; // TODO: null
-    var operatorEmail = _getUploaderEmail(req);
+    var operatorEmail = principalOf(req)?.email;
+    if (operatorEmail == null) return _unauthenticated();
+
+    var email = Uri.splitQueryString(await req.readAsString())['email'];
+    if (email == null) return _badRequest('email is required');
+
     var package = await metaStore.queryPackage(name);
 
     if (package?.uploaders?.contains(operatorEmail) == false) {
@@ -439,8 +439,11 @@ class App {
       shelf.Request req, String name, String email) async {
     if (!isValidPackageName(name)) return _notFound();
 
+    var operatorEmail = principalOf(req)?.email;
+    if (operatorEmail == null) return _unauthenticated();
+
     email = Uri.decodeComponent(email);
-    var operatorEmail = _getUploaderEmail(req);
+
     var package = await metaStore.queryPackage(name);
 
     // TODO: null

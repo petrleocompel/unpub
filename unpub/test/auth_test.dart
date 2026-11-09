@@ -174,13 +174,32 @@ void main() {
       });
     }
 
+    const undeclaredWrites = [
+      ['POST', 'some/future/route'],
+      ['PUT', 'api/packages/foo'],
+      ['PATCH', 'webapi/packages'],
+      ['DELETE', 'api/packages/foo'],
+      ['PROPFIND', 'api/packages/foo'],
+      ['post', 'api/packages/foo'],
+    ];
+
+    for (var route in undeclaredWrites) {
+      test('${route[0]} ${route[1]} is denied by default', () async {
+        var response = await handler(request(route[0], route[1]));
+        expect(response.statusCode, HttpStatus.unauthorized);
+        expect(seen, isNull);
+      });
+    }
+
     const publicRoutes = [
       ['GET', 'api/packages/foo'],
       ['GET', 'api/packages/foo/versions/1.0.0'],
       ['GET', 'packages/foo/versions/1.0.0.tar.gz'],
       ['GET', 'webapi/packages'],
       ['GET', 'healthz'],
+      ['HEAD', 'api/packages/foo'],
       ['OPTIONS', 'api/packages/versions/new'],
+      ['OPTIONS', 'api/packages/foo/uploaders'],
     ];
 
     for (var route in publicRoutes) {

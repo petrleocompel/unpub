@@ -181,6 +181,35 @@ void main() {
     });
   });
 
+  group('routes without the auth middleware', () {
+    final routes = [
+      ['POST', '/api/packages/versions/newUpload'],
+      ['POST', '/api/packages/fine/uploaders'],
+      ['DELETE', '/api/packages/fine/uploaders/a%40b.c'],
+    ];
+
+    for (var route in routes) {
+      test('${route[0]} ${route[1]} is a JSON 401', () async {
+        var response = await createApp().router.call(shelf.Request(
+            route[0], Uri.parse('http://internal:4000${route[1]}'),
+            body: 'email=a%40b.c'));
+        expect(response.statusCode, HttpStatus.unauthorized);
+        expect(response.headers['content-type'], contains('json'));
+        expect(json.decode(await response.readAsString())['error']['message'],
+            'Authentication is required.');
+      });
+    }
+  });
+
+  group('uploader requests', () {
+    test('adding without an email is a 400', () async {
+      var response = await createApp().handler(shelf.Request(
+          'POST', Uri.parse('http://internal:4000/api/packages/fine/uploaders'),
+          headers: authorized, body: 'other=1'));
+      expect(response.statusCode, HttpStatus.badRequest);
+    });
+  });
+
   group('package names and versions', () {
     late Directory temp;
     late String baseDir;
