@@ -100,6 +100,39 @@ void main() {
     });
   });
 
+  group('object keys', () {
+    final store = S3Store(s3Bucket,
+        region: 'us-east-1', credentials: mockCredentials, environment: {});
+
+    for (var unsafe in [
+      ['../escaped', '1.0.0'],
+      ['a/b', '1.0.0'],
+      ['fine', '../1.0.0'],
+      ['fine', '1.0.0/x'],
+      ['fine', '1.0.0\n'],
+      ['fi\x00ne', '1.0.0'],
+    ]) {
+      test('rejects ${json.encode(unsafe)} before any request', () async {
+        await expectLater(store.upload(unsafe[0], unsafe[1], testPackageData),
+            throwsA(isA<ArgumentError>()));
+        await expectLater(store.download(unsafe[0], unsafe[1]).drain<void>(),
+            throwsA(isA<ArgumentError>()));
+      });
+    }
+
+    for (var key in ['a/../b', 'a\x7fb']) {
+      test('rejects a custom key of ${json.encode(key)}', () async {
+        var custom = S3Store(s3Bucket,
+            region: 'us-east-1',
+            credentials: mockCredentials,
+            environment: {},
+            getObjectPath: (_, __) => key);
+        await expectLater(custom.upload('fine', '1.0.0', testPackageData),
+            throwsA(isA<ArgumentError>()));
+      });
+    }
+  });
+
   group('against an s3 service', () {
     late Minio minio;
 

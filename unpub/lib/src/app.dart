@@ -25,6 +25,7 @@ import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
 import 'utils.dart';
+import 'validation.dart';
 
 part 'app.g.dart';
 
@@ -84,6 +85,18 @@ class App {
           'error': {'message': message}
         }),
       );
+
+  static shelf.Response _notFound([String message = 'Not Found']) =>
+      _badRequest(message, status: HttpStatus.notFound);
+
+  /// The version named by a path [segment], or null if it is not one.
+  ///
+  /// The router passes segments still percent encoded, such as `+` as `%2B`.
+  /// Decoding cannot fail, because shelf rejects such requests before routing.
+  static String? _parseVersionSegment(String segment) {
+    final version = Uri.decodeComponent(segment);
+    return isValidPackageVersion(version) ? version : null;
+  }
 
   String _resolveUrl(shelf.Request req, String reference) {
     return (publicUrl ?? req.requestedUri).resolve(reference).toString();
@@ -163,6 +176,8 @@ class App {
 
   @Route.get('/api/packages/<name>')
   Future<shelf.Response> getVersions(shelf.Request req, String name) async {
+    if (!isValidPackageName(name)) return _notFound();
+
     var package = await metaStore.queryPackage(name);
 
     if (package == null) {
@@ -189,11 +204,9 @@ class App {
   Future<shelf.Response> getVersion(
       shelf.Request req, String name, String version) async {
     // Important: + -> %2B, should be decoded here
-    try {
-      version = Uri.decodeComponent(version);
-    } on ArgumentError catch (err) {
-      _log.fine('cannot decode version "$version"', err);
-    }
+    var decodedVersion = _parseVersionSegment(version);
+    if (!isValidPackageName(name) || decodedVersion == null) return _notFound();
+    version = decodedVersion;
 
     var package = await metaStore.queryPackage(name);
     if (package == null) {
@@ -214,6 +227,10 @@ class App {
   @Route.get('/packages/<name>/versions/<version>.tar.gz')
   Future<shelf.Response> download(
       shelf.Request req, String name, String version) async {
+    var decodedVersion = _parseVersionSegment(version);
+    if (!isValidPackageName(name) || decodedVersion == null) return _notFound();
+    version = decodedVersion;
+
     var package = await metaStore.queryPackage(name);
     if (package == null) {
       return shelf.Response.found(Uri.parse(upstream)
@@ -298,13 +315,22 @@ class App {
       var pubspecYaml = utf8.decode(pubspecArchiveFile.content);
       var pubspec = loadYamlAsMap(pubspecYaml)!;
 
+      // These reach file paths and object keys, so check them before anything
+      // else sees them. The values are not echoed back into the logs.
+      final name = pubspec['name'];
+      if (name is! String || !isValidPackageName(name)) {
+        throw 'Invalid package name: it must match [a-z_][a-z0-9_]* and be at '
+            'most $maxPackageNameLength characters long.';
+      }
+      final version = pubspec['version'];
+      if (version is! String || !isValidPackageVersion(version)) {
+        throw 'Invalid package version: it must be a semantic version such as '
+            '1.2.3.';
+      }
+
       if (uploadValidator != null) {
         await uploadValidator!(pubspec, uploader);
       }
-
-      // TODO: null
-      var name = pubspec['name'] as String;
-      var version = pubspec['version'] as String;
 
       var package = await metaStore.queryPackage(name);
 
@@ -358,7 +384,9 @@ class App {
       _log.warning(
           LogEvent('upload rejected', {'reason': '$err'}), null, stackTrace);
       return shelf.Response.found(_resolveUrl(
-          req, '/api/packages/versions/newUploadFinish?error=$err'));
+          req,
+          '/api/packages/versions/newUploadFinish'
+          '?error=${Uri.encodeQueryComponent('$err')}'));
     }
   }
 
@@ -373,6 +401,8 @@ class App {
 
   @Route.post('/api/packages/<name>/uploaders')
   Future<shelf.Response> addUploader(shelf.Request req, String name) async {
+    if (!isValidPackageName(name)) return _notFound();
+
     var body = await req.readAsString();
     var email = Uri.splitQueryString(body)['email']!; // TODO: null
     var operatorEmail = _getUploaderEmail(req);
@@ -392,6 +422,8 @@ class App {
   @Route.delete('/api/packages/<name>/uploaders/<email>')
   Future<shelf.Response> removeUploader(
       shelf.Request req, String name, String email) async {
+    if (!isValidPackageName(name)) return _notFound();
+
     email = Uri.decodeComponent(email);
     var operatorEmail = _getUploaderEmail(req);
     var package = await metaStore.queryPackage(name);
@@ -455,6 +487,8 @@ class App {
   @Route.get('/packages/<name>.json')
   Future<shelf.Response> getPackageVersions(
       shelf.Request req, String name) async {
+    if (!isValidPackageName(name)) return _notFound();
+
     var package = await metaStore.queryPackage(name);
     if (package == null) {
       return _badRequest('package not exists', status: HttpStatus.notFound);
@@ -475,6 +509,13 @@ class App {
   @Route.get('/webapi/package/<name>/<version>')
   Future<shelf.Response> getPackageDetail(
       shelf.Request req, String name, String version) async {
+    if (!isValidPackageName(name)) return _notFound();
+    if (version != 'latest') {
+      var decodedVersion = _parseVersionSegment(version);
+      if (decodedVersion == null) return _notFound();
+      version = decodedVersion;
+    }
+
     var package = await metaStore.queryPackage(name);
     if (package == null) {
       return _okWithJson({'error': 'package not exists'});
@@ -567,6 +608,8 @@ class App {
   @Route.get('/badge/<type>/<name>')
   Future<shelf.Response> badge(
       shelf.Request req, String type, String name) async {
+    if (!isValidPackageName(name)) return _notFound();
+
     var queryParameters = req.requestedUri.queryParameters;
     var package = await metaStore.queryPackage(name);
     if (package == null) {

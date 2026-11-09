@@ -10,10 +10,18 @@ class FileStore extends PackageStore {
 
   FileStore(this.baseDir, {this.getFilePath});
 
+  /// The archive of [name] [version], which is always inside [baseDir].
+  ///
+  /// Throws an [ArgumentError] for a path that would leave [baseDir].
   File _getTarballFile(String name, String version) {
-    final filePath =
+    final base = path.normalize(path.absolute(baseDir));
+    final relative =
         getFilePath?.call(name, version) ?? '$name-$version.tar.gz';
-    return File(path.join(baseDir, filePath));
+    final filePath = path.normalize(path.join(base, relative));
+    if (!path.isWithin(base, filePath)) {
+      throw ArgumentError('archive path escapes the storage directory');
+    }
+    return File(filePath);
   }
 
   @override

@@ -64,8 +64,25 @@ class S3Store extends PackageStore {
   static String? _nonEmpty(String? value) =>
       value == null || value.isEmpty ? null : value;
 
+  /// Characters that could change which object a name or version refers to.
+  static final _unsafeComponent = RegExp(r'[/\\\x00-\x1f\x7f]|\.\.');
+
+  /// The same check for a whole key, in which `/` is the expected separator.
+  static final _unsafeKey = RegExp(r'[\\\x00-\x1f\x7f]|\.\.');
+
+  /// The object key of [name] [version].
+  ///
+  /// Throws an [ArgumentError] for values that could address another object.
   String _getObjectKey(String name, String version) {
-    return getObjectPath?.call(name, version) ?? '$name/$name-$version.tar.gz';
+    if (_unsafeComponent.hasMatch(name) || _unsafeComponent.hasMatch(version)) {
+      throw ArgumentError('unsafe package name or version');
+    }
+    final key =
+        getObjectPath?.call(name, version) ?? '$name/$name-$version.tar.gz';
+    if (key.startsWith('/') || _unsafeKey.hasMatch(key)) {
+      throw ArgumentError('unsafe object key');
+    }
+    return key;
   }
 
   @override

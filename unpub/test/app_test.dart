@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as path;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
@@ -9,6 +11,8 @@ import 'package:unpub/unpub.dart';
 class FakeMetaStore extends MetaStore {
   Object? healthError;
   UnpubPackage? package;
+  final queried = <String>[];
+  final added = <String>[];
 
   @override
   Future<void> checkHealth() async {
@@ -19,13 +23,18 @@ class FakeMetaStore extends MetaStore {
   Future<void> addUploader(String name, String email) async {}
 
   @override
-  Future<void> addVersion(String name, UnpubVersion version) async {}
+  Future<void> addVersion(String name, UnpubVersion version) async {
+    added.add('$name@${version.version}');
+  }
 
   @override
   void increaseDownloads(String name, String version) {}
 
   @override
-  Future<UnpubPackage?> queryPackage(String name) async => package;
+  Future<UnpubPackage?> queryPackage(String name) async {
+    queried.add(name);
+    return package;
+  }
 
   @override
   Future<UnpubQueryResult> queryPackages({
@@ -57,6 +66,31 @@ class FakePackageStore extends PackageStore {
 shelf.Request get(String path, {Map<String, String>? headers}) =>
     shelf.Request('GET', Uri.parse('http://internal:4000$path'),
         headers: headers);
+
+const authorized = {'authorization': 'Bearer secret'};
+
+/// A `dart pub publish` request for an archive holding [pubspec].
+shelf.Request uploadRequest(String pubspec) {
+  const boundary = 'test-boundary';
+  final archive = Archive()
+    ..addFile(ArchiveFile.string('pubspec.yaml', pubspec));
+  final tarball = GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
+  return shelf.Request(
+    'POST',
+    Uri.parse('http://internal:4000/api/packages/versions/newUpload'),
+    headers: {
+      ...authorized,
+      'content-type': 'multipart/form-data; boundary=$boundary',
+    },
+    body: [
+      ...utf8.encode('--$boundary\r\n'
+          'content-disposition: form-data; name="file"; filename="p.tar.gz"\r\n'
+          'content-type: application/octet-stream\r\n\r\n'),
+      ...tarball,
+      ...utf8.encode('\r\n--$boundary--\r\n'),
+    ],
+  );
+}
 
 void main() {
   late FakeMetaStore metaStore;
@@ -133,6 +167,125 @@ void main() {
           headers: {...auth, 'proxy-origin': 'https://evil.example.com'}));
       expect(await response.readAsString(), isNot(contains('evil')));
     });
+  });
+
+  group('package names and versions', () {
+    late Directory temp;
+    late String baseDir;
+    late App app;
+
+    setUp(() async {
+      temp = await Directory.systemTemp.createTemp('unpub-traversal-');
+      baseDir = path.join(temp.path, 'a', 'b', 'packages');
+      await Directory(baseDir).create(recursive: true);
+      app = App(
+        metaStore: metaStore,
+        packageStore: FileStore(baseDir),
+        authenticator: const BootstrapTokenAuthenticator(token: 'secret'),
+      );
+    });
+
+    tearDown(() => temp.delete(recursive: true));
+
+    List<String> storedFiles() => temp
+        .listSync(recursive: true)
+        .whereType<File>()
+        .map((file) => file.path)
+        .toList();
+
+    Future<void> expectRejected(String pubspec, String message) async {
+      var response = await app.handler(uploadRequest(pubspec));
+      expect(response.statusCode, HttpStatus.found);
+      var location = Uri.parse(response.headers['location']!);
+      expect(location.path, '/api/packages/versions/newUploadFinish');
+
+      var finish = await app.handler(get(
+          location.toString().replaceFirst(
+                'http://internal:4000',
+                '',
+              ),
+          headers: authorized));
+      expect(finish.statusCode, HttpStatus.badRequest);
+      expect(json.decode(await finish.readAsString())['error']['message'],
+          contains(message));
+      expect(storedFiles(), isEmpty);
+      expect(metaStore.added, isEmpty);
+    }
+
+    for (var name in [
+      '../../escaped',
+      '..',
+      'a/b',
+      r'a\\b',
+      'Upper',
+      '1abc',
+      'a-b',
+      '123',
+      'x' * 65,
+    ]) {
+      test('an upload named "$name" is rejected', () async {
+        await expectRejected(
+            'name: "$name"\nversion: 1.0.0\n', 'Invalid package name');
+      });
+    }
+
+    for (var version in [
+      '../../escaped',
+      '1.0.0/../../escaped',
+      'nope',
+      '1.0',
+    ]) {
+      test('an upload with version "$version" is rejected', () async {
+        await expectRejected(
+            'name: fine\nversion: "$version"\n', 'Invalid package version');
+      });
+    }
+
+    test('a non-string version is rejected', () async {
+      await expectRejected('name: fine\nversion: 1.0\n', 'version');
+    });
+
+    test('a valid upload is stored', () async {
+      var response =
+          await app.handler(uploadRequest('name: fine\nversion: 1.0.0+1\n'));
+      expect(response.headers['location'], isNot(contains('error')));
+      expect(metaStore.added, ['fine@1.0.0+1']);
+      expect(storedFiles(), [path.join(baseDir, 'fine-1.0.0+1.tar.gz')]);
+    });
+
+    test('the rejection reason survives the redirect intact', () async {
+      var response =
+          await app.handler(uploadRequest('name: "a#b&c=d"\nversion: 1.0.0\n'));
+      var location = Uri.parse(response.headers['location']!);
+      expect(location.fragment, isEmpty);
+      expect(location.queryParameters.keys, ['error']);
+    });
+
+    const invalidUrls = [
+      ['GET', '/packages/..%2F..%2Fsecret/versions/1.0.0.tar.gz'],
+      ['GET', '/packages/fine/versions/..%2F..%2Fsecret.tar.gz'],
+      ['GET', '/packages/fine/versions/%2e%2e%2Fsecret.tar.gz'],
+      ['GET', '/packages/fine/versions/%ZZ.tar.gz'],
+      ['GET', '/api/packages/..%2Fsecret'],
+      ['GET', '/api/packages/..%2Fsecret/versions/1.0.0'],
+      ['GET', '/api/packages/fine/versions/..%2Fsecret'],
+      ['GET', '/packages/..%2Fsecret.json'],
+      ['GET', '/webapi/package/..%2Fsecret/latest'],
+      ['GET', '/webapi/package/fine/..%2Fsecret'],
+      ['GET', '/badge/v/..%2Fsecret'],
+      ['POST', '/api/packages/..%2Fsecret/uploaders'],
+      ['DELETE', '/api/packages/..%2Fsecret/uploaders/a%40b.c'],
+    ];
+
+    for (var route in invalidUrls) {
+      test('${route[0]} ${route[1]} is a 404 that skips the stores', () async {
+        var response = await app.handler(shelf.Request(
+            route[0], Uri.parse('http://internal:4000${route[1]}'),
+            headers: authorized, body: 'email=a%40b.c'));
+        expect(response.statusCode, HttpStatus.notFound);
+        expect(metaStore.queried, isEmpty);
+      });
+    }
   });
 
   group('errors', () {
