@@ -601,6 +601,16 @@ upstream:
       expect(parse(null).upstream.allowedArchiveHosts, isEmpty);
     });
 
+    test('the limits on archives have defaults and can be set', () {
+      expect(parse(null).upstream.maxArchiveBytes, 256 * 1024 * 1024);
+      expect(parse(null).upstream.maxConcurrentFetches, 4);
+      final upstream = parse(
+              'upstream:\n  maxArchiveBytes: 1024\n  maxConcurrentFetches: 2\n')
+          .upstream;
+      expect(upstream.maxArchiveBytes, 1024);
+      expect(upstream.maxConcurrentFetches, 2);
+    });
+
     test('requireSha256 is on unless turned off', () {
       expect(parse(null).upstream.requireSha256, isTrue);
       expect(
@@ -623,6 +633,8 @@ upstream:
       'upstream:\n  cacheTtl: later\n': 'upstream.cacheTtl',
       'upstream:\n  timeout: 0\n': 'upstream.timeout',
       'upstream:\n  allowlist: [Not-A-Package]\n': 'upstream.allowlist',
+      'upstream:\n  maxArchiveBytes: 0\n': 'upstream.maxArchiveBytes',
+      'upstream:\n  maxConcurrentFetches: 0\n': 'upstream.maxConcurrentFetches',
       'upstream:\n  allowedArchiveHosts: [https://cdn.example.com]\n':
           'upstream.allowedArchiveHosts',
       'upstream:\n  allowedArchiveHosts: [cdn.example.com:8443]\n':

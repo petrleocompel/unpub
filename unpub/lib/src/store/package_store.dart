@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+int _temporaryFiles = 0;
 
 abstract class PackageStore {
   bool supportsDownloadUrl = false;
@@ -19,12 +22,21 @@ abstract class PackageStore {
   /// the archive is requested.
   Future<bool> exists(String name, String version) async => true;
 
-  /// Keeps a copy of an upstream archive, apart from locally published ones.
+  /// A new file to write an upstream archive to while it is fetched, in a
+  /// place where [commitUpstream] can take it from.
+  Future<File> upstreamTemporaryFile(String name, String version) async =>
+      File('${Directory.systemTemp.path}/'
+          'unpub-upstream-$pid-${_temporaryFiles++}-'
+          '${DateTime.now().microsecondsSinceEpoch}.tmp');
+
+  /// Keeps [temporary], a verified upstream archive of [size] bytes, apart
+  /// from locally published ones, and returns whether it was kept.
   ///
   /// A store that keeps this default caches nothing, so the proxy goes to the
   /// upstream on every download.
-  Future<void> cacheUpstream(
-      String name, String version, List<int> content) async {}
+  Future<bool> commitUpstream(
+          String name, String version, File temporary, int size) async =>
+      false;
 
   /// Whether a copy of this upstream archive is kept.
   Future<bool> upstreamCached(String name, String version) async => false;

@@ -46,21 +46,21 @@ class FileStore extends PackageStore {
     return _getTarballFile(name, version).openRead();
   }
 
-  /// Writes to a temporary name first, so that a partial file is never served.
+  /// Next to the final path, so that [commitUpstream] is a rename and a
+  /// partial file is never served.
   @override
-  Future<void> cacheUpstream(
-      String name, String version, List<int> content) async {
+  Future<File> upstreamTemporaryFile(String name, String version) async {
     final file = _getUpstreamFile(name, version);
     await file.parent.create(recursive: true);
     final stamp = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-    final temporary = File('${file.path}.$stamp.tmp');
-    try {
-      await temporary.writeAsBytes(content, flush: true);
-      await temporary.rename(file.path);
-    } catch (_) {
-      await temporary.delete().catchError((Object _) => temporary);
-      rethrow;
-    }
+    return File('${file.path}.$stamp.tmp');
+  }
+
+  @override
+  Future<bool> commitUpstream(
+      String name, String version, File temporary, int size) async {
+    await temporary.rename(_getUpstreamFile(name, version).path);
+    return true;
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
@@ -39,6 +40,14 @@ class FakeUpstream {
 
   /// Replaces the `archive_url` of the listing, by package name.
   String Function(String name, String version)? archiveUrlOf;
+
+  /// When set, each archive arrives in pieces this far apart.
+  Duration? trickle;
+
+  /// How long each archive request takes to be answered.
+  Duration? archiveDelay;
+  int _activeArchives = 0;
+  int peakArchives = 0;
 
   /// Route → the `Location` it redirects to.
   final redirects = <String, String>{};
@@ -101,9 +110,26 @@ class FakeUpstream {
     if (archive != null) {
       final bytes = packages[archive.group(1)!]?[archive.group(2)!];
       if (bytes == null) return shelf.Response.notFound('no');
-      return shelf.Response.ok(bytes);
+      peakArchives = max(peakArchives, ++_activeArchives);
+      try {
+        if (archiveDelay != null) await Future<void>.delayed(archiveDelay!);
+      } finally {
+        _activeArchives--;
+      }
+      final pause = trickle;
+      if (pause == null) return shelf.Response.ok(bytes);
+      return shelf.Response.ok(_trickled(bytes, pause),
+          context: const {'shelf.io.buffer_output': false});
     }
     return shelf.Response.notFound('no');
+  }
+
+  static Stream<List<int>> _trickled(List<int> bytes, Duration pause) async* {
+    final step = (bytes.length / 15).ceil();
+    for (var start = 0; start < bytes.length; start += step) {
+      if (start > 0) await Future<void>.delayed(pause);
+      yield bytes.sublist(start, min(start + step, bytes.length));
+    }
   }
 
   shelf.Response _listing(shelf.Request request, String name) {
@@ -146,6 +172,30 @@ class FakeUpstream {
   }
 }
 
+/// Keeps nothing, as a custom store with the defaults does.
+class _NothingKeptStore extends PackageStore {
+  final temporary = <File>[];
+
+  @override
+  Future<void> upload(String name, String version, List<int> content) async {}
+
+  @override
+  Future<File> upstreamTemporaryFile(String name, String version) async {
+    final file = await super.upstreamTemporaryFile(name, version);
+    temporary.add(file);
+    return file;
+  }
+}
+
+class _FailingCommitStore extends FileStore {
+  _FailingCommitStore(super.baseDir);
+
+  @override
+  Future<bool> commitUpstream(
+          String name, String version, File temporary, int size) =>
+      throw const FileSystemException('disk full');
+}
+
 String sha256Of(List<int> bytes) => crypto.sha256.convert(bytes).toString();
 
 void main() {
@@ -179,6 +229,8 @@ void main() {
     PackageStore? archives,
     List<String> allowedArchiveHosts = const [],
     bool requireSha256 = true,
+    int maxArchiveBytes = UpstreamConfig.defaultMaxArchiveBytes,
+    int maxConcurrentFetches = UpstreamConfig.defaultMaxConcurrentFetches,
   }) =>
       UpstreamProxy(
         config: UpstreamConfig(
@@ -189,6 +241,8 @@ void main() {
           timeout: timeout,
           allowedArchiveHosts: allowedArchiveHosts,
           requireSha256: requireSha256,
+          maxArchiveBytes: maxArchiveBytes,
+          maxConcurrentFetches: maxConcurrentFetches,
         ),
         cache: MongoUpstreamCacheStore(db),
         archives: archives ?? FileStore(storage.path),
@@ -226,6 +280,11 @@ void main() {
 
   File cachedFile(String version) => File(
       path.join(storage.path, 'upstream', _name, '$_name-$version.tar.gz'));
+
+  List<String> filesInStorage() => [
+        for (final entity in storage.listSync(recursive: true))
+          if (entity is File) entity.path,
+      ];
 
   Future<void> publishLocally(String name, String version, {App? using}) async {
     final response = await (using ?? app)
@@ -461,9 +520,7 @@ void main() {
       expect(response.statusCode, 502);
       expect(json.decode(await response.readAsString())['error']['message'],
           contains('hash'));
-      expect(cachedFile('1.0.0').existsSync(), isFalse);
-      expect(
-          Directory(path.join(storage.path, 'upstream')).existsSync(), isFalse);
+      expect(filesInStorage(), isEmpty);
     });
 
     group('the upstream hash', () {
@@ -579,6 +636,170 @@ void main() {
     test('a version the upstream does not have is a 404', () async {
       expect((await get('/packages/$_name/versions/9.9.9.tar.gz')).statusCode,
           404);
+    });
+
+    group('through a temporary file', () {
+      test('the size cap aborts and leaves no file', () async {
+        final capped = buildProxy(maxArchiveBytes: 10);
+        addTearDown(capped.close);
+
+        final response = await get(route, using: buildApp(using: capped));
+
+        expect(response.statusCode, 502);
+        expect(json.decode(await response.readAsString())['error']['message'],
+            contains('maxArchiveBytes'));
+        expect(filesInStorage(), isEmpty);
+        expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+            isNull);
+      });
+
+      test('the size cap holds without a declared length', () async {
+        upstream.trickle = const Duration(milliseconds: 20);
+        final capped = buildProxy(maxArchiveBytes: 10);
+        addTearDown(capped.close);
+
+        final response = await get(route, using: buildApp(using: capped));
+
+        expect(response.statusCode, 502);
+        expect(filesInStorage(), isEmpty);
+      });
+
+      test('an archive exactly at the size cap passes', () async {
+        final capped = buildProxy(
+            maxArchiveBytes: upstream.packages[_name]!['1.0.0']!.length);
+        addTearDown(capped.close);
+        final response = await get(route, using: buildApp(using: capped));
+        expect(response.statusCode, 200);
+        await bytesOf(response);
+      });
+
+      test('a failure to verify leaves no file', () async {
+        upstream.hashOverride['$_name@1.0.0'] = 'a' * 64;
+        expect((await get(route)).statusCode, 502);
+        expect(filesInStorage(), isEmpty);
+      });
+
+      test('a connection lost mid-body leaves no file', () async {
+        final broken = await HttpServer.bind('localhost', 0);
+        addTearDown(() => broken.close(force: true));
+        broken.listen((request) async {
+          if (request.uri.path.startsWith('/api/')) {
+            request.response
+              ..headers.contentType = ContentType.json
+              ..write(json.encode({
+                'name': _name,
+                'versions': [
+                  {
+                    'version': '1.0.0',
+                    'pubspec': {'name': _name, 'version': '1.0.0'},
+                    'archive_url': 'http://localhost:${broken.port}/a.tar.gz',
+                    'archive_sha256': 'a' * 64,
+                  },
+                ],
+              }));
+            await request.response.close();
+            return;
+          }
+          request.response.contentLength = 1000;
+          final socket =
+              await request.response.detachSocket(writeHeaders: true);
+          socket.write('partial');
+          await socket.flush();
+          socket.destroy();
+        });
+        final flaky = UpstreamProxy(
+          config: UpstreamConfig(
+              url: Uri.parse('http://localhost:${broken.port}'),
+              mode: UpstreamMode.proxy),
+          cache: MongoUpstreamCacheStore(db),
+          archives: FileStore(storage.path),
+        );
+        addTearDown(flaky.close);
+
+        final response = await get(route, using: buildApp(using: flaky));
+
+        expect(response.statusCode, 502);
+        expect(filesInStorage(), isEmpty);
+      });
+
+      test('a store that caches nothing still gets the archive served',
+          () async {
+        final store = _NothingKeptStore();
+        final uncached = buildProxy(archives: store);
+
+        final replies = await Future.wait([
+          get(route, using: buildApp(using: uncached, packageStore: store)),
+          get(route, using: buildApp(using: uncached, packageStore: store)),
+        ]);
+
+        for (final reply in replies) {
+          expect(await bytesOf(reply), upstream.packages[_name]!['1.0.0']);
+        }
+        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+        expect(store.temporary.single.existsSync(), isTrue);
+
+        uncached.close();
+        expect(store.temporary.single.existsSync(), isFalse);
+      });
+
+      test('a store that fails does not fail the download', () async {
+        final store = _FailingCommitStore(storage.path);
+        final failing = buildProxy(archives: store);
+        addTearDown(failing.close);
+
+        final response = await get(route,
+            using: buildApp(using: failing, packageStore: store));
+
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+        expect(cachedFile('1.0.0').existsSync(), isFalse);
+      });
+    });
+
+    group('maxConcurrentFetches', () {
+      for (final version in ['1.0.1', '1.0.2', '1.0.3', '1.0.4']) {
+        setUp(() => upstream.add(_name, version));
+      }
+
+      test('bounds how many archives are fetched at once', () async {
+        upstream.archiveDelay = const Duration(milliseconds: 200);
+        final limited = buildProxy(maxConcurrentFetches: 2);
+        addTearDown(limited.close);
+        final limitedApp = buildApp(using: limited);
+
+        final replies = await Future.wait([
+          for (final version in ['1.0.0', '1.0.1', '1.0.2', '1.0.3', '1.0.4'])
+            get('/packages/$_name/versions/$version.tar.gz', using: limitedApp),
+        ]);
+
+        for (final reply in replies) {
+          expect(reply.statusCode, 200);
+          await bytesOf(reply);
+        }
+        expect(upstream.peakArchives, 2);
+      });
+
+      test('a download that waits too long is a 503', () async {
+        upstream.trickle = const Duration(milliseconds: 200);
+        final limited = buildProxy(
+            maxConcurrentFetches: 1, timeout: const Duration(seconds: 1));
+        addTearDown(limited.close);
+        final limitedApp = buildApp(using: limited);
+
+        final running = get(route, using: limitedApp);
+        while (upstream.count('/storage/$_name-1.0.0.tar.gz') == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+
+        final refused = await get('/packages/$_name/versions/1.0.1.tar.gz',
+            using: limitedApp);
+
+        expect(refused.statusCode, 503);
+        expect(json.decode(await refused.readAsString())['error']['message'],
+            contains('try again'));
+        final first = await running;
+        expect(first.statusCode, 200);
+        await bytesOf(first);
+      });
     });
 
     group('a kept archive', () {

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' show sha256;
+import 'package:crypto/crypto.dart' show Digest, sha256;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
@@ -18,15 +20,17 @@ final _log = Logger('unpub.upstream');
 /// Largest metadata response read from the upstream.
 const _maxMetadataBytes = 64 * 1024 * 1024;
 
-/// Largest archive read from the upstream. pub.dev itself accepts 100 MiB.
-const _maxArchiveBytes = 256 * 1024 * 1024;
-
 /// How long past `cacheTtl` an entry stays, for revalidation and so that a
 /// cached archive keeps its validator.
 const _staleRetention = Duration(days: 7);
 
 /// How many redirects one upstream request may follow.
 const _maxRedirects = 3;
+
+/// How long a fetched archive the store did not keep stays on disk. Clients
+/// that were waiting open it right away, and a file that is open can still be
+/// read after it is deleted.
+const _unkeptArchiveLifetime = Duration(seconds: 30);
 
 const _pubAccept = 'application/vnd.pub.v2+json';
 final _userAgent = 'unpub/$packageVersion '
@@ -41,6 +45,12 @@ class UpstreamException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Every fetch slot stayed taken for as long as the request may wait.
+class UpstreamBusyException extends UpstreamException {
+  const UpstreamBusyException()
+      : super('too many upstream downloads are running, try again');
 }
 
 /// A package listing from the upstream, ready to serve.
@@ -91,6 +101,56 @@ class UpstreamArchive {
   const UpstreamArchive(this.content, this.sha256);
 }
 
+/// A fetched and verified archive, kept in the store or else still in [spool].
+class _FetchedArchive {
+  final File? spool;
+  final String? sha256;
+
+  const _FetchedArchive(this.spool, this.sha256);
+}
+
+/// Limits how many archives are fetched at once.
+class _FetchSlots {
+  int _free;
+  final _waiting = Queue<Completer<void>>();
+
+  _FetchSlots(this._free);
+
+  /// Takes a slot, waiting at most [patience] for one.
+  Future<void> acquire(Duration patience) async {
+    if (_free > 0) {
+      _free--;
+      return;
+    }
+    final waiter = Completer<void>();
+    _waiting.add(waiter);
+    try {
+      await waiter.future.timeout(patience);
+    } on TimeoutException {
+      _waiting.remove(waiter);
+      throw const UpstreamBusyException();
+    }
+  }
+
+  void release() {
+    if (_waiting.isEmpty) {
+      _free++;
+    } else {
+      _waiting.removeFirst().complete();
+    }
+  }
+}
+
+class _DigestSink implements Sink<Digest> {
+  late Digest value;
+
+  @override
+  void add(Digest data) => value = data;
+
+  @override
+  void close() {}
+}
+
 class _Response {
   final Uint8List? body;
   final String? etag;
@@ -110,10 +170,13 @@ class UpstreamProxy {
   final PackageStore archives;
   final Set<String> allowedArchiveHosts;
   final bool requireSha256;
+  final int maxArchiveBytes;
   final http.Client _client;
   final DateTime Function() clock;
 
   final _inFlight = <String, Future<Object?>>{};
+  final _unkeptArchives = <File, Timer>{};
+  final _FetchSlots _slots;
 
   UpstreamProxy({
     required UpstreamConfig config,
@@ -127,9 +190,22 @@ class UpstreamProxy {
         timeout = config.timeout,
         allowedArchiveHosts = config.allowedArchiveHosts.toSet(),
         requireSha256 = config.requireSha256,
+        maxArchiveBytes = config.maxArchiveBytes,
+        _slots = _FetchSlots(config.maxConcurrentFetches),
         _client = client ?? http.Client();
 
-  void close() => _client.close();
+  void close() {
+    _client.close();
+    for (final entry in _unkeptArchives.entries) {
+      entry.value.cancel();
+      try {
+        entry.key.deleteSync();
+      } on FileSystemException {
+        // Already gone.
+      }
+    }
+    _unkeptArchives.clear();
+  }
 
   /// Whether [name] may be proxied at all.
   bool allows(String name) => allowlist.isEmpty || allowlist.contains(name);
@@ -377,18 +453,21 @@ class UpstreamProxy {
   /// The archive of [name] [version], from the store if it is there and
   /// otherwise fetched, verified and stored.
   ///
-  /// The archive is fetched completely before the client gets a byte, because
-  /// only then can a corrupt archive still be answered with an error status.
-  /// Returns null if the upstream does not have it.
+  /// The archive is fetched completely, to a temporary file, before the client
+  /// gets a byte, because only then can a corrupt archive still be answered
+  /// with an error status. Returns null if the upstream does not have it.
   ///
-  /// Throws an [UpstreamException] if it cannot be fetched or fails to verify.
+  /// Throws an [UpstreamException] if it cannot be fetched or fails to verify,
+  /// and specifically an [UpstreamBusyException] if too many are being fetched.
   Future<UpstreamArchive?> archive(String name, String version) async {
     final kept = await _keptArchive(name, version);
     if (kept != null) return kept;
     final fetched = await _once(
         'archive:$name@$version', () => _fetchArchive(name, version));
     if (fetched == null) return null;
-    return UpstreamArchive(Stream.value(fetched.$1), fetched.$2);
+    return UpstreamArchive(
+        fetched.spool?.openRead() ?? archives.downloadUpstream(name, version),
+        fetched.sha256);
   }
 
   /// The copy of the archive in the store, if it can be served as it is.
@@ -429,60 +508,155 @@ class UpstreamProxy {
     }
   }
 
-  Future<(Uint8List, String?)?> _fetchArchive(
-      String name, String version) async {
-    final metadata = await listing(name);
-    final archiveUrl = metadata?.archiveUrls[version];
-    if (metadata == null || archiveUrl == null) return null;
+  Future<_FetchedArchive?> _fetchArchive(String name, String version) =>
+      _guarded('/packages/$name/versions/$version', () async {
+        final metadata = await listing(name);
+        final archiveUrl = metadata?.archiveUrls[version];
+        if (metadata == null || archiveUrl == null) return null;
 
-    if (metadata.invalidHashes.contains(version)) {
-      _log.warning(LogEvent('upstream sent a malformed archive hash',
-          {'name': name, 'version': version}));
-      throw const UpstreamException(
-          'upstream provided an invalid archive_sha256');
-    }
-    final expected = metadata.sha256Of(version);
-    if (expected == null && requireSha256) {
-      throw UpstreamException(
-          'upstream provides no archive_sha256 for $name $version');
-    }
+        if (metadata.invalidHashes.contains(version)) {
+          _log.warning(LogEvent('upstream sent a malformed archive hash',
+              {'name': name, 'version': version}));
+          throw const UpstreamException(
+              'upstream provided an invalid archive_sha256');
+        }
+        final expected = metadata.sha256Of(version);
+        if (expected == null && requireSha256) {
+          throw UpstreamException(
+              'upstream provides no archive_sha256 for $name $version');
+        }
 
-    await _forgetIfDifferent(name, version, expected);
+        await _forgetIfDifferent(name, version, expected);
 
-    final response = await _get(Uri.parse(archiveUrl), _maxArchiveBytes);
-    if (response == null) return null;
-    final bytes = response.body!;
+        await _slots.acquire(timeout);
+        try {
+          return await _download(
+              name, version, Uri.parse(archiveUrl), expected);
+        } finally {
+          _slots.release();
+        }
+      });
 
-    final actual = sha256.convert(bytes).toString();
-    if (expected == null) {
-      _log.warning(LogEvent('serving an upstream archive without a hash',
-          {'name': name, 'version': version}));
-    } else if (actual != expected) {
-      _log.warning(LogEvent('upstream archive failed verification',
-          {'name': name, 'version': version}));
-      throw const UpstreamException(
-          'the upstream archive did not match its published hash');
-    }
-
+  /// Fetches the archive into a temporary file, and hands it to the store only
+  /// once it has passed verification. No failure leaves the file behind.
+  Future<_FetchedArchive?> _download(
+      String name, String version, Uri uri, String? expected) async {
+    final temporary = await archives.upstreamTemporaryFile(name, version);
     try {
-      await archives.cacheUpstream(name, version, bytes);
+      final response = await _send(uri);
+      if (response.statusCode == 404) {
+        await _discard(response);
+        await _delete(temporary);
+        return null;
+      }
+      if (response.statusCode != 200) {
+        await _discard(response);
+        _log.warning(LogEvent('upstream refused a request',
+            {'status': response.statusCode, 'path': uri.path}));
+        throw const UpstreamException(
+            'the upstream registry refused the request');
+      }
+      final (actual, size) = await _spool(response, temporary);
+      if (expected == null) {
+        _log.warning(LogEvent('serving an upstream archive without a hash',
+            {'name': name, 'version': version}));
+      } else if (actual != expected) {
+        _log.warning(LogEvent('upstream archive failed verification',
+            {'name': name, 'version': version}));
+        throw const UpstreamException(
+            'the upstream archive did not match its published hash');
+      }
+
+      if (await _keep(name, version, temporary, size, actual,
+          verified: expected != null)) {
+        await _delete(temporary);
+        return _FetchedArchive(null, expected);
+      }
+      _expire(temporary);
+      return _FetchedArchive(temporary, expected);
+    } catch (_) {
+      await _delete(temporary);
+      rethrow;
+    }
+  }
+
+  /// Writes the body of [response] to [file], and returns its hash and size.
+  /// Fails as soon as the body passes [maxArchiveBytes].
+  Future<(String, int)> _spool(
+      http.StreamedResponse response, File file) async {
+    if ((response.contentLength ?? 0) > maxArchiveBytes) {
+      await response.stream.listen(null).cancel();
+      throw const UpstreamException(_archiveTooLarge);
+    }
+    final digest = _DigestSink();
+    final hasher = sha256.startChunkedConversion(digest);
+    final output = await file.open(mode: FileMode.writeOnly);
+    var size = 0;
+    try {
+      await for (final chunk in response.stream.timeout(timeout)) {
+        size += chunk.length;
+        if (size > maxArchiveBytes) {
+          throw const UpstreamException(_archiveTooLarge);
+        }
+        hasher.add(chunk);
+        await output.writeFrom(chunk);
+      }
+    } finally {
+      await output.close();
+    }
+    hasher.close();
+    return (digest.value.toString(), size);
+  }
+
+  static const _archiveTooLarge =
+      'the upstream archive is larger than upstream.maxArchiveBytes';
+
+  /// Hands a verified archive to the store and records it, and returns whether
+  /// the store has it. A store that fails does not fail the download, because
+  /// the client can still have the verified archive.
+  Future<bool> _keep(
+      String name, String version, File temporary, int size, String digest,
+      {required bool verified}) async {
+    final event = {'name': name, 'version': version};
+    try {
+      if (!await archives.commitUpstream(name, version, temporary, size)) {
+        return false;
+      }
+    } catch (error, stackTrace) {
+      _log.warning(LogEvent('failed to store upstream archive', event), error,
+          stackTrace);
+      return false;
+    }
+    try {
       await cache.writeArchive(UpstreamArchiveRecord(
         name: name,
         version: version,
-        sha256: actual,
-        bytes: bytes.length,
+        sha256: digest,
+        bytes: size,
         fetchedAt: clock(),
-        verified: expected != null,
+        verified: verified,
       ));
     } catch (error, stackTrace) {
-      // The client can still have the verified archive.
-      _log.warning(
-          LogEvent('failed to store upstream archive',
-              {'name': name, 'version': version}),
-          error,
+      // Without a record the copy is fetched again next time.
+      _log.warning(LogEvent('failed to record upstream archive', event), error,
           stackTrace);
     }
-    return (bytes, expected);
+    return true;
+  }
+
+  static Future<void> _delete(File file) async {
+    try {
+      await file.delete();
+    } on FileSystemException {
+      // Moved into the store, or never created.
+    }
+  }
+
+  void _expire(File file) {
+    _unkeptArchives[file] = Timer(_unkeptArchiveLifetime, () {
+      _unkeptArchives.remove(file);
+      _delete(file);
+    });
   }
 
   /// Throws away a kept copy whose hash is not [expected], so that it cannot
@@ -573,42 +747,47 @@ class UpstreamProxy {
     }
   }
 
-  /// Returns null for a 404. Every failure is an [UpstreamException] that says
-  /// nothing about the upstream's internals, and is logged here.
-  Future<_Response?> _get(Uri uri, int limit,
-      {String? accept, String? etag}) async {
+  /// Runs [action], turning every failure into an [UpstreamException] that
+  /// says nothing about the upstream's internals, logged here.
+  Future<T> _guarded<T>(String path, Future<T> Function() action) async {
     try {
-      final response = await _send(uri, accept: accept, etag: etag);
-      if (response.statusCode == 304) {
-        await _discard(response);
-        return _Response(null, etag, notModified: true);
-      }
-      if (response.statusCode == 404) {
-        await _discard(response);
-        return null;
-      }
-      if (response.statusCode != 200) {
-        await _discard(response);
-        _log.warning(LogEvent('upstream refused a request',
-            {'status': response.statusCode, 'path': uri.path}));
-        throw const UpstreamException(
-            'the upstream registry refused the request');
-      }
-      final builder = BytesBuilder(copy: false);
-      await for (final chunk in response.stream.timeout(timeout)) {
-        builder.add(chunk);
-        if (builder.length > limit) {
-          throw const UpstreamException('the upstream response is too large');
-        }
-      }
-      return _Response(builder.takeBytes(), response.headers['etag']);
+      return await action();
     } on UpstreamException {
       rethrow;
     } catch (error, stackTrace) {
       // TimeoutException, SocketException, http.ClientException and so on.
-      _log.warning(LogEvent('upstream request failed', {'path': uri.path}),
-          error, stackTrace);
+      _log.warning(LogEvent('upstream request failed', {'path': path}), error,
+          stackTrace);
       throw const UpstreamException('the upstream registry is unavailable');
     }
   }
+
+  /// Returns null for a 404, and throws an [UpstreamException] otherwise.
+  Future<_Response?> _get(Uri uri, int limit, {String? accept, String? etag}) =>
+      _guarded(uri.path, () async {
+        final response = await _send(uri, accept: accept, etag: etag);
+        if (response.statusCode == 304) {
+          await _discard(response);
+          return _Response(null, etag, notModified: true);
+        }
+        if (response.statusCode == 404) {
+          await _discard(response);
+          return null;
+        }
+        if (response.statusCode != 200) {
+          await _discard(response);
+          _log.warning(LogEvent('upstream refused a request',
+              {'status': response.statusCode, 'path': uri.path}));
+          throw const UpstreamException(
+              'the upstream registry refused the request');
+        }
+        final builder = BytesBuilder(copy: false);
+        await for (final chunk in response.stream.timeout(timeout)) {
+          builder.add(chunk);
+          if (builder.length > limit) {
+            throw const UpstreamException('the upstream response is too large');
+          }
+        }
+        return _Response(builder.takeBytes(), response.headers['etag']);
+      });
 }

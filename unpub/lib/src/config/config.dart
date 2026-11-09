@@ -47,6 +47,8 @@ const _schema = <String, _ValueKind>{
   'upstream.timeout': _ValueKind.string,
   'upstream.allowedArchiveHosts': _ValueKind.stringList,
   'upstream.requireSha256': _ValueKind.boolean,
+  'upstream.maxArchiveBytes': _ValueKind.integer,
+  'upstream.maxConcurrentFetches': _ValueKind.integer,
   'publish.allowedNamePrefixes': _ValueKind.stringList,
   'publish.maxArchiveBytes': _ValueKind.integer,
   'publish.requiredFiles': _ValueKind.stringList,
@@ -229,6 +231,8 @@ enum UpstreamMode {
 class UpstreamConfig {
   static const defaultCacheTtl = Duration(minutes: 10);
   static const defaultTimeout = Duration(seconds: 30);
+  static const defaultMaxArchiveBytes = 256 * 1024 * 1024;
+  static const defaultMaxConcurrentFetches = 4;
 
   final Uri url;
   final UpstreamMode mode;
@@ -249,6 +253,12 @@ class UpstreamConfig {
   /// served and cached unverified.
   final bool requireSha256;
 
+  /// Largest archive fetched from the upstream.
+  final int maxArchiveBytes;
+
+  /// How many archives are fetched at once. Other first downloads wait.
+  final int maxConcurrentFetches;
+
   const UpstreamConfig({
     required this.url,
     this.mode = UpstreamMode.redirect,
@@ -257,6 +267,8 @@ class UpstreamConfig {
     this.timeout = defaultTimeout,
     this.allowedArchiveHosts = const [],
     this.requireSha256 = true,
+    this.maxArchiveBytes = defaultMaxArchiveBytes,
+    this.maxConcurrentFetches = defaultMaxConcurrentFetches,
   });
 }
 
@@ -648,6 +660,15 @@ class _ConfigReader {
       _problems.add('${_describe('upstream.allowedArchiveHosts')} must contain '
           'host names, without a scheme or port, got ${badHosts.join(', ')}');
     }
+    for (final key in [
+      'upstream.maxArchiveBytes',
+      'upstream.maxConcurrentFetches'
+    ]) {
+      final value = _integer(key);
+      if (value != null && value <= 0) {
+        _problems.add('${_describe(key)} must be positive');
+      }
+    }
     return UpstreamConfig(
       url: url,
       mode: mode ?? UpstreamMode.redirect,
@@ -658,6 +679,10 @@ class _ConfigReader {
           UpstreamConfig.defaultTimeout,
       allowedArchiveHosts: [for (final h in archiveHosts) h.toLowerCase()],
       requireSha256: _boolean('upstream.requireSha256') ?? true,
+      maxArchiveBytes: _integer('upstream.maxArchiveBytes') ??
+          UpstreamConfig.defaultMaxArchiveBytes,
+      maxConcurrentFetches: _integer('upstream.maxConcurrentFetches') ??
+          UpstreamConfig.defaultMaxConcurrentFetches,
     );
   }
 

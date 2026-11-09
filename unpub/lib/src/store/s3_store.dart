@@ -125,16 +125,22 @@ class S3Store extends PackageStore {
     yield* await _minio.getObject(bucketName, _getObjectKey(name, version));
   }
 
+  /// Streams the file, so that its size does not matter. [temporary] stays
+  /// where it is, for the caller to delete.
   @override
-  Future<void> cacheUpstream(
-      String name, String version, List<int> content) async {
+  Future<bool> commitUpstream(
+      String name, String version, File temporary, int size) async {
     await _minio.putObject(
       bucketName,
       _getUpstreamKey(name, version),
-      Stream.value(Uint8List.fromList(content)),
-      size: content.length,
+      temporary.openRead().map(_asBytes),
+      size: size,
     );
+    return true;
   }
+
+  static Uint8List _asBytes(List<int> chunk) =>
+      chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
 
   @override
   Future<bool> upstreamCached(String name, String version) async {

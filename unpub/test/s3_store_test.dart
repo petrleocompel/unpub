@@ -263,8 +263,18 @@ void main() {
       var store = S3Store(s3Bucket, minio: minio);
       expect(await store.upstreamCached(name, '1.0.0'), isFalse);
 
-      await store.cacheUpstream(name, '1.0.0', testPackageData);
+      final temporary = await store.upstreamTemporaryFile(name, '1.0.0');
+      addTearDown(() => temporary.delete());
+      expect(path.dirname(temporary.path), Directory.systemTemp.path);
+      await temporary.writeAsBytes(testPackageData);
 
+      expect(
+          await store.commitUpstream(
+              name, '1.0.0', temporary, testPackageData.length),
+          isTrue);
+
+      expect(await temporary.exists(), isTrue,
+          reason: 'the caller deletes the temporary file');
       expect(await store.upstreamCached(name, '1.0.0'), isTrue);
       expect(await store.exists(name, '1.0.0'), isFalse);
       expect(await collectBytes(store.downloadUpstream(name, '1.0.0')),
@@ -272,6 +282,9 @@ void main() {
       var stat =
           await minio.statObject(s3Bucket, 'upstream/$name/$name-1.0.0.tar.gz');
       expect(stat.size, testPackageData.length);
+
+      await store.deleteUpstream(name, '1.0.0');
+      expect(await store.upstreamCached(name, '1.0.0'), isFalse);
     });
 
     test('exists reflects the stored objects', () async {

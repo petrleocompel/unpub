@@ -496,6 +496,8 @@ class App {
     final UpstreamArchive? archive;
     try {
       archive = await proxy.archive(name, version);
+    } on UpstreamBusyException catch (error) {
+      return _badRequest(error.message, status: HttpStatus.serviceUnavailable);
     } on UpstreamException catch (error) {
       return _badGateway(error);
     }
