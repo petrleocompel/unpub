@@ -2200,6 +2200,27 @@ void main() {
       expect(await setIds(), [target.id]);
     });
 
+    test('a rebuild under constant contention gives up with a typed error',
+        () async {
+      await user('a@b.c', Role.admin);
+      final other = await user('b@b.c', Role.publisher);
+
+      await expectLater(
+          store.reconcileAdminSet(DateTime.now(),
+              beforeReplace: () => store.addToAdminSet(other.id)),
+          throwsA(isA<AdminSetContentionException>()));
+    });
+
+    test('a promotion blocked by contention answers a conflict', () async {
+      await user('a@b.c', Role.admin);
+      final target = await user('t@b.c', Role.publisher);
+      final contended = AccountService(_ContendedStore(db));
+
+      expect(await codeOf(() => contended.updateUser(target, role: Role.admin)),
+          'conflict');
+      expect((await store.findUserById(target.id))!.role, Role.publisher);
+    });
+
     test('a user that keeps changing gives up with a conflict', () async {
       final target = await user('t@b.c', Role.publisher);
       var writes = 0;
@@ -2632,4 +2653,22 @@ storage:
 class _FailingAuditStore extends AuditStore {
   @override
   Future<void> record(AuditEvent event) async => throw StateError('down');
+}
+
+/// A store whose admin set never settles during a rebuild, and whose direct
+/// additions are blocked, as if a removal marker were always present.
+class _ContendedStore extends AccountStore {
+  _ContendedStore(super.db);
+
+  @override
+  Future<bool> addToAdminSet(String userId) async => false;
+
+  @override
+  Future<void> reconcileAdminSet(
+    DateTime now, {
+    String? abandoned,
+    Future<void> Function()? beforeReplace,
+  }) async {
+    throw const AdminSetContentionException('contended');
+  }
 }

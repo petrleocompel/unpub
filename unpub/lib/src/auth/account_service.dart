@@ -123,7 +123,9 @@ class AccountService {
     } on DuplicateEmailException {
       throw AccountException.conflict('user $normalized already exists');
     }
-    if (user.isEnabledAdmin) await _recordEnabledAdmin(user.id);
+    if (user.isEnabledAdmin) {
+      await _translatingContention(() => _recordEnabledAdmin(user.id));
+    }
     await audit.recordSafely(AuditEvent(
       actor: by.actor,
       ip: by.ip,
@@ -172,10 +174,23 @@ class AccountService {
     for (var attempt = 0; attempt < _updateAttempts; attempt++) {
       final current = await requireUserById(user.id);
       await afterAdminClassified?.call();
-      final updated = await _updateOnce(current, change);
+      final updated =
+          await _translatingContention(() => _updateOnce(current, change));
       if (updated != null) return updated;
     }
     throw const AccountException.conflict('the user keeps changing, try again');
+  }
+
+  /// Runs [action], answering a retried admin set change that kept colliding
+  /// with a 409 conflict, as the caller can simply try again.
+  Future<T> _translatingContention<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on AdminSetContentionException catch (error) {
+      _log.info('admin set contention: $error');
+      throw const AccountException.conflict(
+          'the admin set keeps changing, try again');
+    }
   }
 
   /// One attempt of [updateUser], or null if [current] turned out to be stale.

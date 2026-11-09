@@ -45,6 +45,19 @@ class AdminSetException implements Exception {
   String toString() => 'cannot change the admin set: $message (code $code)';
 }
 
+/// The admin set changed under an operation more often than it retries.
+///
+/// This is contention, not a database failure: the next attempt usually
+/// succeeds. [AccountService] answers it with a 409 conflict.
+class AdminSetContentionException implements Exception {
+  final String message;
+
+  const AdminSetContentionException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// The fields of a new user.
 class NewUser {
   final String email;
@@ -315,10 +328,12 @@ class AccountStore {
       } on AdminSetException catch (error) {
         // The upsert also collides when the document exists but the filter
         // did not match it, and when two first inserts race.
-        if (error.code != _duplicateKeyCode || attempt == _adminSetAttempts) {
-          rethrow;
-        }
+        if (error.code != _duplicateKeyCode) rethrow;
         if (await isAdminRemovalMarked(userId)) return false;
+        if (attempt == _adminSetAttempts) {
+          throw const AdminSetContentionException(
+              'the admin set keeps changing, cannot add to it');
+        }
       }
     }
   }
@@ -403,7 +418,8 @@ class AccountStore {
         if (error.code != _duplicateKeyCode) rethrow;
       }
       if (attempt == _adminSetAttempts) {
-        throw StateError('the admin set keeps changing, cannot rebuild it');
+        throw const AdminSetContentionException(
+            'the admin set keeps changing, cannot rebuild it');
       }
     }
   }
