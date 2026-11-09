@@ -613,6 +613,38 @@ void main() {
       expect(response.statusCode, 502);
     });
 
+    for (final status in [404, 500]) {
+      test('a $status whose body stalls fails within the timeout', () async {
+        final stalling = await HttpServer.bind('localhost', 0);
+        addTearDown(() => stalling.close(force: true));
+        stalling.listen((request) async {
+          request.response
+            ..statusCode = status
+            ..contentLength = 100
+            ..write('partial');
+          await request.response.flush();
+          // The remaining 93 bytes never come.
+        });
+        final slow = UpstreamProxy(
+          config: UpstreamConfig(
+            url: Uri.parse('http://localhost:${stalling.port}'),
+            mode: UpstreamMode.proxy,
+            timeout: const Duration(milliseconds: 200),
+          ),
+          cache: MongoUpstreamCacheStore(db),
+          archives: FileStore(storage.path),
+        );
+        addTearDown(slow.close);
+
+        final watch = Stopwatch()..start();
+        final response =
+            await get('/api/packages/$_name', using: buildApp(using: slow));
+
+        expect(response.statusCode, 502);
+        expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+      });
+    }
+
     for (final body in [
       'not json',
       '[1]',

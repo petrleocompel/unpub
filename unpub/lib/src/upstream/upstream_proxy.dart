@@ -420,28 +420,54 @@ class UpstreamProxy {
   Future<_Response?> _getJson(String path, {String? etag}) =>
       _get(_resolve(path), _maxMetadataBytes, accept: _pubAccept, etag: etag);
 
+  /// Sends a GET for [uri], giving up after [timeout] without an answer.
+  Future<http.StreamedResponse> _send(Uri uri,
+      {String? accept, String? etag}) async {
+    final abort = Completer<void>();
+    final request =
+        http.AbortableRequest('GET', uri, abortTrigger: abort.future)
+          ..headers['user-agent'] = _userAgent
+          ..headers.addAll({
+            if (accept != null) 'accept': accept,
+            if (etag != null) 'if-none-match': etag,
+          });
+    return _client.send(request).timeout(timeout, onTimeout: () {
+      abort.complete();
+      throw TimeoutException('no answer from the upstream', timeout);
+    });
+  }
+
+  /// Reads the [response] body to its end and drops it. The whole body has to
+  /// arrive within [timeout], since nothing in it is worth waiting for.
+  Future<void> _discard(http.StreamedResponse response) async {
+    final done = Completer<void>();
+    final subscription = response.stream.listen(null,
+        onDone: done.complete,
+        onError: done.completeError,
+        cancelOnError: true);
+    try {
+      await done.future.timeout(timeout);
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
   /// Returns null for a 404. Every failure is an [UpstreamException] that says
   /// nothing about the upstream's internals, and is logged here.
   Future<_Response?> _get(Uri uri, int limit,
       {String? accept, String? etag}) async {
-    final request = http.Request('GET', uri)
-      ..headers['user-agent'] = _userAgent
-      ..headers.addAll({
-        if (accept != null) 'accept': accept,
-        if (etag != null) 'if-none-match': etag,
-      });
     try {
-      final response = await _client.send(request).timeout(timeout);
+      final response = await _send(uri, accept: accept, etag: etag);
       if (response.statusCode == 304) {
-        await response.stream.drain<void>();
+        await _discard(response);
         return _Response(null, etag, notModified: true);
       }
       if (response.statusCode == 404) {
-        await response.stream.drain<void>();
+        await _discard(response);
         return null;
       }
       if (response.statusCode != 200) {
-        await response.stream.drain<void>();
+        await _discard(response);
         _log.warning(LogEvent('upstream refused a request',
             {'status': response.statusCode, 'path': uri.path}));
         throw const UpstreamException(
