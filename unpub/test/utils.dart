@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:path/path.dart' as path;
+import 'package:test/test.dart';
 import 'package:unpub/unpub.dart' as unpub;
 
 final notExistingPacakge = 'not_existing_package';
@@ -32,6 +33,7 @@ Future<HttpServer> createServer(
 }) async {
   final db = Db(testMongoUri);
   await db.open();
+  addTearDown(db.close);
   await Directory(baseDir).create(recursive: true);
 
   final app = unpub.App(
