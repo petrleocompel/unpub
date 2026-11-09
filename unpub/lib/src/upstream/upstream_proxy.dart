@@ -360,12 +360,18 @@ class UpstreamProxy {
     }
   }
 
-  /// The hash of [version] of [name] if the metadata is already here, without
-  /// asking the upstream.
+  /// The hash a client with this archive would hold, without asking the
+  /// upstream: what the listing says, or else what was kept.
   Future<String?> knownSha256(String name, String version) async {
+    final listed = (await _cachedListing(name))?.sha256Of(version);
+    if (listed != null) return listed;
+    final record = await cache.readArchive(name, version);
+    return record != null && record.verified ? record.sha256 : null;
+  }
+
+  Future<UpstreamListing?> _cachedListing(String name) async {
     final cached = await cache.read(name);
-    if (cached == null) return null;
-    return _decodeCached(cached).sha256Of(version);
+    return cached == null ? null : _decodeCached(cached);
   }
 
   /// The archive of [name] [version], from the store if it is there and
@@ -377,14 +383,35 @@ class UpstreamProxy {
   ///
   /// Throws an [UpstreamException] if it cannot be fetched or fails to verify.
   Future<UpstreamArchive?> archive(String name, String version) async {
-    if (await _isStored(name, version)) {
-      return UpstreamArchive(archives.downloadUpstream(name, version),
-          await knownSha256(name, version));
-    }
+    final kept = await _keptArchive(name, version);
+    if (kept != null) return kept;
     final fetched = await _once(
         'archive:$name@$version', () => _fetchArchive(name, version));
     if (fetched == null) return null;
     return UpstreamArchive(Stream.value(fetched.$1), fetched.$2);
+  }
+
+  /// The copy of the archive in the store, if it can be served as it is.
+  ///
+  /// A copy with no record of its hash is left for fetching again, and so is
+  /// one the current listing no longer agrees with.
+  Future<UpstreamArchive?> _keptArchive(String name, String version) async {
+    if (!await _isStored(name, version)) return null;
+    final record = await cache.readArchive(name, version);
+    if (record == null) return null;
+
+    final listing = await _cachedListing(name);
+    if (listing?.invalidHashes.contains(version) ?? false) return null;
+    final listed = listing?.sha256Of(version);
+    if (listed != null && listed != record.sha256) {
+      _log.warning(LogEvent('cached archive differs from the upstream listing',
+          {'name': name, 'version': version}));
+      return null;
+    }
+    final isVerified = listed != null || record.verified;
+    if (!isVerified && requireSha256) return null;
+    return UpstreamArchive(archives.downloadUpstream(name, version),
+        isVerified ? record.sha256 : null);
   }
 
   /// A store that cannot be read is treated as not holding the archive, so
@@ -420,6 +447,8 @@ class UpstreamProxy {
           'upstream provides no archive_sha256 for $name $version');
     }
 
+    await _forgetIfDifferent(name, version, expected);
+
     final response = await _get(Uri.parse(archiveUrl), _maxArchiveBytes);
     if (response == null) return null;
     final bytes = response.body!;
@@ -437,6 +466,14 @@ class UpstreamProxy {
 
     try {
       await archives.cacheUpstream(name, version, bytes);
+      await cache.writeArchive(UpstreamArchiveRecord(
+        name: name,
+        version: version,
+        sha256: actual,
+        bytes: bytes.length,
+        fetchedAt: clock(),
+        verified: expected != null,
+      ));
     } catch (error, stackTrace) {
       // The client can still have the verified archive.
       _log.warning(
@@ -446,6 +483,16 @@ class UpstreamProxy {
           stackTrace);
     }
     return (bytes, expected);
+  }
+
+  /// Throws away a kept copy whose hash is not [expected], so that it cannot
+  /// be served again whatever happens to the fetch that replaces it.
+  Future<void> _forgetIfDifferent(
+      String name, String version, String? expected) async {
+    final record = await cache.readArchive(name, version);
+    if (record == null || expected == null || record.sha256 == expected) return;
+    await cache.deleteArchive(name, version);
+    await archives.deleteUpstream(name, version);
   }
 
   Future<_Response?> _getJson(String path, {String? etag}) =>

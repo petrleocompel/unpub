@@ -146,6 +146,8 @@ class FakeUpstream {
   }
 }
 
+String sha256Of(List<int> bytes) => crypto.sha256.convert(bytes).toString();
+
 void main() {
   late Db db;
   late Directory storage;
@@ -163,6 +165,7 @@ void main() {
       statsCollection,
       versionStatsCollection,
       upstreamCacheCollection,
+      upstreamArchivesCollection,
       auditCollection,
     ]) {
       await db.dropCollection(name);
@@ -576,6 +579,130 @@ void main() {
     test('a version the upstream does not have is a 404', () async {
       expect((await get('/packages/$_name/versions/9.9.9.tar.gz')).statusCode,
           404);
+    });
+
+    group('a kept archive', () {
+      Future<void> refreshListing() async {
+        upstream.listingVersion = 'b';
+        now = now.add(const Duration(minutes: 11));
+        await getJson('/api/packages/$_name');
+      }
+
+      test('records its digest and size', () async {
+        await bytesOf(await get(route));
+
+        final record =
+            await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0');
+        expect(record!.sha256, upstream.sha(_name, '1.0.0'));
+        expect(record.bytes, upstream.packages[_name]!['1.0.0']!.length);
+        expect(record.verified, isTrue);
+      });
+
+      test('uses the stored digest once the listing has expired', () async {
+        await bytesOf(await get(route));
+        await MongoUpstreamCacheStore(db).delete(_name);
+        await upstream.stop();
+
+        final response = await get(route);
+
+        expect(response.statusCode, 200);
+        expect(response.headers['etag'], '"${upstream.sha(_name, '1.0.0')}"');
+        await bytesOf(response);
+      });
+
+      test('is replaced when the listing changes its hash', () async {
+        await bytesOf(await get(route));
+        final original = upstream.packages[_name]!['1.0.0']!;
+        upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
+        final replacement = upstream.sha(_name, '1.0.0');
+        expect(sha256Of(original), isNot(replacement));
+        await refreshListing();
+
+        final response = await get(route);
+
+        expect(response.statusCode, 200);
+        expect(response.headers['etag'], '"$replacement"');
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+        expect(sha256Of(cachedFile('1.0.0').readAsBytesSync()), replacement);
+        expect(
+            (await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'))!
+                .sha256,
+            replacement);
+      });
+
+      test('never goes out under the new hash when the refetch fails to verify',
+          () async {
+        await bytesOf(await get(route));
+        upstream.hashOverride['$_name@1.0.0'] = 'b' * 64;
+        await refreshListing();
+
+        final response = await get(route);
+
+        expect(response.statusCode, 502);
+        expect(cachedFile('1.0.0').existsSync(), isFalse);
+        expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+            isNull);
+      });
+
+      test('is a 502 when the hash changed and the upstream is down', () async {
+        await bytesOf(await get(route));
+        upstream.hashOverride['$_name@1.0.0'] = 'b' * 64;
+        await refreshListing();
+        upstream.failWith = 500;
+
+        expect((await get(route)).statusCode, 502);
+      });
+
+      test('the validator of the old bytes stops matching', () async {
+        final digest = upstream.sha(_name, '1.0.0');
+        await bytesOf(await get(route));
+        upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
+        await refreshListing();
+
+        final response =
+            await get(route, headers: {'if-none-match': '"$digest"'});
+
+        expect(response.statusCode, 200);
+        await bytesOf(response);
+      });
+
+      test('without a recorded digest is fetched again', () async {
+        await bytesOf(await get(route));
+        await MongoUpstreamCacheStore(db).deleteArchive(_name, '1.0.0');
+        upstream.requests.clear();
+
+        final response = await get(route);
+
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+        expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+            isNotNull);
+      });
+
+      test('that was not verified gets no strong validator', () async {
+        upstream.sendHashes = false;
+        final relaxed = buildProxy(requireSha256: false);
+        addTearDown(relaxed.close);
+        final lenient = buildApp(using: relaxed);
+        await bytesOf(await get(route, using: lenient));
+
+        final second = await get(route, using: lenient);
+
+        expect(second.statusCode, 200);
+        expect(second.headers.containsKey('etag'), isFalse);
+        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+        await bytesOf(second);
+      });
+
+      test('that was not verified is refused once a hash is required',
+          () async {
+        upstream.sendHashes = false;
+        final relaxed = buildProxy(requireSha256: false);
+        addTearDown(relaxed.close);
+        await bytesOf(await get(route, using: buildApp(using: relaxed)));
+
+        expect((await get(route)).statusCode, 502);
+      });
     });
 
     test('is not counted, because a proxied package has no record', () async {

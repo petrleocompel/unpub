@@ -34,6 +34,9 @@ abstract class PackageStore {
     throw 'downloadUpstream not implemented';
   }
 
+  /// Forgets the copy of this upstream archive, if there is one.
+  Future<void> deleteUpstream(String name, String version) async {}
+
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}
 }

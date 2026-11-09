@@ -71,6 +71,12 @@ class FileStore extends PackageStore {
   Stream<List<int>> downloadUpstream(String name, String version) =>
       _getUpstreamFile(name, version).openRead();
 
+  @override
+  Future<void> deleteUpstream(String name, String version) async {
+    final file = _getUpstreamFile(name, version);
+    if (await file.exists()) await file.delete();
+  }
+
   /// Creates [baseDir] if it is missing, and returns whether it did.
   ///
   /// Call this once at startup, so that [checkHealth] can report a directory

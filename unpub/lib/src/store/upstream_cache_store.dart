@@ -3,6 +3,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'mongo_indexes.dart';
 
 final upstreamCacheCollection = 'upstream_cache';
+final upstreamArchivesCollection = 'upstream_archives';
 
 const _duplicateKeyCode = 11000;
 
@@ -35,6 +36,31 @@ class UpstreamCacheEntry {
   });
 }
 
+/// What is known about an archive kept from the upstream.
+class UpstreamArchiveRecord {
+  final String name;
+  final String version;
+
+  /// Lowercase hex SHA-256 of the kept bytes.
+  final String sha256;
+
+  /// The size of the archive.
+  final int bytes;
+  final DateTime fetchedAt;
+
+  /// Whether [sha256] matched a hash published by the upstream.
+  final bool verified;
+
+  const UpstreamArchiveRecord({
+    required this.name,
+    required this.version,
+    required this.sha256,
+    required this.bytes,
+    required this.fetchedAt,
+    required this.verified,
+  });
+}
+
 /// Where upstream metadata is kept between requests.
 abstract class UpstreamCacheStore {
   Future<UpstreamCacheEntry?> read(String key);
@@ -46,6 +72,13 @@ abstract class UpstreamCacheStore {
   Future<void> touch(String key, DateTime fetchedAt, DateTime expiresAt);
 
   Future<void> delete(String key);
+
+  /// The record of a kept archive, or null if none was written.
+  Future<UpstreamArchiveRecord?> readArchive(String name, String version);
+
+  Future<void> writeArchive(UpstreamArchiveRecord record);
+
+  Future<void> deleteArchive(String name, String version);
 }
 
 /// Keeps entries in the `upstream_cache` collection.
@@ -119,5 +152,50 @@ class MongoUpstreamCacheStore implements UpstreamCacheStore {
   @override
   Future<void> delete(String key) async {
     await _collection.deleteOne(where.eq('_id', key));
+  }
+
+  DbCollection get _archives => db.collection(upstreamArchivesCollection);
+
+  static String _archiveId(String name, String version) => '$name@$version';
+
+  @override
+  Future<UpstreamArchiveRecord?> readArchive(
+      String name, String version) async {
+    final document =
+        await _archives.findOne(where.eq('_id', _archiveId(name, version)));
+    if (document == null) return null;
+    return UpstreamArchiveRecord(
+      name: name,
+      version: version,
+      sha256: document['sha256'] as String,
+      bytes: (document['bytes'] as num).toInt(),
+      fetchedAt: document['fetchedAt'] as DateTime,
+      verified: document['verified'] as bool,
+    );
+  }
+
+  @override
+  Future<void> writeArchive(UpstreamArchiveRecord record) async {
+    final result = await _archives.updateOne(
+        where.eq('_id', _archiveId(record.name, record.version)),
+        modify
+            .set('name', record.name)
+            .set('version', record.version)
+            .set('sha256', record.sha256)
+            .set('bytes', record.bytes)
+            .set('fetchedAt', record.fetchedAt)
+            .set('verified', record.verified),
+        upsert: true);
+    // Losing the race to create the record means a concurrent fetch of the
+    // same version just wrote it.
+    if (result.hasWriteErrors && result.writeError?.code != _duplicateKeyCode) {
+      throw StateError('cannot record ${record.name}@${record.version}: '
+          '${result.writeError?.errmsg}');
+    }
+  }
+
+  @override
+  Future<void> deleteArchive(String name, String version) async {
+    await _archives.deleteOne(where.eq('_id', _archiveId(name, version)));
   }
 }

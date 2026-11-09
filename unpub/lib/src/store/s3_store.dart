@@ -153,6 +153,10 @@ class S3Store extends PackageStore {
     yield* await _minio.getObject(bucketName, _getUpstreamKey(name, version));
   }
 
+  @override
+  Future<void> deleteUpstream(String name, String version) =>
+      _minio.removeObject(bucketName, _getUpstreamKey(name, version));
+
   /// Verifies the bucket exists and accepts writes and deletes, by storing and
   /// removing a probe object.
   ///
