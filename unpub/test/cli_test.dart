@@ -72,6 +72,21 @@ void main() {
       expect(result.stderr, contains('logging.format'));
     });
 
+    for (var uri in [
+      'mongodb://user:hunter2@localhost:bad/db',
+      'mongodb://user:hunter2@127.0.0.1:1/db',
+    ]) {
+      test('never prints the password of $uri', () async {
+        var config = File(path.join(directory.path, 'unpub.yaml'))
+          ..writeAsStringSync('mongo:\n  uri: "$uri"\n'
+              'server:\n  port: 0\n'
+              'storage:\n  file:\n    path: ${directory.path}\n');
+        var result = await unpub(['serve', '--config', config.path]);
+        expect(result.exitCode, 1, reason: '${result.stdout}${result.stderr}');
+        expect('${result.stdout}${result.stderr}', isNot(contains('hunter2')));
+      }, timeout: const Timeout(Duration(minutes: 2)));
+    }
+
     test('a missing config file is reported', () async {
       var result = await unpub(['serve', '--config', '/nonexistent.yaml']);
       expect(result.exitCode, 1);

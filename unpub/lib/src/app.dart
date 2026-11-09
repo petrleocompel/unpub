@@ -21,6 +21,7 @@ import 'package:unpub/src/webapi_models.dart';
 import 'auth/auth_middleware.dart';
 import 'auth/authenticator.dart';
 import 'logging.dart';
+import 'redact.dart';
 import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
@@ -170,7 +171,7 @@ class App {
       return {'status': 'ok'};
     } catch (err) {
       _log.warning('readiness check failed', err);
-      return {'status': 'error', 'error': '$err'};
+      return {'status': 'error', 'error': redactConnectionStrings('$err')};
     }
   }
 

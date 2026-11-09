@@ -4,6 +4,7 @@ export 'src/auth/authenticator.dart';
 export 'src/config/config.dart';
 export 'src/logging.dart';
 export 'src/models.dart';
+export 'src/redact.dart';
 export 'src/server.dart';
 export 'src/store/aws_credentials.dart';
 export 'src/store/file_store.dart';

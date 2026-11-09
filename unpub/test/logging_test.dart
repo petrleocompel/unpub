@@ -18,6 +18,31 @@ void main() {
     return lines;
   }
 
+  group('connection strings', () {
+    const uri = 'mongodb://user:hunter2@localhost:bad/db?authSource=admin';
+    final error = FormatException('Invalid port', uri, 28);
+    final stack = StackTrace.fromString('#0 open ($uri)');
+
+    for (var format in LogFormat.values) {
+      test('${format.name} format never prints the password', () async {
+        var lines = await capture(format, () {
+          logger.severe('connecting to $uri', error, stack);
+          logger.info(LogEvent('connecting',
+              {'uri': uri, 'other': Uri.parse('mongodb://user:hunter2@h/db')}));
+        });
+        expect(lines, hasLength(2));
+        expect(lines.join('\n'), isNot(contains('hunter2')));
+        expect(lines.join('\n'), contains('mongodb://***@localhost'));
+      });
+    }
+
+    test('json stays valid', () async {
+      var lines = await capture(
+          LogFormat.json, () => logger.severe('failed', error, stack));
+      expect(json.decode(lines.single)['error'], isNot(contains('hunter2')));
+    });
+  });
+
   test('text format appends fields', () async {
     var lines = await capture(LogFormat.text,
         () => logger.info(const LogEvent('request', {'status': 200})));

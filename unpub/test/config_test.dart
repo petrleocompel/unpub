@@ -194,6 +194,49 @@ logging:
           isNotNull);
     });
 
+    group('mongo uri', () {
+      for (var uri in [
+        'mongodb://localhost/db',
+        'mongodb://user:p%40ss@localhost:27017/db',
+        'mongodb://a:27017,b:27018/db?replicaSet=rs0',
+        'mongodb://user:pw@a,b:27018/db',
+        'mongodb://[::1]:27017/db',
+        'mongodb+srv://user:pw@cluster.example.com/db?tls=true',
+      ]) {
+        test('accepts $uri', () {
+          expect(parse('mongo:\n  uri: "$uri"\n').mongo.uri, uri);
+        });
+      }
+
+      const secret = 'hunter2secret';
+      for (var uri in [
+        'mongodb://user:$secret@localhost:bad/db',
+        'mongodb://user:$secret@localhost:99999/db',
+        'mongodb://user:$secret@a:1,b:bad/db',
+        'mongodb://user:$secret@:27017/db',
+        'mongodb://user:$secret:more@localhost/db',
+        'mongodb://user:pa/$secret@localhost/db',
+        'mongodb://user:pa$secret@b@localhost/db',
+        'mongodb://user:$secret@localhost',
+        'mongodb://user:$secret@localhost/',
+        'mongodb://user:se cret$secret@localhost/db',
+        'mongodb+srv://user:$secret@a,b/db',
+        'mongodb+srv://user:$secret@a:27017/db',
+        'postgres://user:$secret@localhost/db',
+        secret,
+      ]) {
+        test('rejects $uri without quoting it', () {
+          try {
+            parse('mongo:\n  uri: "$uri"\n');
+            fail('expected a ConfigException');
+          } on ConfigException catch (error) {
+            expect(error.toString(), contains('mongo.uri'));
+            expect(error.toString(), isNot(contains(secret)));
+          }
+        });
+      }
+    });
+
     test('mongo uri needs a database', () {
       expect(() => parse('mongo:\n  uri: mongodb://db:27017\n'),
           problemsContaining([contains('database name')]));

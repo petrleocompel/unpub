@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:logging/logging.dart';
 
+import 'redact.dart';
+
 /// Output format of log records.
 enum LogFormat { text, json }
 
@@ -34,9 +36,13 @@ String formatTextRecord(LogRecord record) {
     ..write(' ')
     ..write(record.loggerName.isEmpty ? 'root' : record.loggerName)
     ..write(' ')
-    ..write(record.message);
-  if (record.error != null) buffer.write(' error="${record.error}"');
-  if (record.stackTrace != null) buffer.write('\n${record.stackTrace}');
+    ..write(redactConnectionStrings(record.message));
+  if (record.error != null) {
+    buffer.write(' error="${redactConnectionStrings('${record.error}')}"');
+  }
+  if (record.stackTrace != null) {
+    buffer.write('\n${redactConnectionStrings('${record.stackTrace}')}');
+  }
   return buffer.toString();
 }
 
@@ -47,18 +53,24 @@ String formatJsonRecord(LogRecord record) {
     'time': record.time.toUtc().toIso8601String(),
     'level': record.level.name,
     'logger': record.loggerName.isEmpty ? 'root' : record.loggerName,
-    'message': object is LogEvent ? object.message : record.message,
+    'message': redactConnectionStrings(
+        object is LogEvent ? object.message : record.message),
   };
   if (object is LogEvent) {
     for (final entry in object.fields.entries) {
-      data.putIfAbsent(entry.key, () => entry.value);
+      final value = entry.value;
+      data.putIfAbsent(entry.key,
+          () => value is String ? redactConnectionStrings(value) : value);
     }
   }
-  if (record.error != null) data['error'] = record.error.toString();
-  if (record.stackTrace != null) {
-    data['stackTrace'] = record.stackTrace.toString();
+  if (record.error != null) {
+    data['error'] = redactConnectionStrings(record.error.toString());
   }
-  return json.encode(data, toEncodable: (value) => value.toString());
+  if (record.stackTrace != null) {
+    data['stackTrace'] = redactConnectionStrings(record.stackTrace.toString());
+  }
+  return json.encode(data,
+      toEncodable: (value) => redactConnectionStrings(value.toString()));
 }
 
 /// Routes all log records at [level] or above to [sink] (stdout by default).

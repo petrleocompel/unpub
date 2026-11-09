@@ -71,7 +71,57 @@ const _logLevels = <String, Level>{
 
 /// The characters `dart pub token add` accepts in a Bearer token.
 final _bearerTokenPattern = RegExp(r'^[a-zA-Z0-9._~+/=-]+$');
-final _mongoUriPattern = RegExp(r'^mongodb(\+srv)?://[^/]+/[^/?]+');
+final _mongoScheme = RegExp(r'^mongodb(\+srv)?://');
+final _whitespaceOrControl = RegExp(r'[\s\x00-\x1f\x7f]');
+
+/// Why mongo_dart cannot use [uri], or null if it can.
+///
+/// Parsing here gives messages that never quote the URI, while the driver's
+/// own errors repeat it, password included. `Uri` alone cannot do this because
+/// a standard connection string can list several hosts.
+String? _mongoUriProblem(String uri) {
+  if (_whitespaceOrControl.hasMatch(uri)) {
+    return 'it contains whitespace or control characters';
+  }
+  final scheme = _mongoScheme.firstMatch(uri);
+  if (scheme == null) return 'the scheme must be mongodb or mongodb+srv';
+
+  final rest = uri.substring(scheme.end);
+  final slash = rest.indexOf('/');
+  if (slash < 0) return 'the database name is required';
+  final authority = rest.substring(0, slash);
+  final tail = rest.substring(slash + 1);
+  final database = tail.split('?').first;
+  if (database.isEmpty || database.contains('/')) {
+    return 'the database name is required';
+  }
+
+  final at = authority.lastIndexOf('@');
+  final userInfo = at < 0 ? null : authority.substring(0, at);
+  if (userInfo != null) {
+    final parts = userInfo.split(':');
+    if (parts.length != 2 || parts.first.isEmpty || userInfo.contains('@')) {
+      return 'the credentials must be user:password, with reserved characters '
+          'percent-encoded';
+    }
+  }
+
+  final hosts = authority.substring(at + 1).split(',');
+  if (scheme.group(1) != null &&
+      (hosts.length != 1 || hosts.single.contains(':'))) {
+    return 'mongodb+srv takes a single host name without a port';
+  }
+  final credentials = userInfo == null ? '' : '$userInfo@';
+  for (final host in hosts) {
+    final parsed = Uri.tryParse('mongodb://$credentials$host/$tail');
+    if (parsed == null ||
+        parsed.host.isEmpty ||
+        (parsed.hasPort && parsed.port > 65535)) {
+      return 'a host or port is invalid';
+    }
+  }
+  return null;
+}
 
 class ServerConfig {
   final String host;
@@ -426,9 +476,10 @@ class _ConfigReader {
   String _mongoUri() {
     const fallback = 'mongodb://localhost:27017/dart_pub';
     final uri = _string('mongo.uri') ?? fallback;
-    if (!_mongoUriPattern.hasMatch(uri)) {
+    final problem = _mongoUriProblem(uri);
+    if (problem != null) {
       _problems.add('${_describe('mongo.uri')} must look like '
-          'mongodb://host:27017/database (the database name is required)');
+          'mongodb://host:27017/database: $problem');
     }
     return uri;
   }

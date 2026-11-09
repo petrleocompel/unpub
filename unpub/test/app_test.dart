@@ -134,6 +134,15 @@ void main() {
       });
     });
 
+    test('readyz never exposes a connection string', () async {
+      metaStore.healthError =
+          'cannot reach mongodb://user:hunter2@db:27017/pub?x=y';
+      var response = await createApp().handler(get('/readyz'));
+      var body = await response.readAsString();
+      expect(body, isNot(contains('hunter2')));
+      expect(body, contains('mongodb://***@db:27017/pub'));
+    });
+
     test('readyz reports a failing package store', () async {
       packageStore.healthError = 'read only';
       var response = await createApp().handler(get('/readyz'));

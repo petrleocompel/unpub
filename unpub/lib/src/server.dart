@@ -7,6 +7,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'app.dart';
 import 'auth/authenticator.dart';
 import 'config/config.dart';
+import 'redact.dart';
 import 'store/aws_credentials.dart';
 import 'store/file_store.dart';
 import 'store/mongo_store.dart';
@@ -30,7 +31,21 @@ class UnpubServer {
   int get port => _http.port;
 
   /// Connects to Mongo, creates the stores, and starts listening.
+  ///
+  /// An error that quotes the Mongo connection string is rethrown as a
+  /// [RedactedException].
   static Future<UnpubServer> start(Config config) async {
+    try {
+      return await _start(config);
+    } catch (error, stackTrace) {
+      final original = error.toString();
+      final safe = redactConnectionStrings(original);
+      if (safe == original) rethrow;
+      Error.throwWithStackTrace(RedactedException(safe), stackTrace);
+    }
+  }
+
+  static Future<UnpubServer> _start(Config config) async {
     final db = await Db.create(config.mongo.uri);
     try {
       await db.open().timeout(_mongoConnectTimeout);
