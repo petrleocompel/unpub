@@ -248,6 +248,98 @@ void main() {
     });
   });
 
+  group('write gate for sessions and demoted tokens', () {
+    final session = Session(
+      id: 'id',
+      userId: 'user',
+      createdAt: DateTime(2026),
+      expiresAt: DateTime(2027),
+      csrfToken: 'csrf',
+    );
+
+    Principal? seen;
+    Handler gate(Principal principal) => const Pipeline()
+            .addMiddleware(authMiddleware(_FixedAuthenticator(principal)))
+            .addHandler((request) {
+          seen = principalOf(request);
+          return Response.ok('inner');
+        });
+
+    Future<Response> write(Principal principal, String method, String path,
+            {bool csrf = true}) async =>
+        gate(principal)(Request(
+          method,
+          Uri.parse('http://localhost/$path'),
+          headers: {if (csrf) 'x-csrf-token': 'csrf'},
+        ));
+
+    // With every scope, so only the role can be what refuses it.
+    final readerSession = Principal('r@b.c',
+        role: Role.reader,
+        credentialKind: CredentialKind.session,
+        session: session);
+
+    setUp(() => seen = null);
+
+    for (var route in const [
+      ['POST', 'api/packages/versions/newUpload'],
+      ['POST', 'api/packages/foo/uploaders'],
+      ['DELETE', 'api/packages/foo/uploaders/a%40b.c'],
+      ['PUT', 'some/future/route'],
+    ]) {
+      test('a reader session cannot ${route[0]} ${route[1]}', () async {
+        var response = await write(readerSession, route[0], route[1]);
+        expect(response.statusCode, HttpStatus.forbidden);
+        expect(seen, isNull);
+      });
+    }
+
+    test('a reader session cannot reach the read-only publish steps', () async {
+      var response =
+          await write(readerSession, 'GET', 'api/packages/versions/new');
+      expect(response.statusCode, HttpStatus.forbidden);
+      expect(seen, isNull);
+    });
+
+    for (var route in const [
+      ['POST', 'webapi/logout'],
+      ['POST', 'webapi/me/password'],
+      ['POST', 'webapi/tokens'],
+      ['DELETE', 'webapi/tokens/abc'],
+    ]) {
+      test('a reader session can ${route[0]} ${route[1]}', () async {
+        var response = await write(readerSession, route[0], route[1]);
+        expect(response.statusCode, HttpStatus.ok);
+        expect(seen, isNotNull);
+      });
+
+      test('${route[0]} ${route[1]} still needs the CSRF token', () async {
+        var response =
+            await write(readerSession, route[0], route[1], csrf: false);
+        expect(response.statusCode, HttpStatus.forbidden);
+        expect(seen, isNull);
+      });
+
+      test('a read-only token cannot ${route[0]} ${route[1]}', () async {
+        var response = await write(
+            const Principal('r@b.c', role: Role.reader, scopes: {Scope.read}),
+            route[0],
+            route[1]);
+        expect(response.statusCode, HttpStatus.forbidden);
+        expect(seen, isNull);
+      });
+    }
+
+    test('a token that outlived its publishing role cannot write', () async {
+      var response = await write(
+          const Principal('r@b.c', role: Role.reader, scopes: {Scope.publish}),
+          'POST',
+          'api/packages/foo/uploaders');
+      expect(response.statusCode, HttpStatus.forbidden);
+      expect(seen, isNull);
+    });
+  });
+
   group('email handling', () {
     test('normalizes case and whitespace', () {
       expect(normalizeEmail('  Foo@Example.COM '), 'foo@example.com');
@@ -514,4 +606,13 @@ void main() {
       });
     });
   });
+}
+
+class _FixedAuthenticator implements Authenticator {
+  final Principal principal;
+
+  const _FixedAuthenticator(this.principal);
+
+  @override
+  Future<Principal?> authenticate(Request request) async => principal;
 }

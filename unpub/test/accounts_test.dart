@@ -962,6 +962,55 @@ void main() {
           HttpStatus.unauthorized);
     });
 
+    for (final (role, scopes) in [
+      (Role.reader, ['read']),
+      (Role.publisher, ['read', 'publish']),
+      (Role.admin, ['read', 'publish']),
+    ]) {
+      test('a session of a ${role.name} holds $scopes', () async {
+        final browser = await login(await user('u@b.c', role));
+        final reply = await send('GET', '/webapi/me', browser: browser);
+        expect(reply.body['scopes'], unorderedEquals(scopes));
+      });
+    }
+
+    test('a reader session is refused a publish route by the middleware',
+        () async {
+      final browser = await login(await user('r@b.c', Role.reader));
+      await addPackage('owned', ['r@b.c']);
+      final reply = await send('POST', '/api/packages/owned/uploaders',
+          browser: browser, form: 'email=new%40b.c');
+      expect(reply.status, HttpStatus.forbidden);
+      // The handler would have answered with a plain error, not this code.
+      expect(reply.errorCode, 'insufficient_scope');
+      expect((await package('owned'))!['uploaders'], ['r@b.c']);
+    });
+
+    test('a reader can still look after their own account', () async {
+      final browser = await login(await user('r@b.c', Role.reader));
+
+      final created = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'laptop'});
+      expect(created.status, HttpStatus.created);
+      expect(created.body['token']['scopes'], ['read']);
+
+      final id = created.body['token']['id'];
+      expect(
+          (await send('DELETE', '/webapi/tokens/$id', browser: browser)).status,
+          HttpStatus.ok);
+
+      expect(
+          (await send('POST', '/webapi/me/password', browser: browser, body: {
+            'currentPassword': _password,
+            'newPassword': 'a-new-password',
+          }))
+              .status,
+          HttpStatus.ok);
+
+      expect((await send('POST', '/webapi/logout', browser: browser)).status,
+          HttpStatus.ok);
+    });
+
     test('me without credentials is unauthorized in public mode', () async {
       final reply = await send('GET', '/webapi/me');
       expect(reply.status, HttpStatus.unauthorized);

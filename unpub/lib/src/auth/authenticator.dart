@@ -177,6 +177,7 @@ class SessionAuthenticator implements Authenticator {
     return Principal(
       user.email,
       role: user.role,
+      scopes: scopesAllowedFor(user.role),
       userId: user.id,
       credentialKind: CredentialKind.session,
       session: session,

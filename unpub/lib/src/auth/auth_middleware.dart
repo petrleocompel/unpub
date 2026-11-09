@@ -20,8 +20,6 @@ const _publishSteps = {
   'api/packages/versions/newUploadFinish',
 };
 
-const _publishRoutes = {..._publishSteps, 'api/packages/versions/newUpload'};
-
 /// Field of a form post that can carry the CSRF token instead of the header.
 const csrfFormField = 'csrf_token';
 const csrfHeader = 'x-csrf-token';
@@ -47,6 +45,16 @@ bool isHealthRequest(shelf.Request request) {
 
 bool _isLoginRequest(shelf.Request request) =>
     request.method == 'POST' && request.url.path == 'webapi/login';
+
+/// Whether [path] is where a signed-in user looks after their own account.
+///
+/// These are writes, but they change nothing in the registry, and a reader
+/// has to be able to log out, change a password and get a token to read with.
+bool _isOwnAccountRoute(String path) =>
+    path == 'webapi/logout' ||
+    path == 'webapi/me/password' ||
+    path == 'webapi/tokens' ||
+    path.startsWith('webapi/tokens/');
 
 /// The principal set by [authMiddleware], if the request was authenticated.
 Principal? principalOf(shelf.Request request) =>
@@ -97,11 +105,15 @@ void _authorize(
           : 'Missing Bearer token. '
               'Add one with: dart pub token add <server url>');
     }
+    if (principal.credentialKind == CredentialKind.session &&
+        _isOwnAccountRoute(request.url.path)) {
+      return;
+    }
     if (!principal.scopes.contains(Scope.publish)) {
-      throw const AuthException.forbidden('This token is read-only.',
+      throw const AuthException.forbidden('This credential is read-only.',
           code: 'insufficient_scope');
     }
-    if (_publishRoutes.contains(request.url.path) && !principal.canPublish) {
+    if (!principal.canPublish) {
       throw const AuthException.forbidden(
           'This account is not allowed to publish packages.');
     }
