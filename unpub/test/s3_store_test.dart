@@ -524,7 +524,7 @@ class _HealthyMetaStore extends MetaStore {
   Future<void> addUploader(String name, String email) async {}
 
   @override
-  Future<bool> addVersion(String name, UnpubVersion version) async => true;
+  Future<void> addVersion(String name, UnpubVersion version) async {}
 
   @override
   Future<void> replaceVersion(String name, UnpubVersion version) async {}

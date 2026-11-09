@@ -38,7 +38,8 @@ class _LosingMetaStore extends MongoStore {
   _LosingMetaStore(super.db);
 
   @override
-  Future<bool> addVersion(String name, UnpubVersion version) async => false;
+  Future<void> addVersion(String name, UnpubVersion version) async =>
+      throw VersionExistsException(name, version.version);
 }
 
 /// Counts how often a reservation is renewed.
@@ -132,6 +133,115 @@ void main() {
     await MongoStore(db).ensureIndexes();
     storage = await Directory.systemTemp.createTemp('unpub-concurrency-');
     addTearDown(() => storage.delete(recursive: true));
+  });
+
+  group('adding a version', () {
+    UnpubVersion entry(String version, String hash) => UnpubVersion(
+          version,
+          {'name': _name, 'version': version},
+          'name: $_name',
+          'dev@b.c',
+          null,
+          null,
+          DateTime.now(),
+          sha256: hash,
+        );
+
+    Future<List<Map<String, dynamic>>> packageDocuments() =>
+        db.collection(packageCollection).find(where.eq('name', _name)).toList();
+
+    Future<List<Object?>> addAll(List<UnpubVersion> versions) async {
+      final store = MongoStore(db);
+      return Future.wait([
+        for (final item in versions)
+          store
+              .addVersion(_name, item)
+              .then<Object?>((_) => null, onError: (Object error) => error),
+      ]);
+    }
+
+    test('two concurrent first publishes leave one entry', () async {
+      final results = await addAll([entry('1.0.0', 'a'), entry('1.0.0', 'b')]);
+
+      expect(results.whereType<VersionExistsException>(), hasLength(1));
+      expect(results.where((error) => error == null), hasLength(1));
+      final documents = await packageDocuments();
+      expect(documents, hasLength(1));
+      expect(documents.single['versions'], hasLength(1));
+      expect(documents.single['uploaders'], ['dev@b.c']);
+      expect(documents.single['private'], isTrue);
+      expect(documents.single['download'], 0);
+    });
+
+    test('many concurrent first publishes leave one entry', () async {
+      final results = await addAll(
+          [for (var i = 0; i < 16; i++) entry('1.0.0', 'hash $i')]);
+
+      expect(results.where((error) => error == null), hasLength(1));
+      expect(results.whereType<VersionExistsException>(), hasLength(15));
+      final documents = await packageDocuments();
+      expect(documents, hasLength(1));
+      expect(documents.single['versions'], hasLength(1));
+    });
+
+    test('concurrent first publishes of different versions all land', () async {
+      final results = await addAll([
+        for (var i = 0; i < 8; i++) entry('1.0.$i', 'hash $i'),
+      ]);
+
+      expect(results.whereType<Object>(), isEmpty);
+      final documents = await packageDocuments();
+      expect(documents, hasLength(1));
+      expect(documents.single['versions'], hasLength(8));
+    });
+
+    test('two concurrent adds to an existing package leave one entry',
+        () async {
+      await MongoStore(db).addVersion(_name, entry('1.0.0', 'first'));
+
+      final results = await addAll([entry('2.0.0', 'a'), entry('2.0.0', 'b')]);
+
+      expect(results.where((error) => error == null), hasLength(1));
+      expect(results.whereType<VersionExistsException>(), hasLength(1));
+      final versions = (await packageDocuments()).single['versions'] as List;
+      expect(
+          versions.where((item) => item['version'] == '2.0.0'), hasLength(1));
+    });
+
+    test('adding a version that exists changes nothing', () async {
+      final store = MongoStore(db);
+      await store.addVersion(_name, entry('1.0.0', 'first'));
+      await expectLater(store.addVersion(_name, entry('1.0.0', 'second')),
+          throwsA(isA<VersionExistsException>()));
+      expect((await storedVersion())['sha256'], 'first');
+    });
+  });
+
+  group('the unique index on package names', () {
+    test('exists after startup', () async {
+      final indexes = await db.collection(packageCollection).getIndexes();
+      expect(indexes.singleWhere((i) => i['name'] == 'name_unique')['unique'],
+          isTrue);
+    });
+
+    test('is safe to create twice', () async {
+      await MongoStore(db).ensureIndexes();
+      await MongoStore(db).ensureIndexes();
+    });
+
+    test('refuses to start with a duplicate, and names it', () async {
+      await db.dropCollection(packageCollection);
+      await db.collection(packageCollection).insertMany([
+        {'name': 'twice', 'versions': []},
+        {'name': 'twice', 'versions': []},
+        {'name': 'once', 'versions': []},
+      ]);
+
+      await expectLater(
+          MongoStore(db).ensureIndexes(),
+          throwsA(isA<StateError>().having((e) => e.message, 'message',
+              allOf(contains('twice'), isNot(contains('once'))))));
+    });
   });
 
   group('in one process', () {

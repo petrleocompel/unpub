@@ -25,9 +25,8 @@ class FakeMetaStore extends MetaStore {
   Future<void> addUploader(String name, String email) async {}
 
   @override
-  Future<bool> addVersion(String name, UnpubVersion version) async {
+  Future<void> addVersion(String name, UnpubVersion version) async {
     added.add('$name@${version.version}');
-    return true;
   }
 
   @override

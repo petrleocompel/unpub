@@ -666,7 +666,9 @@ class App {
         await metaStore.replaceVersion(name, unpubVersion);
       } else {
         await _checkNotStoredYet(name, version);
-        if (!await metaStore.addVersion(name, unpubVersion)) {
+        try {
+          await metaStore.addVersion(name, unpubVersion);
+        } on VersionExistsException {
           throw PublishPolicy.duplicateVersion(name, version);
         }
       }

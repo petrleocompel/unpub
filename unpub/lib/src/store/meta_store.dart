@@ -1,12 +1,24 @@
 import 'package:unpub/src/models.dart';
 
+/// The version being added is already published.
+class VersionExistsException implements Exception {
+  final String name;
+  final String version;
+
+  const VersionExistsException(this.name, this.version);
+
+  @override
+  String toString() => '$name@$version already exists';
+}
+
 abstract class MetaStore {
   Future<UnpubPackage?> queryPackage(String name);
 
   /// Adds [version] to the package [name], creating the package if needed.
   ///
-  /// Returns false, changing nothing, if the package already has that version.
-  Future<bool> addVersion(String name, UnpubVersion version);
+  /// Throws a [VersionExistsException], changing nothing, if the package
+  /// already has that version, also when another call added it just now.
+  Future<void> addVersion(String name, UnpubVersion version);
 
   /// Replaces the stored version with the same number as [version], which is
   /// what publishing over an existing version does.

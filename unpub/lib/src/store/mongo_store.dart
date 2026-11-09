@@ -14,6 +14,8 @@ final uploadReservationsCollection = 'upload_reservations';
 
 const _duplicateKeyCode = 11000;
 
+const _duplicateNamesReported = 20;
+
 final _log = Logger('unpub.mongo');
 
 class MongoStore extends MetaStore {
@@ -23,9 +25,14 @@ class MongoStore extends MetaStore {
 
   /// Creates the indexes the store relies on, which is safe to repeat.
   ///
-  /// The unique index keeps two concurrent first downloads of a version from
-  /// creating two counter documents.
+  /// The unique indexes keep two concurrent first publishes of a package from
+  /// creating two documents, and two concurrent first downloads of a version
+  /// from creating two counter documents.
+  ///
+  /// Throws if `packages` already holds a name twice, because publishing is not
+  /// safe without the index.
   Future<void> ensureIndexes() async {
+    await _ensureUniquePackageNames();
     await createIndexes(db, versionStatsCollection, [
       {
         'key': {'name': 1, 'version': 1},
@@ -45,6 +52,56 @@ class MongoStore extends MetaStore {
         'expireAfterSeconds': 0,
       },
     ]);
+  }
+
+  Future<void> _ensureUniquePackageNames() async {
+    try {
+      await createIndexes(db, packageCollection, [
+        {
+          'key': {'name': 1},
+          'name': 'name_unique',
+          'unique': true,
+        },
+      ]);
+    } catch (error) {
+      final duplicates = await _duplicatePackageNames();
+      if (duplicates.isEmpty) rethrow;
+      final message = 'cannot start: the packages collection holds more than '
+          'one document for ${duplicates.join(', ')}. Merge or remove the extra '
+          'documents, then start again.';
+      _log.severe(message);
+      throw StateError(message);
+    }
+  }
+
+  /// Up to [_duplicateNamesReported] names held by more than one package.
+  Future<List<String>> _duplicatePackageNames() async {
+    final reply = await db.runCommand({
+      'aggregate': packageCollection,
+      'pipeline': [
+        {
+          r'$group': {
+            '_id': r'$name',
+            'count': {r'$sum': 1},
+          },
+        },
+        {
+          r'$match': {
+            'count': {r'$gt': 1},
+          },
+        },
+        {
+          r'$sort': {'_id': 1},
+        },
+        {r'$limit': _duplicateNamesReported},
+      ],
+      'cursor': <String, Object>{},
+    });
+    final cursor = reply['cursor'] as Map?;
+    return [
+      for (final item in cursor?['firstBatch'] as List? ?? const [])
+        '${item['_id']}',
+    ];
   }
 
   static SelectorBuilder _selectByName(String? name) => where.eq('name', name);
@@ -71,30 +128,38 @@ class MongoStore extends MetaStore {
   @override
   addVersion(name, version) async {
     final packages = db.collection(packageCollection);
-    if (await packages.findOne(_selectByName(name).fields(['_id'])) != null) {
-      // The condition keeps two concurrent publishes of one version from both
-      // being added.
-      final result = await packages.updateOne(
-          where.eq('name', name).ne('versions.version', version.version),
-          modify
-              .push('versions', version.toJson())
-              .set('updatedAt', version.createdAt));
-      _checkWrite(result, 'add version');
-      return result.nModified == 1;
+    final existing =
+        await packages.findOne(_selectByName(name).fields(['_id']));
+    if (existing == null) {
+      final inserted = await packages.insertOne({
+        'name': name,
+        'versions': [version.toJson()],
+        // Only a new package gets its first uploader. An administrator
+        // publishing to someone else's package must not join it.
+        'uploaders': [version.uploader],
+        'private': true,
+        'download': 0,
+        'createdAt': version.createdAt,
+        'updatedAt': version.createdAt,
+      });
+      if (inserted.writeError?.code != _duplicateKeyCode) {
+        _checkWrite(inserted, 'add package');
+        return;
+      }
+      // Another publish created the package first, so this is one more version
+      // of it, or the same one.
     }
-    await packages.update(
-        _selectByName(name),
+    // The condition keeps two concurrent publishes of one version from both
+    // being added.
+    final result = await packages.updateOne(
+        where.eq('name', name).ne('versions.version', version.version),
         modify
             .push('versions', version.toJson())
-            // Only a new package gets its first uploader. An administrator
-            // publishing to someone else's package must not join it.
-            .setOnInsert('uploaders', [version.uploader])
-            .setOnInsert('createdAt', version.createdAt)
-            .setOnInsert('private', true)
-            .setOnInsert('download', 0)
-            .set('updatedAt', version.createdAt),
-        upsert: true);
-    return true;
+            .set('updatedAt', version.createdAt));
+    _checkWrite(result, 'add version');
+    if (result.nMatched == 0) {
+      throw VersionExistsException(name, version.version);
+    }
   }
 
   @override
