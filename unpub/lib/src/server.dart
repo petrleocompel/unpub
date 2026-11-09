@@ -19,6 +19,8 @@ import 'store/file_store.dart';
 import 'store/mongo_store.dart';
 import 'store/mongo_version.dart';
 import 'store/package_store_factory.dart';
+import 'store/upstream_cache_store.dart';
+import 'upstream/upstream_proxy.dart';
 
 final _log = Logger('unpub.server');
 
@@ -30,9 +32,10 @@ const _mongoConnectTimeout = Duration(seconds: 30);
 class UnpubServer {
   final HttpServer _http;
   final Db _db;
+  final UpstreamProxy? _upstreamProxy;
   Future<void>? _stopping;
 
-  UnpubServer._(this._http, this._db);
+  UnpubServer._(this._http, this._db, this._upstreamProxy);
 
   int get port => _http.port;
 
@@ -59,13 +62,16 @@ class UnpubServer {
       final accounts = AccountStore(db);
       final audit = MongoAuditStore(db);
       final metaStore = MongoStore(db);
+      final upstreamCache = MongoUpstreamCacheStore(db);
       await accounts.ensureIndexes();
       await audit.ensureIndexes();
       await metaStore.ensureIndexes();
+      await upstreamCache.ensureIndexes();
       final service = AccountService(accounts, audit: audit);
       await service.bootstrapAdmin(config.auth.admin);
       await accounts.reconcileAdminSet(DateTime.now());
       _warnAboutStaticTokens(config.auth);
+      _warnAboutUnusedAllowlist(config.upstream);
 
       final packageStore = await createPackageStore(config.storage);
       if (packageStore is FileStore) {
@@ -74,6 +80,14 @@ class UnpubServer {
             created ? 'created storage directory' : 'using storage directory',
             {'path': packageStore.baseDir}));
       }
+
+      final upstreamProxy = config.upstream.mode == UpstreamMode.proxy
+          ? UpstreamProxy(
+              config: config.upstream,
+              cache: upstreamCache,
+              archives: packageStore,
+            )
+          : null;
 
       final app = App(
         metaStore: metaStore,
@@ -97,14 +111,23 @@ class UnpubServer {
         auditStore: audit,
         trustForwardedFor: config.server.trustForwardedFor,
         upstream: config.upstream.url.toString(),
+        upstreamProxy: upstreamProxy,
         publishPolicy: PublishPolicy(config.publish),
         publicUrl: config.server.publicUrl,
       );
       final http = await app.serve(config.server.host, config.server.port);
-      return UnpubServer._(http, db);
+      return UnpubServer._(http, db, upstreamProxy);
     } catch (_) {
       await db.close().catchError((Object _) {});
       rethrow;
+    }
+  }
+
+  static void _warnAboutUnusedAllowlist(UpstreamConfig upstream) {
+    if (upstream.mode == UpstreamMode.redirect &&
+        upstream.allowlist.isNotEmpty) {
+      _log.warning('upstream.allowlist only applies when upstream.mode is '
+          'proxy, every unknown package is redirected');
     }
   }
 
@@ -130,6 +153,7 @@ class UnpubServer {
       _log.warning('dropping requests still running after drain timeout');
       await _http.close(force: true);
     }
+    _upstreamProxy?.close();
     await _db.close();
     _log.info('stopped');
   }

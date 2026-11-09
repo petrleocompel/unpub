@@ -32,6 +32,7 @@ import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
 import 'store/audit_store.dart';
+import 'upstream/upstream_proxy.dart';
 import 'utils.dart';
 import 'validation.dart';
 
@@ -81,6 +82,9 @@ class App {
   /// External URL of this server. When null, URLs derive from the request.
   final Uri? publicUrl;
 
+  /// Fetches packages from the upstream instead of redirecting to it.
+  final UpstreamProxy? upstreamProxy;
+
   /// The `publish` rules uploads must satisfy.
   final PublishPolicy publishPolicy;
 
@@ -103,6 +107,7 @@ class App {
     this.auditStore = const NullAuditStore(),
     this.trustForwardedFor = false,
     this.upstream = 'https://pub.dev',
+    this.upstreamProxy,
     this.publishPolicy = const PublishPolicy(PublishConfig()),
     this.uploadValidator,
     this.publicUrl,
@@ -135,6 +140,9 @@ class App {
 
   static shelf.Response _notFound([String message = 'Not Found']) =>
       _badRequest(message, status: HttpStatus.notFound);
+
+  static shelf.Response _badGateway(UpstreamException error) =>
+      _badRequest(error.message, status: HttpStatus.badGateway);
 
   /// The version named by a path [segment], or null if it is not one.
   ///
@@ -230,6 +238,15 @@ class App {
       hash != null &&
       etagMatches(req.headers[HttpHeaders.ifNoneMatchHeader], '"$hash"');
 
+  /// [version], a listing entry whose `archive_url` is a path on this server,
+  /// with that made absolute.
+  Map<String, dynamic> _absoluteArchiveUrl(
+          shelf.Request req, Map<String, dynamic> version) =>
+      {
+        ...version,
+        'archive_url': _resolveUrl(req, version['archive_url'] as String),
+      };
+
   bool isPubClient(shelf.Request req) {
     var ua = req.headers[HttpHeaders.userAgentHeader];
     return ua != null && ua.toLowerCase().contains('dart pub');
@@ -297,6 +314,8 @@ class App {
     final found = await metaStore.queryPackage(name);
 
     if (found == null) {
+      final proxy = upstreamProxy;
+      if (proxy != null) return _proxiedListing(req, proxy, name);
       return shelf.Response.found(
           Uri.parse(upstream).resolve('/api/packages/$name').toString());
     }
@@ -319,6 +338,31 @@ class App {
     });
   }
 
+  Future<shelf.Response> _proxiedListing(
+      shelf.Request req, UpstreamProxy proxy, String name) async {
+    if (!proxy.allows(name)) return _notFound();
+    final UpstreamListing? listing;
+    try {
+      listing = await proxy.listing(name);
+    } on UpstreamException catch (error) {
+      return _badGateway(error);
+    }
+    if (listing == null) return _notFound();
+    final data = listing.json;
+    return _listingResponse(req, _listingEtag(req, [listing.digest]), () {
+      return {
+        ...data,
+        if (data['latest'] != null)
+          'latest':
+              _absoluteArchiveUrl(req, data['latest'] as Map<String, dynamic>),
+        'versions': [
+          for (final item in data['versions'] as List)
+            _absoluteArchiveUrl(req, item as Map<String, dynamic>),
+        ],
+      };
+    });
+  }
+
   @Route.get('/api/packages/<name>/advisories')
   Future<shelf.Response> getAdvisories(shelf.Request req, String name) async {
     if (!isValidPackageName(name)) return _notFound();
@@ -327,9 +371,23 @@ class App {
       return _okWithJson({'advisories': [], 'advisoriesUpdated': null});
     }
 
-    return shelf.Response.found(Uri.parse(upstream)
-        .resolve('/api/packages/$name/advisories')
-        .toString());
+    final proxy = upstreamProxy;
+    if (proxy == null) {
+      return shelf.Response.found(Uri.parse(upstream)
+          .resolve('/api/packages/$name/advisories')
+          .toString());
+    }
+    if (!proxy.allows(name)) return _notFound();
+    final UpstreamDocument? advisories;
+    try {
+      advisories = await proxy.advisories(name);
+    } on UpstreamException catch (error) {
+      return _badGateway(error);
+    }
+    if (advisories == null) return _notFound();
+    final document = advisories;
+    return _listingResponse(
+        req, _listingEtag(req, [document.digest]), () => document.json);
   }
 
   @Route.get('/api/packages/<name>/versions/<version>')
@@ -342,6 +400,8 @@ class App {
 
     var package = await metaStore.queryPackage(name);
     if (package == null) {
+      final proxy = upstreamProxy;
+      if (proxy != null) return _proxiedVersion(req, proxy, name, version);
       return shelf.Response.found(Uri.parse(upstream)
           .resolve('/api/packages/$name/versions/$version')
           .toString());
@@ -358,6 +418,21 @@ class App {
         req, _packageEtag(req, package), () => _versionToJson(found, req));
   }
 
+  Future<shelf.Response> _proxiedVersion(shelf.Request req, UpstreamProxy proxy,
+      String name, String version) async {
+    if (!proxy.allows(name)) return _notFound();
+    final UpstreamListing? listing;
+    try {
+      listing = await proxy.listing(name);
+    } on UpstreamException catch (error) {
+      return _badGateway(error);
+    }
+    final item = listing?.version(version);
+    if (listing == null || item == null) return _notFound();
+    return _listingResponse(req, _listingEtag(req, [listing.digest, version]),
+        () => _absoluteArchiveUrl(req, item));
+  }
+
   @Route.get('/packages/<name>/versions/<version>.tar.gz')
   Future<shelf.Response> download(
       shelf.Request req, String name, String version) async {
@@ -367,6 +442,8 @@ class App {
 
     var package = await metaStore.queryPackage(name);
     if (package == null) {
+      final proxy = upstreamProxy;
+      if (proxy != null) return _proxiedDownload(req, proxy, name, version);
       return shelf.Response.found(Uri.parse(upstream)
           .resolve('/packages/$name/versions/$version.tar.gz')
           .toString());
@@ -405,6 +482,31 @@ class App {
         },
       );
     }
+  }
+
+  Future<shelf.Response> _proxiedDownload(shelf.Request req,
+      UpstreamProxy proxy, String name, String version) async {
+    if (!proxy.allows(name)) return _notFound();
+
+    final known = await proxy.knownSha256(name, version);
+    if (_clientHasArchive(req, known)) {
+      return shelf.Response.notModified(headers: _archiveHeaders(known));
+    }
+
+    final UpstreamArchive? archive;
+    try {
+      archive = await proxy.archive(name, version);
+    } on UpstreamException catch (error) {
+      return _badGateway(error);
+    }
+    if (archive == null) return _notFound();
+    return shelf.Response.ok(
+      archive.content,
+      headers: {
+        HttpHeaders.contentTypeHeader: ContentType.binary.mimeType,
+        ..._archiveHeaders(archive.sha256 ?? known),
+      },
+    );
   }
 
   @Route.get('/api/packages/versions/new')
@@ -483,6 +585,7 @@ class App {
       publishPolicy.checkRequiredFiles(
           archive.files.where((file) => file.isFile).map((file) => file.name));
       if (package != null) publishPolicy.checkVersion(package, version);
+      if (package == null) await _rejectUpstreamPackage(name);
 
       final callback = uploadValidator;
       if (callback != null) await callback(pubspec, uploader);
@@ -589,6 +692,25 @@ class App {
     if (archive == null) throw 'the upload has no file';
     publishPolicy.checkSize(size);
     return archive.takeBytes();
+  }
+
+  /// Refuses a new package that the upstream has, in proxy mode. A package the
+  /// allowlist keeps from being proxied can be published here.
+  Future<void> _rejectUpstreamPackage(String name) async {
+    final proxy = upstreamProxy;
+    if (proxy == null || !proxy.allows(name)) return;
+    final bool exists;
+    try {
+      exists = await proxy.packageExists(name);
+    } on UpstreamException catch (error) {
+      _log.warning(LogEvent('could not check the upstream before publishing',
+          {'name': name, 'reason': error.message}));
+      return;
+    }
+    if (exists) {
+      throw '$name exists on the upstream registry and is proxied by this '
+          'server, so it cannot be published here.';
+    }
   }
 
   @Route.get('/api/packages/versions/newUploadFinish')
