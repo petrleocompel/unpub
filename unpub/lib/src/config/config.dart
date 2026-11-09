@@ -5,6 +5,7 @@ import 'package:yaml/yaml.dart';
 
 import '../auth/accounts.dart';
 import '../logging.dart';
+import '../validation.dart';
 
 /// Raised when the configuration cannot be loaded or is invalid.
 ///
@@ -40,6 +41,16 @@ const _schema = <String, _ValueKind>{
   'storage.s3.secretKey': _ValueKind.string,
   'storage.s3.sessionToken': _ValueKind.string,
   'upstream.url': _ValueKind.string,
+  'upstream.mode': _ValueKind.string,
+  'upstream.cacheTtl': _ValueKind.string,
+  'upstream.allowlist': _ValueKind.stringList,
+  'upstream.timeout': _ValueKind.string,
+  'publish.allowedNamePrefixes': _ValueKind.stringList,
+  'publish.maxArchiveBytes': _ValueKind.integer,
+  'publish.requiredFiles': _ValueKind.stringList,
+  'publish.rejectOlderThanLatest': _ValueKind.boolean,
+  'publish.requireVersionBump': _ValueKind.boolean,
+  'publish.retractionWindow': _ValueKind.string,
   'auth.bootstrapToken': _ValueKind.string,
   'auth.bootstrapEmail': _ValueKind.string,
   'auth.readAccess': _ValueKind.string,
@@ -204,10 +215,70 @@ class StorageConfig {
   });
 }
 
-class UpstreamConfig {
-  final Uri url;
+/// What happens to a package that does not exist locally.
+enum UpstreamMode {
+  /// Send the client to the upstream.
+  redirect,
 
-  const UpstreamConfig({required this.url});
+  /// Fetch from the upstream and keep a copy.
+  proxy,
+}
+
+class UpstreamConfig {
+  static const defaultCacheTtl = Duration(minutes: 10);
+  static const defaultTimeout = Duration(seconds: 30);
+
+  final Uri url;
+  final UpstreamMode mode;
+
+  /// How long proxied metadata is served without asking the upstream again.
+  final Duration cacheTtl;
+
+  /// The only packages proxied, or empty for any package.
+  final List<String> allowlist;
+
+  /// How long an upstream may stay silent during a request.
+  final Duration timeout;
+
+  const UpstreamConfig({
+    required this.url,
+    this.mode = UpstreamMode.redirect,
+    this.cacheTtl = defaultCacheTtl,
+    this.allowlist = const [],
+    this.timeout = defaultTimeout,
+  });
+}
+
+/// Rules an upload must satisfy.
+class PublishConfig {
+  static const defaultMaxArchiveBytes = 100 * 1024 * 1024;
+
+  /// Package names must start with one of these, or empty for any name.
+  final List<String> allowedNamePrefixes;
+  final int maxArchiveBytes;
+
+  /// Files the archive must hold at its root, matched ignoring case.
+  final List<String> requiredFiles;
+
+  /// Refuse a version lower than the highest one not retracted.
+  final bool rejectOlderThanLatest;
+
+  /// Refuse a version that already exists. When false, publishing an existing
+  /// version replaces it.
+  final bool requireVersionBump;
+
+  /// How long after publishing a non-administrator may retract, or null for
+  /// no limit.
+  final Duration? retractionWindow;
+
+  const PublishConfig({
+    this.allowedNamePrefixes = const [],
+    this.maxArchiveBytes = defaultMaxArchiveBytes,
+    this.requiredFiles = const [],
+    this.rejectOlderThanLatest = false,
+    this.requireVersionBump = true,
+    this.retractionWindow = const Duration(days: 7),
+  });
 }
 
 /// Who may read packages.
@@ -264,6 +335,7 @@ class Config {
   final MongoConfig mongo;
   final StorageConfig storage;
   final UpstreamConfig upstream;
+  final PublishConfig publish;
   final AuthConfig auth;
   final LoggingConfig logging;
 
@@ -272,6 +344,7 @@ class Config {
     required this.mongo,
     required this.storage,
     required this.upstream,
+    this.publish = const PublishConfig(),
     required this.auth,
     required this.logging,
   });
@@ -508,9 +581,8 @@ class _ConfigReader {
     );
     final mongo = MongoConfig(uri: _mongoUri());
     final storage = _storage();
-    final upstream = UpstreamConfig(
-      url: _httpUrl('upstream.url') ?? Uri.parse('https://pub.dev'),
-    );
+    final upstream = _upstream();
+    final publish = _publish();
     final auth = _auth();
     final logging = _logging();
     if (_problems.isNotEmpty) throw ConfigException(_problems);
@@ -519,8 +591,82 @@ class _ConfigReader {
       mongo: mongo,
       storage: storage,
       upstream: upstream,
+      publish: publish,
       auth: auth,
       logging: logging,
+    );
+  }
+
+  /// A duration such as `10m`, or `0` when [allowZero] is true.
+  Duration? _duration(String key, {required bool allowZero}) {
+    final text = _string(key);
+    if (text == null) return null;
+    if (allowZero && text.trim() == '0') return Duration.zero;
+    final parsed = parseDuration(text);
+    if (parsed == null) {
+      _problems.add('${_describe(key)} must be a duration such as 30s, 10m, '
+          '12h or 7d${allowZero ? ', or 0' : ''}, got ${_shown(key)}');
+    }
+    return parsed;
+  }
+
+  UpstreamConfig _upstream() {
+    final url = _httpUrl('upstream.url') ?? Uri.parse('https://pub.dev');
+    final modeName = _string('upstream.mode') ?? UpstreamMode.redirect.name;
+    final mode =
+        UpstreamMode.values.where((m) => m.name == modeName).firstOrNull;
+    if (mode == null) {
+      _problems.add('${_describe('upstream.mode')} must be one of redirect, '
+          'proxy, got ${_shown('upstream.mode')}');
+    }
+    // A proxy logs what it fetches, and credentials in the URL would go too.
+    if (mode == UpstreamMode.proxy && url.userInfo.isNotEmpty) {
+      _problems.add('${_describe('upstream.url')} must not contain credentials '
+          'when upstream.mode is proxy');
+    }
+    final allowlist = _stringList('upstream.allowlist');
+    final invalid = allowlist.where((name) => !isValidPackageName(name));
+    if (invalid.isNotEmpty) {
+      _problems.add('${_describe('upstream.allowlist')} must contain package '
+          'names, got ${invalid.join(', ')}');
+    }
+    return UpstreamConfig(
+      url: url,
+      mode: mode ?? UpstreamMode.redirect,
+      cacheTtl: _duration('upstream.cacheTtl', allowZero: true) ??
+          UpstreamConfig.defaultCacheTtl,
+      allowlist: allowlist,
+      timeout: _duration('upstream.timeout', allowZero: false) ??
+          UpstreamConfig.defaultTimeout,
+    );
+  }
+
+  PublishConfig _publish() {
+    const defaults = PublishConfig();
+    final prefixes = _stringList('publish.allowedNamePrefixes');
+    final badPrefixes = prefixes.where((prefix) => !isValidPackageName(prefix));
+    if (badPrefixes.isNotEmpty) {
+      _problems.add('${_describe('publish.allowedNamePrefixes')} must contain '
+          'the start of a package name, got ${badPrefixes.join(', ')}');
+    }
+    final requiredFiles = _stringList('publish.requiredFiles');
+    if (requiredFiles.any((file) => file.contains('/'))) {
+      _problems.add('${_describe('publish.requiredFiles')} must name files at '
+          'the archive root, without a directory');
+    }
+    final maxBytes = _integer('publish.maxArchiveBytes');
+    if (maxBytes != null && maxBytes <= 0) {
+      _problems.add('${_describe('publish.maxArchiveBytes')} must be positive');
+    }
+    final window = _duration('publish.retractionWindow', allowZero: true);
+    return PublishConfig(
+      allowedNamePrefixes: prefixes,
+      maxArchiveBytes: maxBytes ?? defaults.maxArchiveBytes,
+      requiredFiles: requiredFiles,
+      rejectOlderThanLatest: _boolean('publish.rejectOlderThanLatest') ?? false,
+      requireVersionBump: _boolean('publish.requireVersionBump') ?? true,
+      retractionWindow:
+          window == Duration.zero ? null : window ?? defaults.retractionWindow,
     );
   }
 

@@ -491,6 +491,136 @@ logging:
     });
   });
 
+  group('publish', () {
+    test('has the documented defaults', () {
+      final publish = parse(null).publish;
+      expect(publish.allowedNamePrefixes, isEmpty);
+      expect(publish.maxArchiveBytes, 100 * 1024 * 1024);
+      expect(publish.requiredFiles, isEmpty);
+      expect(publish.rejectOlderThanLatest, isFalse);
+      expect(publish.requireVersionBump, isTrue);
+      expect(publish.retractionWindow, const Duration(days: 7));
+    });
+
+    test('reads the file', () {
+      final publish = parse('''
+publish:
+  allowedNamePrefixes: [acme_, corp_]
+  maxArchiveBytes: 1024
+  requiredFiles: [README.md, LICENSE]
+  rejectOlderThanLatest: true
+  requireVersionBump: false
+  retractionWindow: 30d
+''').publish;
+      expect(publish.allowedNamePrefixes, ['acme_', 'corp_']);
+      expect(publish.maxArchiveBytes, 1024);
+      expect(publish.requiredFiles, ['README.md', 'LICENSE']);
+      expect(publish.rejectOlderThanLatest, isTrue);
+      expect(publish.requireVersionBump, isFalse);
+      expect(publish.retractionWindow, const Duration(days: 30));
+    });
+
+    test('reads the environment', () {
+      final publish = parse(null, env: {
+        'UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES': 'acme_,corp_',
+        'UNPUB_PUBLISH_MAX_ARCHIVE_BYTES': '2048',
+        'UNPUB_PUBLISH_RETRACTION_WINDOW': '12h',
+      }).publish;
+      expect(publish.allowedNamePrefixes, ['acme_', 'corp_']);
+      expect(publish.maxArchiveBytes, 2048);
+      expect(publish.retractionWindow, const Duration(hours: 12));
+    });
+
+    for (final zero in ['0', '"0"']) {
+      test('a retraction window of $zero means unlimited', () {
+        expect(
+            parse('publish:\n  retractionWindow: $zero\n')
+                .publish
+                .retractionWindow,
+            isNull);
+      });
+    }
+
+    final invalid = {
+      'publish:\n  retractionWindow: soon\n': 'publish.retractionWindow',
+      'publish:\n  maxArchiveBytes: 0\n': 'publish.maxArchiveBytes',
+      'publish:\n  allowedNamePrefixes: [Bad-Prefix]\n':
+          'publish.allowedNamePrefixes',
+      'publish:\n  requiredFiles: [doc/README.md]\n': 'publish.requiredFiles',
+      'publish:\n  unknown: 1\n': 'unknown key',
+    };
+    invalid.forEach((yaml, message) {
+      test('rejects ${yaml.replaceAll('\n', ' ')}', () {
+        expect(() => parse(yaml), problemsContaining([contains(message)]));
+      });
+    });
+  });
+
+  group('upstream', () {
+    test('has the documented defaults', () {
+      final upstream = parse(null).upstream;
+      expect(upstream.url, Uri.parse('https://pub.dev'));
+      expect(upstream.mode, UpstreamMode.redirect);
+      expect(upstream.cacheTtl, const Duration(minutes: 10));
+      expect(upstream.allowlist, isEmpty);
+      expect(upstream.timeout, const Duration(seconds: 30));
+    });
+
+    test('reads the file', () {
+      final upstream = parse('''
+upstream:
+  url: https://mirror.example.com
+  mode: proxy
+  cacheTtl: 1h
+  allowlist: [http, path]
+  timeout: 5s
+''').upstream;
+      expect(upstream.mode, UpstreamMode.proxy);
+      expect(upstream.cacheTtl, const Duration(hours: 1));
+      expect(upstream.allowlist, ['http', 'path']);
+      expect(upstream.timeout, const Duration(seconds: 5));
+    });
+
+    test('reads the environment', () {
+      final upstream = parse(null, env: {
+        'UNPUB_UPSTREAM_MODE': 'proxy',
+        'UNPUB_UPSTREAM_CACHE_TTL': '30s',
+        'UNPUB_UPSTREAM_ALLOWLIST': 'http,path',
+      }).upstream;
+      expect(upstream.mode, UpstreamMode.proxy);
+      expect(upstream.cacheTtl, const Duration(seconds: 30));
+      expect(upstream.allowlist, ['http', 'path']);
+    });
+
+    test('a cache TTL of 0 always asks the upstream', () {
+      expect(
+          parse('upstream:\n  cacheTtl: 0\n').upstream.cacheTtl, Duration.zero);
+    });
+
+    final invalid = {
+      'upstream:\n  mode: mirror\n': 'upstream.mode',
+      'upstream:\n  cacheTtl: later\n': 'upstream.cacheTtl',
+      'upstream:\n  timeout: 0\n': 'upstream.timeout',
+      'upstream:\n  allowlist: [Not-A-Package]\n': 'upstream.allowlist',
+      'upstream:\n  mode: proxy\n  url: https://u:p@example.com\n':
+          'must not contain credentials',
+    };
+    invalid.forEach((yaml, message) {
+      test('rejects ${yaml.replaceAll('\n', ' ')}', () {
+        expect(() => parse(yaml), problemsContaining([contains(message)]));
+      });
+    });
+
+    test('does not repeat upstream credentials in the message', () {
+      try {
+        parse('upstream:\n  mode: proxy\n  url: https://u:hunter2@e.com\n');
+        fail('should have thrown');
+      } on ConfigException catch (error) {
+        expect('$error', isNot(contains('hunter2')));
+      }
+    });
+  });
+
   group('load', () {
     late Directory directory;
 
