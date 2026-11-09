@@ -2,7 +2,7 @@
 
 Unpub is a self-hosted private Dart Pub server for teams, with a simple web interface to search and view package information. It is a single binary that stores metadata in MongoDB and package archives on disk or in S3.
 
-> **This is a modernization in progress.** Authentication is temporary: a single shared token gates publishing, and optional shared tokens gate reading, until user accounts arrive. The plan for accounts, policies, the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
+> **This is a modernization in progress.** User accounts, roles and personal API tokens are in place. The plan for policies, the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Screenshot](assets/screenshot.png)
 
@@ -10,20 +10,24 @@ Unpub is a self-hosted private Dart Pub server for teams, with a simple web inte
 
 ```sh
 cat > .env <<EOT
-UNPUB_AUTH_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
+UNPUB_AUTH_ADMIN_EMAIL=you@example.com
+UNPUB_AUTH_ADMIN_PASSWORD=$(openssl rand -hex 16)
 UNPUB_SERVER_PUBLIC_URL=http://localhost:4000
 EOT
 
 docker compose up -d --build
 curl http://localhost:4000/readyz
+docker compose exec unpub /app/unpub admin create-token --email you@example.com --name laptop
 ```
+
+The first start creates the administrator. The last command prints an API token, once.
 
 ## Publishing and consuming packages
 
-Give the Dart client the token and set the server in the package's `pubspec.yaml`:
+Give the Dart client a personal token and set the server in the package's `pubspec.yaml`:
 
 ```sh
-dart pub token add http://localhost:4000 # paste the value of UNPUB_AUTH_BOOTSTRAP_TOKEN
+dart pub token add http://localhost:4000 # paste the token secret
 ```
 
 ```yaml
@@ -41,9 +45,71 @@ dependencies:
 
 Packages not found locally redirect to the upstream, pub.dev by default, so setting `PUB_HOSTED_URL` to this server also works for mixed dependency trees.
 
-Reading is public by default, and only publishing and uploader management need the token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz` and `/readyz` then needs a Bearer token from `auth.readTokens`, or the bootstrap token, which `dart pub get` sends once added with `dart pub token add`. The embedded web UI cannot send tokens, so it does not work in that mode until the new UI arrives.
+Reading is public by default, and only publishing and uploader management need a token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz`, `/readyz` and the login endpoint then needs a token or session, which `dart pub get` provides once the token is added with `dart pub token add`. The embedded web UI cannot send tokens, so it does not work in that mode until the new UI arrives.
 
 Dart clients only send tokens over HTTPS, except to localhost, so deploy behind TLS.
+
+## Authentication
+
+### Roles
+
+| Role | May |
+| --- | --- |
+| `admin` | Everything: manage users, publish to any package, manage the uploaders of any package. |
+| `publisher` | Publish new packages, publish to packages where their email is in `uploaders`, and manage the uploaders of those packages. |
+| `reader` | Read only. This matters when `auth.readAccess` is `authenticated`. |
+
+Package `uploaders` remain a list of email addresses, matched against the authenticated user ignoring case. A package without an `uploaders` list can only be changed by an administrator.
+
+### Tokens and sessions
+
+A request is authenticated by the first of these that matches. Anything else is anonymous.
+
+1. `Authorization: Bearer <secret>` with a personal token that is neither revoked nor expired.
+2. The `unpub_session` cookie from `POST /webapi/login`. Requests other than GET, HEAD and OPTIONS must also send its CSRF token, in the `X-CSRF-Token` header or the `csrf_token` form field.
+3. The deprecated static tokens: `auth.bootstrapToken` acts as an administrator with the email `auth.bootstrapEmail`, and each entry of `auth.readTokens` acts as a reader. The server logs a warning when they are set. Move to personal tokens.
+
+Personal tokens have the scopes `read` and `publish`. A scope narrows what the role allows and never widens it, so a `read` token cannot change anything even for an administrator. Only the hash of a secret is stored. It is shown once, when created.
+
+```sh
+unpub admin create-token --email you@example.com --name laptop --scopes read,publish --expires-in 90d
+dart pub token add https://pub.example.com
+```
+
+### Administrators
+
+Set `auth.admin.email` and `auth.admin.password` (or `UNPUB_AUTH_ADMIN_EMAIL` and `UNPUB_AUTH_ADMIN_PASSWORD`) to create the first administrator when the server starts with no users. Once any user exists, including the placeholders made by `unpub migrate`, these values are ignored and the server logs that. Use `unpub admin` from then on.
+
+| Command | Description |
+| --- | --- |
+| `unpub admin create-user --email <address> --role <role> [--display-name <name>] [--password <secret> \| --password-stdin]` | Create a user. Without a password it is a placeholder that cannot log in. `--password` is visible in the process list. |
+| `unpub admin set-password --email <address> [--password-stdin]` | Set a password, prompting on a terminal. Ends the sessions of the user. |
+| `unpub admin set-role --email <address> --role <role>` | Change a role. |
+| `unpub admin disable --email <address>`, `unpub admin enable --email <address>` | Disable or re-enable a user. A disabled user's tokens and sessions stop working. |
+| `unpub admin list-users` | List users. |
+| `unpub admin create-token --email <address> --name <label> [--scopes read,publish] [--expires-in 30d]` | Print a new token secret. Lifetimes use `s`, `m`, `h`, `d` or `w`. |
+
+Each takes `--config <path>`. The last enabled administrator cannot be demoted or disabled.
+
+### HTTP API
+
+JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409 or 429.
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /webapi/login` | `{email, password}`. Sets the session cookie and returns the user and `csrfToken`. |
+| `POST /webapi/logout` | Ends the session. |
+| `GET /webapi/me` | The current user and scopes, and `csrfToken` for a session. |
+| `POST /webapi/me/password` | `{currentPassword, newPassword}`. Ends the other sessions of the user. |
+| `GET`, `POST /webapi/tokens` | List or create your own tokens. Create takes `{name, scopes?, expiresIn?}` and returns the `secret` once. A token cannot create a token with more scopes or a later expiry than its own. |
+| `DELETE /webapi/tokens/<id>` | Revoke your own token. Administrators can revoke any. |
+| `GET`, `POST /webapi/users` | Administrators: list or create users, with `{email, role, displayName?, password?}`. |
+| `PATCH /webapi/users/<id>` | Administrators: change `role`, `disabled` or `displayName`. |
+| `POST /webapi/users/<id>/password` | Administrators: `{password}`. |
+
+After 10 failed attempts within 15 minutes, for one email or one client address, login answers 429 with `Retry-After`. The count is kept per process, so several instances each allow their own attempts. Sessions last 24 hours.
+
+Logins, token and user changes, publishes and uploader changes are recorded in the `audit` collection.
 
 ## Running from source
 
@@ -65,7 +131,8 @@ To build a standalone binary, run `dart compile exe bin/unpub.dart -o unpub`.
 | `unpub serve [--config path] [--host address] [--port number]` | Start the server. |
 | `unpub version` | Print the version. |
 | `unpub --help` | Print usage. |
-| `unpub migrate`, `unpub admin` | Reserved for later phases. They exit with code 2. |
+| `unpub migrate [--dry-run] [--config path]` | Apply pending data migrations, or list what would change. |
+| `unpub admin ...` | Manage users and tokens. See [Administrators](#administrators). |
 
 ## Configuration
 
@@ -79,7 +146,8 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | --- | --- | --- | --- |
 | `server.host` | `UNPUB_SERVER_HOST` | `0.0.0.0` | Listen address. |
 | `server.port` | `UNPUB_SERVER_PORT` | `4000` | Listen port. |
-| `server.publicUrl` | `UNPUB_SERVER_PUBLIC_URL` | derived from the request | External origin, used in archive and upload URLs. Set it behind a reverse proxy. |
+| `server.publicUrl` | `UNPUB_SERVER_PUBLIC_URL` | derived from the request | External origin, used in archive and upload URLs. Set it behind a reverse proxy. `https` also marks the session cookie `Secure`. |
+| `server.trustForwardedFor` | `UNPUB_SERVER_TRUST_FORWARDED_FOR` | `false` | Take the client address for the login limit and the audit log from the last entry of `X-Forwarded-For`. Only enable behind a proxy that sets it. |
 | `mongo.uri` | `UNPUB_MONGO_URI` | `mongodb://localhost:27017/dart_pub` | MongoDB URI, including the database name. |
 | `storage.type` | `UNPUB_STORAGE_TYPE` | `file` | `file` or `s3`. |
 | `storage.file.path` | `UNPUB_STORAGE_FILE_PATH` | `unpub-packages` | Directory for archives. |
@@ -93,10 +161,12 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `storage.s3.secretKey` | `UNPUB_STORAGE_S3_SECRET_KEY` | `AWS_SECRET_ACCESS_KEY` | Secret key. |
 | `storage.s3.sessionToken` | `UNPUB_STORAGE_S3_SESSION_TOKEN` | | Session token for `storage.s3.accessKey`. Keys from the environment use `AWS_SESSION_TOKEN` instead. |
 | `upstream.url` | `UNPUB_UPSTREAM_URL` | `https://pub.dev` | Where unknown packages redirect. |
-| `auth.bootstrapToken` | `UNPUB_AUTH_BOOTSTRAP_TOKEN` | | Bearer token for publishing and uploader management. Publishing is disabled while unset. |
-| `auth.bootstrapEmail` | `UNPUB_AUTH_BOOTSTRAP_EMAIL` | `admin@localhost` | Uploader recorded for token publishes. |
-| `auth.readAccess` | `UNPUB_AUTH_READ_ACCESS` | `public` | `public`, or `authenticated` to require a Bearer token on every route except `/healthz` and `/readyz`. |
-| `auth.readTokens` | `UNPUB_AUTH_READ_TOKENS` | | Tokens that may read but not publish. A YAML list, or comma separated in the environment. |
+| `auth.admin.email` | `UNPUB_AUTH_ADMIN_EMAIL` | | First administrator, created when there are no users. Set together with the password. |
+| `auth.admin.password` | `UNPUB_AUTH_ADMIN_PASSWORD` | | Password of that administrator, at least 8 characters. Prefer the environment. |
+| `auth.readAccess` | `UNPUB_AUTH_READ_ACCESS` | `public` | `public`, or `authenticated` to require a token or session on every route except `/healthz`, `/readyz` and login. |
+| `auth.bootstrapToken` | `UNPUB_AUTH_BOOTSTRAP_TOKEN` | | Deprecated. Static Bearer token that acts as an administrator. |
+| `auth.bootstrapEmail` | `UNPUB_AUTH_BOOTSTRAP_EMAIL` | `admin@localhost` | Email of the `auth.bootstrapToken` identity, and the uploader recorded for its publishes. |
+| `auth.readTokens` | `UNPUB_AUTH_READ_TOKENS` | | Deprecated. Static Bearer tokens that act as readers. A YAML list, or comma separated in the environment. |
 | `logging.level` | `UNPUB_LOGGING_LEVEL` | `info` | `fine`, `info`, `warning`, `severe` and other `package:logging` levels, or `off`. |
 | `logging.format` | `UNPUB_LOGGING_FORMAT` | `text` | `text` or `json`. |
 
@@ -115,9 +185,12 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 
 - A registry that set `ALLOWED_TOKENS` was private. It becomes world-readable unless you set `auth.readAccess: authenticated`, which is not the default.
 - The embedded web UI cannot send tokens, so it is unusable in `authenticated` mode, as it was with `ALLOWED_TOKENS`, until the new UI replaces it.
-- `auth.bootstrapEmail` must match an email already present in the `uploaders` of your existing packages, because publishing to a package requires being on that list.
+- A package without an `uploaders` list can now only be changed by an administrator.
+- Accounts: run `unpub migrate` once. It creates a placeholder `publisher` for every email in existing `uploaders`, and an `admin` for `auth.bootstrapEmail` if it appears there. Check first with `unpub migrate --dry-run`. Placeholders cannot log in, so give them a password with `unpub admin set-password` or a token with `unpub admin create-token`.
+- Run `unpub migrate` after creating your first administrator, or use `unpub admin create-user` afterwards: `auth.admin.*` is ignored once any user exists.
+- `auth.bootstrapToken` and `auth.readTokens` keep working but are deprecated. Replace them with personal tokens.
 - Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
-- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default.
+- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit` and `migrations`.
 
 ### Behind a reverse proxy
 
@@ -126,8 +199,11 @@ Set `server.publicUrl` to the external origin, and use HTTP/1.1 towards unpub:
 ```nginx
 proxy_http_version 1.1;
 proxy_set_header Host $host;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 client_max_body_size 100m;
 ```
+
+Also set `server.trustForwardedFor: true`, or the login limit and the audit log see only the address of the proxy, and one user's failures would lock out everyone.
 
 ## Operations
 
@@ -155,8 +231,8 @@ Future<void> main() async {
   final app = unpub.App(
     metaStore: unpub.MongoStore(db),
     packageStore: unpub.FileStore('./unpub-packages'),
-    authenticator: const unpub.BootstrapTokenAuthenticator(
-      token: 'a-long-random-token',
+    authenticator: const unpub.StaticTokenAuthenticator(
+      bootstrapToken: 'a-long-random-token',
     ),
     uploadValidator: (pubspec, uploaderEmail) async {
       // Throw to reject the upload.
@@ -171,7 +247,7 @@ Future<void> main() async {
 }
 ```
 
-`MetaStore`, `PackageStore` and `Authenticator` can each be replaced by your own implementation. `S3Store` and `FileStore` are included.
+`MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints are added by passing an `AccountApi`. `S3Store` and `FileStore` are included.
 
 ## Badges
 

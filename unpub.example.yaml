@@ -11,6 +11,9 @@ server:
   # External URL of the server. Required behind a reverse proxy, because it
   # builds the archive and upload URLs given to `dart pub`. An origin only.
   # publicUrl: https://pub.example.com
+  # Take the client address from the last entry of X-Forwarded-For. Enable it
+  # only behind a reverse proxy that sets the header.
+  # trustForwardedFor: false
 
 mongo:
   # The database name is required.
@@ -39,20 +42,22 @@ upstream:
   url: https://pub.dev
 
 auth:
-  # Temporary until user accounts arrive, see docs/ROADMAP.md.
-  # Bearer token required to publish and manage uploaders. Publishing is
-  # disabled while it is unset. Allowed characters: a-z A-Z 0-9 . _ ~ + / = -
-  # bootstrapToken: replace-with-a-long-random-token
-  # Recorded as the uploader of publishes that use the token, and checked
-  # against the uploaders of existing packages.
-  bootstrapEmail: admin@localhost
-  # public: anyone can read. authenticated: every route except /healthz and
-  # /readyz needs a Bearer token from readTokens, or the bootstrap token.
-  # The embedded web UI cannot send tokens, so it does not work when
-  # authenticated.
+  # Creates this administrator when the server starts with no users. Ignored
+  # once any user exists. Prefer UNPUB_AUTH_ADMIN_PASSWORD for the password.
+  # admin:
+  #   email: you@example.com
+  #   password: at-least-8-characters
+  # public: anyone can read. authenticated: every route except /healthz,
+  # /readyz and login needs a token or session. The embedded web UI cannot
+  # send tokens, so it does not work when authenticated.
   readAccess: public
-  # Tokens that may read but not publish. As UNPUB_AUTH_READ_TOKENS, separate
-  # them with commas.
+  # Deprecated, use personal tokens from `unpub admin create-token`.
+  # A static Bearer token that acts as an administrator with bootstrapEmail.
+  # Allowed characters: a-z A-Z 0-9 . _ ~ + / = -
+  # bootstrapToken: replace-with-a-long-random-token
+  bootstrapEmail: admin@localhost
+  # Deprecated. Static Bearer tokens that act as readers. As
+  # UNPUB_AUTH_READ_TOKENS, separate them with commas.
   # readTokens:
   #   - replace-with-a-long-random-token
 
