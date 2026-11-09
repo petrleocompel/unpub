@@ -63,7 +63,7 @@ Goal: real authentication and authorization.
 Goal: behave like pub.dev for modern clients and enforce publishing rules.
 
 - Version listing: `archive_sha256` (computed on upload, stored; `unpub migrate` backfills from stored tarballs), `published` timestamp, `latest` excludes prereleases unless only prereleases exist, `retracted` flag.
-- Package flags `isDiscontinued`, `replacedBy`; version flag `isRetracted`, `retractedAt`. Endpoints: `PUT /api/packages/<name>/discontinue`, `POST /api/packages/<name>/versions/<version>/retract` and `unretract` (admin or uploader). Retracted versions are hidden from `latest` and marked in listings.
+- Package flags `isDiscontinued`, `replacedBy`; version flag `isRetracted`, `retractedAt`. Endpoints: `PUT /api/packages/<name>/discontinue`, `POST /api/packages/<name>/versions/<version>/retract` and `unretract` (admin or uploader). Retracted versions are hidden from `latest` and marked in listings. If every version of a package is retracted, `latest` is the highest version anyway, as on pub.dev, so that the listing stays valid.
 - `GET /api/packages/<name>/advisories` returns an empty, valid response.
 - Proper HTTP caching: `ETag` and `Cache-Control` on listing and tarball responses, `304` support.
 - Upload policies from config `publish`: `allowedNamePrefixes`, `maxArchiveBytes`, `requiredFiles` (e.g. README.md, CHANGELOG.md, LICENSE), `rejectOlderThanLatest`, `requireVersionBump`. Keep the Dart `uploadValidator` callback for programmatic use.

@@ -152,7 +152,7 @@ Uploaders of a package and administrators can change these, with a credential th
 | `POST /api/packages/<name>/versions/<version>/unretract` | Restore a retracted version. |
 | `PUT /api/packages/<name>/discontinue` | `{"isDiscontinued": true, "replacedBy": "<name>"}`, with `replacedBy` optional, or `{"isDiscontinued": false}`. `replacedBy` must be a valid package name and need not exist on this server. |
 
-A retracted version stays downloadable, so a project with it in its lockfile still resolves, but new resolutions avoid it and it is left out of `latest`. The only version of a package can be retracted too. A non-administrator can retract only within `publish.retractionWindow` of publishing, 7 days by default, and is answered 403 after that. The window does not limit `unretract`.
+A retracted version stays downloadable, so a project with it in its lockfile still resolves, but new resolutions avoid it and it is left out of `latest`. If every version of a package is retracted, `latest` is the highest version anyway, the same as pub.dev, because a listing has to name one. The only version of a package can be retracted too, and then stays `latest`. A non-administrator can retract only within `publish.retractionWindow` of publishing, 7 days by default, and is answered 403 after that. The window does not limit `unretract`.
 
 A discontinued package keeps serving everything, with the flag set. `/webapi/packages` leaves discontinued packages out unless called with `?discontinued=true`. `/webapi/packages` and `/webapi/package/<name>/<version>` include the flags.
 
