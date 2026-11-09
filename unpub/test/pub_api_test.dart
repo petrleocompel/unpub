@@ -439,7 +439,7 @@ void main() {
       final private = buildApp(readAccess: ReadAccess.authenticated);
       final reply =
           await send('GET', tarball, bearer: ownerToken, using: private);
-      expect(reply.headers['cache-control'], 'private');
+      expect(reply.headers['cache-control'], 'private, no-store');
     });
 
     Future<int?> countOf(String field) async {

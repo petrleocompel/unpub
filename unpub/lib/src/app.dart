@@ -240,8 +240,9 @@ class App {
 
   /// The headers of an archive whose hash is [hash], if known.
   Map<String, String> _archiveHeaders(String? hash) => {
-        HttpHeaders.cacheControlHeader:
-            _isPublicRead ? 'public, max-age=31536000, immutable' : 'private',
+        HttpHeaders.cacheControlHeader: _isPublicRead
+            ? 'public, max-age=31536000, immutable'
+            : 'private, no-store',
         if (hash != null) HttpHeaders.etagHeader: '"$hash"',
       };
 

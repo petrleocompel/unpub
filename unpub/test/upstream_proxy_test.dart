@@ -1449,7 +1449,7 @@ void main() {
     test('with a token it works and is marked private', () async {
       final response = await get(route, headers: auth);
       expect(response.statusCode, 200);
-      expect(response.headers['cache-control'], 'private');
+      expect(response.headers['cache-control'], 'private, no-store');
       await bytesOf(response);
 
       final listing = await get('/api/packages/$_name', headers: auth);
