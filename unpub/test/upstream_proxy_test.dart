@@ -679,6 +679,52 @@ void main() {
         expect(filesInStorage(), isEmpty);
       });
 
+      test('a declared length over the cap is refused at once', () async {
+        final declaring = await HttpServer.bind('localhost', 0);
+        addTearDown(() => declaring.close(force: true));
+        declaring.listen((request) async {
+          if (request.uri.path.startsWith('/api/')) {
+            request.response
+              ..headers.contentType = ContentType.json
+              ..write(json.encode({
+                'name': _name,
+                'versions': [
+                  {
+                    'version': '1.0.0',
+                    'pubspec': {'name': _name, 'version': '1.0.0'},
+                    'archive_url':
+                        'http://localhost:${declaring.port}/a.tar.gz',
+                    'archive_sha256': 'a' * 64,
+                  },
+                ],
+              }));
+            await request.response.close();
+            return;
+          }
+          // Declares a body, then never sends it.
+          request.response.contentLength = 1000;
+          await request.response.detachSocket(writeHeaders: true);
+        });
+        final capped = UpstreamProxy(
+          config: UpstreamConfig(
+            url: Uri.parse('http://localhost:${declaring.port}'),
+            mode: UpstreamMode.proxy,
+            maxArchiveBytes: 100,
+            timeout: const Duration(seconds: 20),
+          ),
+          cache: MongoUpstreamCacheStore(db),
+          archives: FileStore(storage.path),
+        );
+        addTearDown(capped.close);
+
+        final watch = Stopwatch()..start();
+        final response = await get(route, using: buildApp(using: capped));
+
+        expect(response.statusCode, 502);
+        expect(watch.elapsed, lessThan(const Duration(seconds: 10)));
+        expect(filesInStorage(), isEmpty);
+      });
+
       test('an archive exactly at the size cap passes', () async {
         final capped = buildProxy(
             maxArchiveBytes: upstream.packages[_name]!['1.0.0']!.length);

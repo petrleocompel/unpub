@@ -528,7 +528,7 @@ class App {
       archive.content,
       headers: {
         HttpHeaders.contentTypeHeader: ContentType.binary.mimeType,
-        ..._archiveHeaders(archive.sha256 ?? known),
+        ..._archiveHeaders(archive.sha256),
       },
     );
   }
