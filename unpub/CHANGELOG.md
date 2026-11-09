@@ -13,12 +13,17 @@ Completes the pub API, and adds publishing policies and an upstream proxy. See "
 - A new name in proxy mode needs a definitive answer from the upstream, and otherwise answers 503. `upstream.allowPublishWhenUnavailable` accepts it with a warning instead.
 - Adds `publish.maxUnpackedBytes`, enforced while inflating an upload. `publish.requiredFiles` only counts regular files.
 - A publish of a version takes a per-version guard before reading the package, and a claim in the new `upload_reservations` collection before writing the archive, so concurrent publishes, also across instances, cannot corrupt it.
+- Proxied archives are immutable objects named by their digest, `upstream/<name>/<name>-<version>-<sha256>.tar.gz`, and the record in `upstream_archives` is the only pointer to one, so several instances on one storage cannot serve bytes under another hash. Unverified archives get a weak `ETag`. Files at the `upstream/<name>/<name>-<version>.tar.gz` path of earlier development builds are ignored.
+- An upstream 304 to a request without a validator is an upstream failure rather than a null check.
+- A publish stages its archive and moves it to the final path only after its metadata write has won, so a stalled publisher cannot overwrite another one's archive. Adds `publish.uploadTimeout`, 10 minutes by default and below the 15 minute reservation, which is renewed once halfway. An archive found at the final path of a version nobody published is reported as corruption and not overwritten.
+- Temporary and staged files left by a crash are deleted at startup and once an hour, once more than an hour old. Only files carrying the temporary naming are touched.
 - `unpub migrate --rerun 0002` hashes the versions an earlier run skipped.
 - Archives are `private, no-store` in `authenticated` mode, and cached for 60 seconds with `publish.requireVersionBump: false`.
 - `/webapi` gains `discontinuedAt`, `downloads` and `uploader` per version, and `downloads` per package.
 - Adds per-version download counts in the new `version_stats` collection, reported as `downloads` by `/webapi/package/<name>/<version>`.
 - `/webapi/packages` hides discontinued packages unless called with `?discontinued=true`. The `/webapi` views and the version badge use the new `latest`.
 - A `HEAD` request for an archive is no longer counted as a download.
+- **Breaking:** on `PackageStore`, `commitUpstream`, `upstreamCached`, `downloadUpstream` and `deleteUpstream` take the digest of the archive. New methods with defaults: `stageArchive`, `commitStaged`, `discardStaged`, `hasCommittedArchive` and `reclaimTemporary`. A store that keeps the defaults holds a staged archive in memory until it is committed.
 - **Breaking:** the validator in `uploadValidator` now runs after the uploader check and the policies, so it no longer sees uploads those refuse.
 - **Breaking:** `MetaStore` gains `replaceVersion`, `versionDownloads`, `setVersionRetracted`, `setDiscontinued` and an `includeDiscontinued` argument on `queryPackages`, and `addVersion` returns whether it added the version. `PackageStore` gains `upstreamTemporaryFile`, `commitUpstream`, `upstreamCached`, `downloadUpstream` and `deleteUpstream`, with defaults that cache nothing. `MetaStore` also gains `reserveUpload`, `releaseUpload` and `versionDownloadCounts`, with defaults. `UpstreamCacheStore` needs `readArchive`, `writeArchive` and `deleteArchive`. `Migrator` takes a `PackageStore`.
 

@@ -87,6 +87,9 @@ publish:
   # requireVersionBump: true
   # How long after publishing a non-administrator may retract. 0 is unlimited.
   # retractionWindow: 7d
+  # How long storing an uploaded archive may take. Longer answers a retryable
+  # 503. Must be under 15 minutes, the time a publish keeps its version reserved.
+  # uploadTimeout: 10m
 
 auth:
   # Creates this administrator when the server starts with no users. Ignored
