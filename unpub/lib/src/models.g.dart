@@ -14,6 +14,10 @@ UnpubVersion _$UnpubVersionFromJson(Map<String, dynamic> json) => UnpubVersion(
       json['readme'] as String?,
       json['changelog'] as String?,
       identity(json['createdAt'] as DateTime),
+      sha256: json['sha256'] as String?,
+      isRetracted: json['isRetracted'] as bool? ?? false,
+      retractedAt: optionalIdentity(json['retractedAt'] as DateTime?),
+      retractedBy: json['retractedBy'] as String?,
     );
 
 Map<String, dynamic> _$UnpubVersionToJson(UnpubVersion instance) =>
@@ -25,6 +29,10 @@ Map<String, dynamic> _$UnpubVersionToJson(UnpubVersion instance) =>
       'readme': instance.readme,
       'changelog': instance.changelog,
       'createdAt': identity(instance.createdAt),
+      'sha256': instance.sha256,
+      'isRetracted': instance.isRetracted,
+      'retractedAt': optionalIdentity(instance.retractedAt),
+      'retractedBy': instance.retractedBy,
     };
 
 UnpubPackage _$UnpubPackageFromJson(Map<String, dynamic> json) => UnpubPackage(
@@ -37,6 +45,9 @@ UnpubPackage _$UnpubPackageFromJson(Map<String, dynamic> json) => UnpubPackage(
       identity(json['createdAt'] as DateTime),
       identity(json['updatedAt'] as DateTime),
       (json['download'] as num?)?.toInt(),
+      isDiscontinued: json['isDiscontinued'] as bool? ?? false,
+      replacedBy: json['replacedBy'] as String?,
+      discontinuedAt: optionalIdentity(json['discontinuedAt'] as DateTime?),
     );
 
 UnpubQueryResult _$UnpubQueryResultFromJson(Map<String, dynamic> json) =>
