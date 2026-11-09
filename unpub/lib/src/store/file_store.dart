@@ -13,10 +13,16 @@ class FileStore extends PackageStore {
   /// The archive of [name] [version], which is always inside [baseDir].
   ///
   /// Throws an [ArgumentError] for a path that would leave [baseDir].
-  File _getTarballFile(String name, String version) {
+  File _getTarballFile(String name, String version) =>
+      _inBaseDir(getFilePath?.call(name, version) ?? '$name-$version.tar.gz');
+
+  /// A proxied archive, under `upstream/`. A locally published archive never
+  /// lands there, whatever the name, because it has no directory of its own.
+  File _getUpstreamFile(String name, String version) =>
+      _inBaseDir(path.join('upstream', name, '$name-$version.tar.gz'));
+
+  File _inBaseDir(String relative) {
     final base = path.normalize(path.absolute(baseDir));
-    final relative =
-        getFilePath?.call(name, version) ?? '$name-$version.tar.gz';
     final filePath = path.normalize(path.join(base, relative));
     if (!path.isWithin(base, filePath)) {
       throw ArgumentError('archive path escapes the storage directory');
@@ -39,6 +45,31 @@ class FileStore extends PackageStore {
   Stream<List<int>> download(String name, String version) {
     return _getTarballFile(name, version).openRead();
   }
+
+  /// Writes to a temporary name first, so that a partial file is never served.
+  @override
+  Future<void> cacheUpstream(
+      String name, String version, List<int> content) async {
+    final file = _getUpstreamFile(name, version);
+    await file.parent.create(recursive: true);
+    final stamp = '$pid-${DateTime.now().microsecondsSinceEpoch}';
+    final temporary = File('${file.path}.$stamp.tmp');
+    try {
+      await temporary.writeAsBytes(content, flush: true);
+      await temporary.rename(file.path);
+    } catch (_) {
+      await temporary.delete().catchError((Object _) => temporary);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> upstreamCached(String name, String version) =>
+      _getUpstreamFile(name, version).exists();
+
+  @override
+  Stream<List<int>> downloadUpstream(String name, String version) =>
+      _getUpstreamFile(name, version).openRead();
 
   /// Creates [baseDir] if it is missing, and returns whether it did.
   ///

@@ -19,6 +19,21 @@ abstract class PackageStore {
   /// the archive is requested.
   Future<bool> exists(String name, String version) async => true;
 
+  /// Keeps a copy of an upstream archive, apart from locally published ones.
+  ///
+  /// A store that keeps this default caches nothing, so the proxy goes to the
+  /// upstream on every download.
+  Future<void> cacheUpstream(
+      String name, String version, List<int> content) async {}
+
+  /// Whether a copy of this upstream archive is kept.
+  Future<bool> upstreamCached(String name, String version) async => false;
+
+  /// The copy of this upstream archive. Only valid if [upstreamCached].
+  Stream<List<int>> downloadUpstream(String name, String version) {
+    throw 'downloadUpstream not implemented';
+  }
+
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}
 }

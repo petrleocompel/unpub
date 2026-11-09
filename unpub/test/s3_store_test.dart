@@ -257,6 +257,23 @@ void main() {
       expect(stat.size, testPackageData.length);
     });
 
+    test('a proxied archive lives under upstream/ on its own', () async {
+      // The bucket outlives a test run.
+      final name = 'proxied_${DateTime.now().microsecondsSinceEpoch}';
+      var store = S3Store(s3Bucket, minio: minio);
+      expect(await store.upstreamCached(name, '1.0.0'), isFalse);
+
+      await store.cacheUpstream(name, '1.0.0', testPackageData);
+
+      expect(await store.upstreamCached(name, '1.0.0'), isTrue);
+      expect(await store.exists(name, '1.0.0'), isFalse);
+      expect(await collectBytes(store.downloadUpstream(name, '1.0.0')),
+          testPackageData);
+      var stat =
+          await minio.statObject(s3Bucket, 'upstream/$name/$name-1.0.0.tar.gz');
+      expect(stat.size, testPackageData.length);
+    });
+
     test('exists reflects the stored objects', () async {
       var store = S3Store(s3Bucket, minio: minio);
       await store.upload('exists_package', '1.0.0', testPackageData);

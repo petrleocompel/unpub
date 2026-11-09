@@ -76,15 +76,26 @@ class S3Store extends PackageStore {
   ///
   /// Throws an [ArgumentError] for values that could address another object.
   String _getObjectKey(String name, String version) {
-    if (_unsafeComponent.hasMatch(name) || _unsafeComponent.hasMatch(version)) {
-      throw ArgumentError('unsafe package name or version');
-    }
+    _checkComponents(name, version);
     final key =
         getObjectPath?.call(name, version) ?? '$name/$name-$version.tar.gz';
     if (key.startsWith('/') || _unsafeKey.hasMatch(key)) {
       throw ArgumentError('unsafe object key');
     }
     return key;
+  }
+
+  /// The object key of a proxied archive. It has three path segments, while
+  /// the default key of a locally published archive has two.
+  String _getUpstreamKey(String name, String version) {
+    _checkComponents(name, version);
+    return 'upstream/$name/$name-$version.tar.gz';
+  }
+
+  static void _checkComponents(String name, String version) {
+    if (_unsafeComponent.hasMatch(name) || _unsafeComponent.hasMatch(version)) {
+      throw ArgumentError('unsafe package name or version');
+    }
   }
 
   @override
@@ -112,6 +123,34 @@ class S3Store extends PackageStore {
   @override
   Stream<List<int>> download(String name, String version) async* {
     yield* await _minio.getObject(bucketName, _getObjectKey(name, version));
+  }
+
+  @override
+  Future<void> cacheUpstream(
+      String name, String version, List<int> content) async {
+    await _minio.putObject(
+      bucketName,
+      _getUpstreamKey(name, version),
+      Stream.value(Uint8List.fromList(content)),
+      size: content.length,
+    );
+  }
+
+  @override
+  Future<bool> upstreamCached(String name, String version) async {
+    try {
+      await _minio.statObject(bucketName, _getUpstreamKey(name, version),
+          retrieveAcls: false);
+      return true;
+    } on MinioS3Error catch (error) {
+      if (error.response?.statusCode == HttpStatus.notFound) return false;
+      rethrow;
+    }
+  }
+
+  @override
+  Stream<List<int>> downloadUpstream(String name, String version) async* {
+    yield* await _minio.getObject(bucketName, _getUpstreamKey(name, version));
   }
 
   /// Verifies the bucket exists and accepts writes and deletes, by storing and

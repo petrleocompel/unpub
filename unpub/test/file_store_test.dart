@@ -119,6 +119,56 @@ void main() {
           throwsA(isA<FileSystemException>()));
     });
   });
+
+  group('upstream namespace', () {
+    const data = [1, 2, 3];
+
+    test('is under upstream/<name>/', () async {
+      var baseDir = setupFixture('upstream-layout');
+      var store = unpub.FileStore(baseDir.path);
+      await store.cacheUpstream('foo', '1.0.0+1', data);
+      expect(
+          File(path.join(baseDir.path, 'upstream', 'foo', 'foo-1.0.0+1.tar.gz'))
+              .readAsBytesSync(),
+          data);
+    });
+
+    test('reads back and reports what is cached', () async {
+      var store = unpub.FileStore(setupFixture('upstream-read').path);
+      expect(await store.upstreamCached('foo', '1.0.0'), isFalse);
+      await store.cacheUpstream('foo', '1.0.0', data);
+      expect(await store.upstreamCached('foo', '1.0.0'), isTrue);
+      expect(
+          await store
+              .downloadUpstream('foo', '1.0.0')
+              .expand((b) => b)
+              .toList(),
+          data);
+    });
+
+    test('is apart from published archives, even a custom layout', () async {
+      var baseDir = setupFixture('upstream-apart');
+      var store = unpub.FileStore(baseDir.path, getFilePath: newFilePathFunc());
+      await store.cacheUpstream('foo', '1.0.0', data);
+      expect(await store.exists('foo', '1.0.0'), isFalse);
+      await store.upload('upstream', '1.0.0', [9]);
+      expect(await store.exists('upstream', '1.0.0'), isTrue);
+      expect(await store.upstreamCached('upstream', '1.0.0'), isFalse);
+    });
+
+    test('leaves no temporary file behind', () async {
+      var baseDir = setupFixture('upstream-clean');
+      await unpub.FileStore(baseDir.path).cacheUpstream('foo', '1.0.0', data);
+      expect(Directory(path.join(baseDir.path, 'upstream', 'foo')).listSync(),
+          hasLength(1));
+    });
+
+    test('rejects a name that would escape the directory', () async {
+      var store = unpub.FileStore(setupFixture('upstream-escape').path);
+      expect(
+          () => store.upstreamCached('../../x', '1.0.0'), throwsArgumentError);
+    });
+  });
 }
 
 String Function(String, String) newFilePathFunc() {
