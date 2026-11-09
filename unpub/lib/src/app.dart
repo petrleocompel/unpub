@@ -1,31 +1,39 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
 import 'package:collection/collection.dart' show IterableExtension;
+import 'package:http_parser/http_parser.dart';
+import 'package:logging/logging.dart';
+import 'package:mime/mime.dart';
+import 'package:pub_semver/pub_semver.dart' as semver;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
-import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
-import 'package:googleapis/oauth2/v2.dart';
-import 'package:mime/mime.dart';
-import 'package:http_parser/http_parser.dart';
 import 'package:shelf_cors_headers/shelf_cors_headers.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:pub_semver/pub_semver.dart' as semver;
-import 'package:archive/archive.dart';
 import 'package:unpub/src/models.dart';
-import 'package:unpub/unpub_api/lib/models.dart';
-import 'package:unpub/src/meta_store.dart';
-import 'package:unpub/src/package_store.dart';
-import 'utils.dart';
+import 'package:unpub/src/store/meta_store.dart';
+import 'package:unpub/src/store/package_store.dart';
+import 'package:unpub/src/webapi_models.dart';
+
+import 'auth/auth_middleware.dart';
+import 'auth/authenticator.dart';
+import 'logging.dart';
+import 'request_logger.dart';
 import 'static/index.html.dart' as index_html;
 import 'static/main.dart.js.dart' as main_dart_js;
+import 'utils.dart';
 
 part 'app.g.dart';
 
-class App {
-  static const proxyOriginHeader = "proxy-origin";
-  static const bearerPrefix = "Bearer";
+final _log = Logger('unpub.app');
 
+/// How long a single readiness check may take.
+const _healthCheckTimeout = Duration(seconds: 5);
+
+class App {
   /// meta information store
   final MetaStore metaStore;
 
@@ -35,27 +43,23 @@ class App {
   /// upstream url, default: https://pub.dev
   final String upstream;
 
-  /// http(s) proxy to call googleapis (to get uploader email)
-  final String? googleapisProxy;
-  final String? overrideUploaderEmail;
+  /// Establishes the identity behind publishing and uploader requests.
+  final Authenticator authenticator;
 
-  /// A forward proxy uri
-  final Uri? proxy_origin;
+  /// External URL of this server. When null, URLs derive from the request.
+  final Uri? publicUrl;
 
   /// validate if the package can be published
-  ///
-  /// for more details, see: https://github.com/bytedance/unpub#package-validator
   final Future<void> Function(
       Map<String, dynamic> pubspec, String uploaderEmail)? uploadValidator;
 
   App({
     required this.metaStore,
     required this.packageStore,
+    required this.authenticator,
     this.upstream = 'https://pub.dev',
-    this.googleapisProxy,
-    this.overrideUploaderEmail,
     this.uploadValidator,
-    this.proxy_origin,
+    this.publicUrl,
   });
 
   static shelf.Response _okWithJson(Map<String, dynamic> data) =>
@@ -81,86 +85,28 @@ class App {
         }),
       );
 
-  http.Client? _googleapisClient;
-
   String _resolveUrl(shelf.Request req, String reference) {
-    if (proxy_origin != null) {
-      return proxy_origin!.resolve(reference).toString();
-    }
-    String? proxyOriginInHeader = req.headers[proxyOriginHeader];
-    if (proxyOriginInHeader != null) {
-      return Uri.parse(proxyOriginInHeader).resolve(reference).toString();
-    }
-    return req.requestedUri.resolve(reference).toString();
+    return (publicUrl ?? req.requestedUri).resolve(reference).toString();
   }
 
-  Future<String> _getUploaderEmail(shelf.Request req) async {
-    if (overrideUploaderEmail != null) return overrideUploaderEmail!;
-
-    var authHeader = req.headers[HttpHeaders.authorizationHeader];
-    if (authHeader == null) throw 'missing authorization header';
-
-    var type = authHeader.split(' ').first;
-    var token = authHeader.split(' ').last;
-    if (Platform.environment.containsKey('UPLOAD_TOKEN') &&
-        Platform.environment.containsKey('UPLOAD_EMAIL') &&
-        type.startsWith(bearerPrefix) &&
-        token.endsWith(Platform.environment['UPLOAD_TOKEN']!)) {
-      return Platform.environment['UPLOAD_EMAIL']!;
-    }
-
-    if (_googleapisClient == null) {
-      if (googleapisProxy != null) {
-        _googleapisClient = IOClient(HttpClient()
-          ..findProxy = (url) => HttpClient.findProxyFromEnvironment(url,
-              environment: {"https_proxy": googleapisProxy!}));
-      } else {
-        _googleapisClient = http.Client();
-      }
-    }
-
-    var info =
-        await Oauth2Api(_googleapisClient!).tokeninfo(accessToken: token);
-    if (info.email == null) throw 'fail to get google account email';
-    return info.email!;
+  /// The uploader email of a request that passed [authMiddleware].
+  ///
+  /// Throws when a route is missing authentication, so it fails closed.
+  String _getUploaderEmail(shelf.Request req) {
+    var principal = principalOf(req);
+    if (principal == null) throw 'request is not authenticated';
+    return principal.email;
   }
 
-  Future<HttpServer> serve([String host = '0.0.0.0', int port = 4000]) async {
-    var pipline = const shelf.Pipeline()
-        .addMiddleware(corsHeaders())
-        .addMiddleware(shelf.logRequests());
+  /// The complete request handler, including all middleware.
+  shelf.Handler get handler => const shelf.Pipeline()
+      .addMiddleware(corsHeaders())
+      .addMiddleware(requestLogger())
+      .addMiddleware(authMiddleware(authenticator))
+      .addHandler(router.call);
 
-    if (Platform.environment.containsKey('ALLOWED_TOKENS')) {
-      pipline = pipline.addMiddleware((innerHandler) => (request) async {
-            if (!request.headers.containsKey(HttpHeaders.authorizationHeader) ||
-                request.headers[HttpHeaders.authorizationHeader] == null ||
-                request.headers[HttpHeaders.authorizationHeader]!.isEmpty) {
-              return shelf.Response(HttpStatus.unauthorized);
-            }
-            final authHeader =
-                request.headers[HttpHeaders.authorizationHeader]!;
-            if (!authHeader.startsWith(bearerPrefix) ||
-                authHeader.split(" ").length != 2) {
-              return shelf.Response(HttpStatus.unauthorized);
-            }
-            final token = authHeader.split(" ")[1];
-            final allowedTokens =
-                (Platform.environment['ALLOWED_TOKENS'] ?? '').split(',');
-            if (!allowedTokens.contains(token)) {
-              return shelf.Response(HttpStatus.unauthorized);
-            }
-            return innerHandler(request);
-          });
-    }
-
-    var handler = pipline.addHandler((req) async {
-      // Return 404 by default
-      // https://github.com/google/dart-neats/issues/1
-      var res = await router.call(req);
-      return res;
-    });
-    var server = await shelf_io.serve(handler, host, port);
-    return server;
+  Future<HttpServer> serve([String host = '0.0.0.0', int port = 4000]) {
+    return shelf_io.serve(handler, host, port);
   }
 
   Map<String, dynamic> _versionToJson(UnpubVersion item, shelf.Request req) {
@@ -176,11 +122,44 @@ class App {
 
   bool isPubClient(shelf.Request req) {
     var ua = req.headers[HttpHeaders.userAgentHeader];
-    print(ua);
     return ua != null && ua.toLowerCase().contains('dart pub');
   }
 
   Router get router => _$AppRouter(this);
+
+  @Route.get('/healthz')
+  Future<shelf.Response> healthz(shelf.Request req) async {
+    return _okWithJson({'status': 'ok'});
+  }
+
+  @Route.get('/readyz')
+  Future<shelf.Response> readyz(shelf.Request req) async {
+    var results = await Future.wait([
+      _runCheck(metaStore.checkHealth),
+      _runCheck(packageStore.checkHealth),
+    ]);
+    var checks = {'mongo': results[0], 'storage': results[1]};
+    var ready = results.every((result) => result['status'] == 'ok');
+    return shelf.Response(
+      ready ? HttpStatus.ok : HttpStatus.serviceUnavailable,
+      headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
+      body: json.encode({
+        'status': ready ? 'ok' : 'unavailable',
+        'checks': checks,
+      }),
+    );
+  }
+
+  static Future<Map<String, String>> _runCheck(
+      Future<void> Function() check) async {
+    try {
+      await check().timeout(_healthCheckTimeout);
+      return {'status': 'ok'};
+    } catch (err) {
+      _log.warning('readiness check failed', err);
+      return {'status': 'error', 'error': '$err'};
+    }
+  }
 
   @Route.get('/api/packages/<name>')
   Future<shelf.Response> getVersions(shelf.Request req, String name) async {
@@ -212,8 +191,8 @@ class App {
     // Important: + -> %2B, should be decoded here
     try {
       version = Uri.decodeComponent(version);
-    } catch (err) {
-      print(err);
+    } on ArgumentError catch (err) {
+      _log.fine('cannot decode version "$version"', err);
     }
 
     var package = await metaStore.queryPackage(name);
@@ -268,7 +247,7 @@ class App {
   @Route.post('/api/packages/versions/newUpload')
   Future<shelf.Response> upload(shelf.Request req) async {
     try {
-      var uploader = await _getUploaderEmail(req);
+      var uploader = _getUploaderEmail(req);
 
       var contentType = req.headers['content-type'];
       if (contentType == null) throw 'invalid content type';
@@ -375,7 +354,9 @@ class App {
       // TODO: Upload docs
       return shelf.Response.found(
           _resolveUrl(req, '/api/packages/versions/newUploadFinish'));
-    } catch (err) {
+    } catch (err, stackTrace) {
+      _log.warning(
+          LogEvent('upload rejected', {'reason': '$err'}), null, stackTrace);
       return shelf.Response.found(_resolveUrl(
           req, '/api/packages/versions/newUploadFinish?error=$err'));
     }
@@ -394,7 +375,7 @@ class App {
   Future<shelf.Response> addUploader(shelf.Request req, String name) async {
     var body = await req.readAsString();
     var email = Uri.splitQueryString(body)['email']!; // TODO: null
-    var operatorEmail = await _getUploaderEmail(req);
+    var operatorEmail = _getUploaderEmail(req);
     var package = await metaStore.queryPackage(name);
 
     if (package?.uploaders?.contains(operatorEmail) == false) {
@@ -412,7 +393,7 @@ class App {
   Future<shelf.Response> removeUploader(
       shelf.Request req, String name, String email) async {
     email = Uri.decodeComponent(email);
-    var operatorEmail = await _getUploaderEmail(req);
+    var operatorEmail = _getUploaderEmail(req);
     var package = await metaStore.queryPackage(name);
 
     // TODO: null
