@@ -1,0 +1,188 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:async/async.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:minio/minio.dart';
+import 'package:path/path.dart' as path;
+import 'package:test/test.dart';
+import 'package:unpub/unpub.dart';
+
+/// `host:port` of an S3 compatible service for the integration tests.
+final s3Endpoint = Platform.environment['UNPUB_TEST_S3_ENDPOINT'];
+const s3Bucket = 'dart-pub-test';
+final s3AccessKey =
+    Platform.environment['UNPUB_TEST_S3_ACCESS_KEY'] ?? 'rustfsadmin';
+final s3SecretKey =
+    Platform.environment['UNPUB_TEST_S3_SECRET_KEY'] ?? 'rustfsadmin';
+
+const mockCredentials =
+    AwsCredentials(accessKeyId: 'key', secretAccessKey: 'secret');
+
+void main() {
+  group('aws credentials', () {
+    test('explicit values win over the environment', () async {
+      var credentials = await AwsCredentials.resolve(
+        accessKeyId: 'specialKey',
+        secretAccessKey: 'specialSecret',
+        environment: {
+          'AWS_ACCESS_KEY_ID': 'env-key',
+          'AWS_SECRET_ACCESS_KEY': 'env-secret',
+        },
+      );
+      expect(credentials.accessKeyId, 'specialKey');
+      expect(credentials.secretAccessKey, 'specialSecret');
+    });
+
+    test('read from the environment', () async {
+      var credentials = await AwsCredentials.resolve(environment: {
+        'AWS_ACCESS_KEY_ID': 'special-key-id',
+        'AWS_SECRET_ACCESS_KEY': 'special-access-key',
+        'AWS_SESSION_TOKEN': 'special-session',
+      });
+      expect(credentials.accessKeyId, 'special-key-id');
+      expect(credentials.secretAccessKey, 'special-access-key');
+      expect(credentials.sessionToken, 'special-session');
+    });
+
+    test('fetched from the ecs container endpoint', () async {
+      late Uri requested;
+      var client = MockClient((request) async {
+        requested = request.url;
+        return http.Response(
+          json.encode({
+            'AccessKeyId': 'container-creds-key',
+            'SecretAccessKey': 'container-creds-secret',
+            'Token': 'container-creds-token',
+          }),
+          200,
+        );
+      });
+
+      var credentials = await AwsCredentials.resolve(
+        environment: {'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI': '/creds/1'},
+        httpClient: client,
+      );
+
+      expect(requested.toString(), 'http://169.254.170.2/creds/1');
+      expect(credentials.accessKeyId, 'container-creds-key');
+      expect(credentials.secretAccessKey, 'container-creds-secret');
+      expect(credentials.sessionToken, 'container-creds-token');
+    });
+
+    test('missing credentials are an error', () {
+      expect(AwsCredentials.resolve(environment: {}),
+          throwsA(isA<ArgumentError>()));
+    });
+  });
+
+  group('region', () {
+    test('taken from the argument', () {
+      var store = S3Store(s3Bucket,
+          region: 'us-east-1', credentials: mockCredentials, environment: {});
+      expect(store.region, 'us-east-1');
+    });
+
+    test('taken from the environment', () {
+      var store = S3Store(s3Bucket,
+          credentials: mockCredentials,
+          environment: {'AWS_DEFAULT_REGION': 'eu-west-1'});
+      expect(store.region, 'eu-west-1');
+    });
+
+    test('is required', () {
+      expect(
+        () => S3Store(s3Bucket, credentials: mockCredentials, environment: {}),
+        throwsA(isA<ArgumentError>().having((e) => e.message, 'message',
+            'Could not determine a default region for aws.')),
+      );
+    });
+  });
+
+  group('against an s3 service', () {
+    late Minio minio;
+
+    setUpAll(() async {
+      if (s3Endpoint == null) return;
+      minio = createMinio(s3AccessKey, s3SecretKey);
+      if (!await minio.bucketExists(s3Bucket)) {
+        await minio.makeBucket(s3Bucket);
+      }
+    });
+
+    test('upload and download with the default path', () async {
+      var store = S3Store(s3Bucket, minio: minio);
+      await store.upload('test_package', '1.0.0', testPackageData);
+      expect(await collectBytes(store.download('test_package', '1.0.0')),
+          testPackageData);
+
+      var stat = await minio.statObject(
+          s3Bucket, 'test_package/test_package-1.0.0.tar.gz');
+      expect(stat.size, testPackageData.length);
+    });
+
+    test('upload and download with a custom path', () async {
+      var store =
+          S3Store(s3Bucket, minio: minio, getObjectPath: newFilePathFunc());
+      await store.upload('test_package', '2.0.0', testPackageData2);
+      expect(await collectBytes(store.download('test_package', '2.0.0')),
+          testPackageData2);
+      await minio.statObject(
+          s3Bucket, newFilePathFunc()('test_package', '2.0.0'));
+    });
+
+    test('checkHealth passes for an existing bucket', () async {
+      await S3Store(s3Bucket, minio: minio).checkHealth();
+    });
+
+    test('checkHealth fails for a missing bucket', () async {
+      expect(S3Store('dart-pub-missing', minio: minio).checkHealth(),
+          throwsA(isA<StateError>()));
+    });
+
+    test('checkHealth fails for wrong credentials', () async {
+      var bad = createMinio('wrong-access-key', 'wrong-secret-key');
+      expect(S3Store(s3Bucket, minio: bad).checkHealth(), throwsA(anything));
+    });
+  }, skip: s3Endpoint == null ? 'UNPUB_TEST_S3_ENDPOINT is not set' : false);
+}
+
+Minio createMinio(String accessKey, String secretKey) {
+  var endpoint = Uri.parse('http://$s3Endpoint');
+  return Minio(
+    endPoint: endpoint.host,
+    port: endpoint.port,
+    useSSL: false,
+    region: 'us-east-1',
+    accessKey: accessKey,
+    secretKey: secretKey,
+  );
+}
+
+const testPackageData = [
+  0x8b, 0x1f, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x03, //
+  0x02, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 //
+];
+
+// A tar.gz file with a `hello.txt` file that has `hello` written inside.
+const testPackageData2 = [
+  31, 139, 8, 0, 4, 81, 79, 97, 0, 3, 237, 207, 73, 10, 128, 48, 12, 5, //
+  80, 215, 158, 34, 39, 144, 84, 99, 123, 30, 209, 138, 139, 98, 193, 214, //
+  233, 246, 142, 116, 37, 238, 84, 132, 188, 205, 39, 16, 194, 79, 163, //
+  141, 177, 137, 159, 124, 244, 28, 68, 148, 68, 176, 165, 82, 98, 79, 76, //
+  143, 249, 36, 65, 144, 72, 51, 153, 99, 38, 17, 80, 144, 162, 60, 2, //
+  124, 176, 83, 208, 59, 95, 116, 107, 149, 210, 26, 237, 188, 30, 116, //
+  235, 108, 123, 177, 183, 174, 213, 245, 205, 157, 227, 17, 8, 249, 19, //
+  141, 29, 171, 57, 254, 186, 5, 99, 140, 177, 183, 45, 78, 193, 149, 248, //
+  0, 8, 0, 0,
+];
+
+String Function(String, String) newFilePathFunc() {
+  return (String package, String version) {
+    var grp = package[0];
+    var subgrp = package.substring(0, 2);
+    return path.join('packages', grp, subgrp, package, 'versions',
+        '$package-$version.tar.gz');
+  };
+}
