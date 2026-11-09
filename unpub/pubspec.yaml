@@ -21,6 +21,7 @@ dependencies:
   minio: ^3.5.8
   mongo_dart: ^0.10.10
   path: ^1.9.1
+  pointycastle: ^4.0.0
   pub_semver: ^2.2.1
   shelf: ^1.4.3
   shelf_cors_headers: ^0.1.5
