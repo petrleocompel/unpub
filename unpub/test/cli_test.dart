@@ -390,7 +390,10 @@ void main() {
       expect(result.exitCode, 1);
       expect('${result.stdout}${result.stderr}', isNot(contains('hunter2')));
     }, timeout: const Timeout(Duration(minutes: 2)));
-  });
+  },
+      // Every step is a separate `dart run`, which takes several seconds on
+      // a CI runner, so the default timeout of 30 seconds is too short.
+      timeout: const Timeout(Duration(minutes: 3)));
 
   group('serve', () {
     late Directory directory;
