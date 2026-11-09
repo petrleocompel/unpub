@@ -425,6 +425,31 @@ void main() {
       expect(second.headers['etag'], '"$hash"');
     });
 
+    test('an archive that cannot be replaced is immutable', () async {
+      await publish('1.0.0');
+      final reply = await send('GET', tarball);
+      expect(reply.headers['cache-control'],
+          'public, max-age=31536000, immutable');
+    });
+
+    test('an archive that can be replaced is cached briefly', () async {
+      await publish('1.0.0');
+      final replaceable =
+          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final reply = await send('GET', tarball, using: replaceable);
+      expect(reply.headers['cache-control'], 'public, max-age=60');
+    });
+
+    test('a private registry ignores requireVersionBump', () async {
+      await publish('1.0.0');
+      final private = buildApp(
+          readAccess: ReadAccess.authenticated,
+          publish: const PublishConfig(requireVersionBump: false));
+      final reply =
+          await send('GET', tarball, bearer: ownerToken, using: private);
+      expect(reply.headers['cache-control'], 'private, no-store');
+    });
+
     test('an archive without a stored hash has no validator', () async {
       await publish('1.0.0');
       await db.collection(packageCollection).updateOne(

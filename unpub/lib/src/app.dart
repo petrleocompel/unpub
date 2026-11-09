@@ -238,11 +238,18 @@ class App {
     return _okWithJson(body(), headers: headers);
   }
 
+  /// An archive can be cached for good only if nothing can replace it, which
+  /// `publish.requireVersionBump: false` allows.
+  String get _archiveCacheControl {
+    if (!_isPublicRead) return 'private, no-store';
+    return publishPolicy.config.requireVersionBump
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=60';
+  }
+
   /// The headers of an archive whose hash is [hash], if known.
   Map<String, String> _archiveHeaders(String? hash) => {
-        HttpHeaders.cacheControlHeader: _isPublicRead
-            ? 'public, max-age=31536000, immutable'
-            : 'private, no-store',
+        HttpHeaders.cacheControlHeader: _archiveCacheControl,
         if (hash != null) HttpHeaders.etagHeader: '"$hash"',
       };
 
