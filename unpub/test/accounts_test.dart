@@ -1034,6 +1034,21 @@ void main() {
           HttpStatus.ok);
     });
 
+    test('a limiter with no room left answers 429', () async {
+      final full =
+          buildApp(limiter: LoginRateLimiter(maxFailures: 1, maxKeys: 2));
+      Future<Reply> attemptOn(String ip) => send('POST', '/webapi/login',
+          body: {'email': 'r@b.c', 'password': 'wrong-pass'},
+          headers: {'x-forwarded-for': ip},
+          using: full);
+
+      expect((await attemptOn('10.0.0.1')).status, HttpStatus.unauthorized);
+      final refused = await attemptOn('10.0.0.2');
+      expect(refused.status, HttpStatus.tooManyRequests);
+      expect(refused.errorCode, 'rate_limited');
+      expect(refused.headers['retry-after'], isNotNull);
+    });
+
     test('a malformed request does not use up attempts', () async {
       for (var i = 0; i < 5; i++) {
         expect(

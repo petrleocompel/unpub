@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:logging/logging.dart';
 import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
@@ -378,6 +379,139 @@ void main() {
       // Only the successful attempt itself is taken back.
       fail('10.0.0.1', 'other@b.c');
       expect(limiter.acquire('10.0.0.1', 'another@b.c'), isNotNull);
+    });
+
+    group('at capacity', () {
+      const window = Duration(minutes: 15);
+      const refused = Duration(minutes: 1);
+
+      LoginRateLimiter limited(int maxFailures, int maxKeys) =>
+          LoginRateLimiter(
+              maxFailures: maxFailures,
+              maxKeys: maxKeys,
+              window: window,
+              clock: () => now);
+
+      void flood(LoginRateLimiter limiter, int requests) {
+        for (var i = 0; i < requests; i++) {
+          limiter.acquire('flood-$i', 'flood-$i@b.c');
+        }
+      }
+
+      test('a flood past capacity does not unlock an email', () {
+        final limiter = limited(3, 100);
+        for (var i = 0; i < 3; i++) {
+          limiter.acquire('10.0.0.$i', 'victim@b.c');
+        }
+        flood(limiter, 1000);
+        expect(limiter.acquire('10.9.9.9', 'victim@b.c'), window);
+      });
+
+      test('a flood past capacity does not unlock an address', () {
+        final limiter = limited(3, 100);
+        for (var i = 0; i < 3; i++) {
+          limiter.acquire('10.0.0.1', 'user$i@b.c');
+        }
+        flood(limiter, 1000);
+        expect(limiter.acquire('10.0.0.1', 'new@b.c'), window);
+      });
+
+      test('a key near the limit is kept and a low one is forgotten', () {
+        final limiter = limited(4, 100);
+        for (var i = 0; i < 2; i++) {
+          limiter.acquire('near-$i', 'near@b.c');
+        }
+        limiter.acquire('low', 'low@b.c');
+        flood(limiter, 1000);
+
+        // Two more reach the limit only if the first two are remembered.
+        limiter.acquire('other-1', 'near@b.c');
+        limiter.acquire('other-2', 'near@b.c');
+        expect(limiter.acquire('other-3', 'near@b.c'), isNotNull);
+
+        for (var i = 0; i < 3; i++) {
+          limiter.acquire('other-low-$i', 'low@b.c');
+        }
+        expect(limiter.acquire('other-low-3', 'low@b.c'), isNull);
+      });
+
+      test('forgets flood keys before keys with more attempts', () {
+        final limiter = limited(10, 100);
+        for (var i = 0; i < 4; i++) {
+          limiter.acquire('near-$i', 'partly@b.c');
+        }
+        flood(limiter, 1000);
+        for (var i = 0; i < 6; i++) {
+          expect(limiter.acquire('other-$i', 'partly@b.c'), isNull);
+        }
+        expect(limiter.acquire('other-6', 'partly@b.c'), isNotNull);
+      });
+
+      test('expired keys make room', () {
+        final limiter = limited(1, 4);
+        limiter.acquire('a', 'a@b.c');
+        limiter.acquire('b', 'b@b.c');
+        now = now.add(window);
+        expect(limiter.acquire('c', 'c@b.c'), isNull);
+      });
+
+      group('with nothing to forget', () {
+        late List<LogRecord> warnings;
+
+        setUp(() {
+          warnings = [];
+          final subscription = Logger.root.onRecord
+              .where((record) => record.level == Level.WARNING)
+              .listen(warnings.add);
+          addTearDown(subscription.cancel);
+        });
+
+        test('refuses new keys and recovers after the window', () {
+          final limiter = limited(1, 4);
+          expect(limiter.acquire('a', 'a@b.c'), isNull);
+          expect(limiter.acquire('b', 'b@b.c'), isNull);
+
+          expect(limiter.acquire('c', 'c@b.c'), refused);
+          expect(limiter.acquire('c', 'c@b.c'), refused);
+
+          now = now.add(window);
+          expect(limiter.acquire('c', 'c@b.c'), isNull);
+        });
+
+        test('refuses a known email from a new address', () {
+          final limiter = limited(2, 2);
+          expect(limiter.acquire('a', 'a@b.c'), isNull);
+          expect(limiter.acquire('new', 'a@b.c'), refused);
+        });
+
+        test('still serves keys it already tracks', () {
+          final limiter = limited(2, 2);
+          expect(limiter.acquire('a', 'a@b.c'), isNull);
+          expect(limiter.acquire('a', 'a@b.c'), isNull);
+          expect(limiter.acquire('a', 'a@b.c'), window);
+        });
+
+        test('warns once a minute', () async {
+          final limiter = limited(1, 2);
+          limiter.acquire('a', 'a@b.c');
+
+          for (var i = 0; i < 5; i++) {
+            limiter.acquire('new-$i', 'new-$i@b.c');
+          }
+          await pumpEventQueue();
+          expect(warnings, hasLength(1));
+
+          now = now.add(const Duration(seconds: 59));
+          limiter.acquire('later', 'later@b.c');
+          await pumpEventQueue();
+          expect(warnings, hasLength(1));
+
+          now = now.add(const Duration(seconds: 1));
+          limiter.acquire('later', 'later@b.c');
+          await pumpEventQueue();
+          expect(warnings, hasLength(2));
+        });
+      });
     });
   });
 }
