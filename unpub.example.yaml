@@ -1,0 +1,54 @@
+# Example unpub configuration. Copy to unpub.yaml and adjust.
+#
+# Every key can be overridden by an environment variable named
+# UNPUB_<SECTION>_<KEY>, for example UNPUB_MONGO_URI, UNPUB_SERVER_PORT or
+# UNPUB_STORAGE_S3_BUCKET. CamelCase keys take underscores: server.publicUrl is
+# UNPUB_SERVER_PUBLIC_URL. Prefer the environment for secrets.
+
+server:
+  host: 0.0.0.0
+  port: 4000
+  # External URL of the server. Required behind a reverse proxy, because it
+  # builds the archive and upload URLs given to `dart pub`. An origin only.
+  # publicUrl: https://pub.example.com
+
+mongo:
+  # The database name is required.
+  uri: mongodb://localhost:27017/dart_pub
+
+storage:
+  # file or s3
+  type: file
+  file:
+    path: unpub-packages
+  # Used when type is s3. Without accessKey and secretKey the credentials come
+  # from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or the ECS task role.
+  # s3:
+  #   bucket: my-packages
+  #   region: eu-west-1
+  #   endpoint: s3.amazonaws.com  # host name only
+  #   port: 9000
+  #   useSSL: true
+  #   pathStyle: false
+  #   accessKey: ...
+  #   secretKey: ...
+  #   sessionToken: ...
+
+upstream:
+  # Packages not found locally redirect here.
+  url: https://pub.dev
+
+auth:
+  # Temporary until user accounts arrive, see docs/ROADMAP.md.
+  # Bearer token required to publish and manage uploaders. Publishing is
+  # disabled while it is unset. Allowed characters: a-z A-Z 0-9 . _ ~ + / = -
+  # bootstrapToken: replace-with-a-long-random-token
+  # Recorded as the uploader of publishes that use the token, and checked
+  # against the uploaders of existing packages.
+  bootstrapEmail: admin@localhost
+
+logging:
+  # finest, finer, fine (debug), config, info, warning, severe (error), shout, off
+  level: info
+  # text or json
+  format: text
