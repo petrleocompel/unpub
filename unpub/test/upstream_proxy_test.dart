@@ -246,6 +246,35 @@ class _PausingRecords implements UpstreamCacheStore {
       inner.deleteArchive(name, version);
 }
 
+/// Locks whose leases are lost as soon as they are taken, as happens to a
+/// holder that stalls past the lease.
+class _LosingLocks extends ObjectLocks {
+  final ObjectLocks inner;
+
+  _LosingLocks(this.inner);
+
+  @override
+  Future<bool> tryAcquire(String digest, String owner) =>
+      inner.tryAcquire(digest, owner);
+
+  @override
+  Future<bool> renew(String digest, String owner) async => false;
+
+  @override
+  Future<void> release(String digest, String owner) =>
+      inner.release(digest, owner);
+}
+
+/// A cache store whose object locks are [_LosingLocks].
+class _LosingLockRecords extends _PausingRecords {
+  _LosingLockRecords(super.inner) {
+    resume.complete();
+  }
+
+  @override
+  ObjectLocks get objectLocks => _LosingLocks(inner.objectLocks);
+}
+
 /// Accepts everything but recording an archive.
 class _FailingRecords extends _PausingRecords {
   _FailingRecords(super.inner);
@@ -1148,6 +1177,22 @@ void main() {
           stalled.resume.complete();
           expect(await expectMatchesValidator(await running), digest);
           expect(await db.collection(objectLocksCollection).findOne(), isNull);
+        });
+
+        test('that is lost before the commit keeps neither object nor record',
+            () async {
+          final digest = upstream.sha(_name, '1.0.0');
+          final losing = buildProxy(
+              cache: _LosingLockRecords(MongoUpstreamCacheStore(db)));
+          addTearDown(losing.close);
+
+          final response = await get(route, using: buildApp(using: losing));
+
+          expect(response.statusCode, 200);
+          expect(await expectMatchesValidator(response), digest);
+          expect(objectFile('1.0.0', digest).existsSync(), isFalse);
+          expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+              isNull);
         });
 
         test('that stays busy leaves the archive served but not kept',

@@ -650,16 +650,24 @@ class UpstreamProxy {
       return false;
     }
     try {
-      return await _commit(name, version, temporary, size, digest,
+      return await _commit(name, version, temporary, size, digest, lock,
           verified: verified, event: event);
     } finally {
       await lock.release();
     }
   }
 
-  Future<bool> _commit(
-      String name, String version, File temporary, int size, String digest,
+  Future<bool> _commit(String name, String version, File temporary, int size,
+      String digest, ObjectLock lock,
       {required bool verified, required Map<String, Object> event}) async {
+    // The lease can run out during a stall. Once it has, reclamation may be
+    // deleting this very object, so neither the store nor the record may be
+    // touched; the client still gets the verified copy from the spool.
+    if (!await lock.confirm()) {
+      _log.warning(LogEvent(
+          'lost the object lock, not keeping upstream archive', event));
+      return false;
+    }
     try {
       if (!await archives.commitUpstream(
           name, version, digest, temporary, size)) {
@@ -668,6 +676,13 @@ class UpstreamProxy {
     } catch (error, stackTrace) {
       _log.warning(LogEvent('failed to store upstream archive', event), error,
           stackTrace);
+      return false;
+    }
+    if (!await lock.confirm()) {
+      // The object may already be gone again; a record naming it would send
+      // the next download to a 404 instead of a fetch.
+      _log.warning(LogEvent(
+          'lost the object lock, not recording upstream archive', event));
       return false;
     }
     try {
@@ -715,9 +730,12 @@ class UpstreamProxy {
     if (lock == null) return;
     try {
       final current = await cache.readArchive(name, version);
-      if (current?.sha256 != record.sha256) {
-        await archives.deleteUpstream(name, version, record.sha256);
-      }
+      // Something recorded the same object again in between: keep it.
+      if (current?.sha256 == record.sha256) return;
+      // Deleting under a lease that ran out could take an object another
+      // instance has just started to refer to.
+      if (!await lock.confirm()) return;
+      await archives.deleteUpstream(name, version, record.sha256);
     } finally {
       await lock.release();
     }
