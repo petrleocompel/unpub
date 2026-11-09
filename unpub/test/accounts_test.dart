@@ -1873,6 +1873,38 @@ void main() {
           (await event('uploader.removed'))['details'], {'email': 'gone@b.c'});
     });
 
+    group('when the database rejects the event', () {
+      setUp(() async {
+        final reply = await db.runCommand({
+          'collMod': auditCollection,
+          'validator': {
+            'actor': {r'$type': 'int'},
+          },
+        });
+        expect(reply['ok'], 1.0, reason: '$reply');
+      });
+
+      test('record throws', () async {
+        expect(audit.record(AuditEvent(actor: 'a', action: 'x', target: 'y')),
+            throwsA(isA<StateError>()));
+      });
+
+      test('recordSafely logs the loss and does not throw', () async {
+        final records = <LogRecord>[];
+        final subscription = Logger.root.onRecord.listen(records.add);
+        addTearDown(subscription.cancel);
+
+        await audit
+            .recordSafely(AuditEvent(actor: 'a', action: 'x.y', target: 'z'));
+        await pumpEventQueue();
+
+        final failure = records.singleWhere((r) => r.level == Level.SEVERE);
+        expect(failure.message, contains('failed to record audit event'));
+        expect(failure.message, contains('x.y'));
+        expect(await auditEvents('x.y'), isEmpty);
+      });
+    });
+
     test('a store that cannot record does not fail the request', () async {
       final failing = App(
         metaStore: MongoStore(db),

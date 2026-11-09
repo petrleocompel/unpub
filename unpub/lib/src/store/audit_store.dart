@@ -78,7 +78,7 @@ class MongoAuditStore extends AuditStore {
 
   @override
   Future<void> record(AuditEvent event) async {
-    await db.collection(auditCollection).insertOne({
+    final result = await db.collection(auditCollection).insertOne({
       'at': event.at,
       'actor': event.actor,
       'action': event.action,
@@ -86,5 +86,9 @@ class MongoAuditStore extends AuditStore {
       'details': event.details,
       'ip': event.ip,
     });
+    if (result.hasWriteErrors) {
+      throw StateError(
+          'cannot store audit event: ${result.writeError?.errmsg}');
+    }
   }
 }
