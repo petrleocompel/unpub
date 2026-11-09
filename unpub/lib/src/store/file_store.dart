@@ -149,6 +149,9 @@ class FileStore extends PackageStore {
       File temporary, int size) async {
     final target = _getUpstreamFile(name, version, digest);
     if (await target.exists()) {
+      // Make it young again: reclamation leaves alone what changed within the
+      // hour, so the object outlives a lease lost right after this.
+      await target.setLastModified(DateTime.now());
       await temporary.delete();
       return true;
     }

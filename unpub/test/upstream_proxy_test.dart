@@ -265,14 +265,30 @@ class _LosingLocks extends ObjectLocks {
       inner.release(digest, owner);
 }
 
-/// A cache store whose object locks are [_LosingLocks].
+/// Locks whose leases hold for the first [renewals] confirmations and are
+/// lost after that, as happens to a holder that stalls later on.
+class _LosingLaterLocks extends _LosingLocks {
+  int renewals;
+
+  _LosingLaterLocks(super.inner, this.renewals);
+
+  @override
+  Future<bool> renew(String digest, String owner) async => renewals-- > 0;
+}
+
+/// A cache store whose object locks are [_LosingLocks], or [_LosingLaterLocks]
+/// when [renewals] is given.
 class _LosingLockRecords extends _PausingRecords {
-  _LosingLockRecords(super.inner) {
+  final int? renewals;
+
+  _LosingLockRecords(super.inner, {this.renewals}) {
     resume.complete();
   }
 
   @override
-  ObjectLocks get objectLocks => _LosingLocks(inner.objectLocks);
+  ObjectLocks get objectLocks => renewals == null
+      ? _LosingLocks(inner.objectLocks)
+      : _LosingLaterLocks(inner.objectLocks, renewals!);
 }
 
 /// Accepts everything but recording an archive.
@@ -1193,6 +1209,37 @@ void main() {
           expect(objectFile('1.0.0', digest).existsSync(), isFalse);
           expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
               isNull);
+        });
+
+        test('that is lost after the commit serves the object, unrecorded',
+            () async {
+          final digest = upstream.sha(_name, '1.0.0');
+          final losing = buildProxy(
+              cache:
+                  _LosingLockRecords(MongoUpstreamCacheStore(db), renewals: 1));
+          addTearDown(losing.close);
+
+          final response = await get(route, using: buildApp(using: losing));
+
+          expect(response.statusCode, 200);
+          expect(await expectMatchesValidator(response), digest);
+          expect(objectFile('1.0.0', digest).existsSync(), isTrue);
+          expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+              isNull);
+        });
+
+        test('storing an object that is already there makes it young again',
+            () async {
+          final digest = upstream.sha(_name, '1.0.0');
+          await bytesOf(await get(route));
+          final object = objectFile('1.0.0', digest);
+          final twoHoursAgo = DateTime.now().subtract(const Duration(hours: 2));
+          object.setLastModifiedSync(twoHoursAgo);
+          await MongoUpstreamCacheStore(db).deleteArchive(_name, '1.0.0');
+
+          await bytesOf(await get(route));
+
+          expect(object.lastModifiedSync().isAfter(twoHoursAgo), isTrue);
         });
 
         test('that stays busy leaves the archive served but not kept',

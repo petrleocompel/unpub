@@ -604,9 +604,12 @@ void main() {
       await cacheUpstream(store, 'foo', '1.0.0', data);
 
       expect(kept.parent.listSync(), hasLength(1));
-      expect(kept.lastModifiedSync().difference(stamp).inSeconds.abs(),
-          lessThan(5),
-          reason: 'the object that was already there is left as it is');
+      expect(kept.readAsBytesSync(), data);
+      expect(
+          kept.lastModifiedSync().isAfter(stamp.add(const Duration(hours: 1))),
+          isTrue,
+          reason: 'the object that was already there is made young again, so '
+              'that reclamation leaves it alone for another hour');
     });
 
     test('never serves a file at the mutable path of earlier commits',

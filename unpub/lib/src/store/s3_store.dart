@@ -190,8 +190,8 @@ class S3Store extends PackageStore {
   }
 
   /// Streams the file, so that its size does not matter. Storing the same
-  /// digest twice stores the same bytes. [temporary] stays where it is, for
-  /// the caller to delete.
+  /// digest twice stores the same bytes, and makes the object young again for
+  /// reclamation. [temporary] stays where it is, for the caller to delete.
   @override
   Future<bool> commitUpstream(String name, String version, String digest,
       File temporary, int size) async {

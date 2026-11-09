@@ -679,11 +679,16 @@ class UpstreamProxy {
       return false;
     }
     if (!await lock.confirm()) {
-      // The object may already be gone again; a record naming it would send
-      // the next download to a 404 instead of a fetch.
+      // No record: one naming an object reclamation may be taking would send
+      // the next download to a 404 instead of a fetch. The object itself was
+      // just written or made young again, so reclamation leaves it alone for
+      // an hour, and the file store has already consumed the spool.
       _log.warning(LogEvent(
           'lost the object lock, not recording upstream archive', event));
-      return false;
+      if (await archives.upstreamCached(name, version, digest)) return true;
+      if (await temporary.exists()) return false;
+      throw const UpstreamException(
+          'the upstream archive was reclaimed while being stored, try again');
     }
     try {
       await cache.writeArchive(UpstreamArchiveRecord(
