@@ -445,12 +445,13 @@ class UpstreamProxy {
   }
 
   /// The hash a client with this archive would hold, without asking the
-  /// upstream: what the listing says, or else what was kept.
+  /// upstream: what the listing says, or else what is still kept.
   Future<String?> knownSha256(String name, String version) async {
     final listed = (await _cachedListing(name))?.sha256Of(version);
     if (listed != null) return listed;
     final record = await cache.readArchive(name, version);
-    return record != null && record.verified ? record.sha256 : null;
+    if (record == null || !record.verified) return null;
+    return await _isStored(name, version, record.sha256) ? record.sha256 : null;
   }
 
   Future<UpstreamListing?> _cachedListing(String name) async {

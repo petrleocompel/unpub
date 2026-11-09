@@ -237,6 +237,15 @@ class _PausingRecords implements UpstreamCacheStore {
       inner.deleteArchive(name, version);
 }
 
+/// Accepts everything but recording an archive.
+class _FailingRecords extends _PausingRecords {
+  _FailingRecords(super.inner);
+
+  @override
+  Future<void> writeArchive(UpstreamArchiveRecord record) =>
+      throw StateError('record write failed');
+}
+
 String sha256Of(List<int> bytes) => crypto.sha256.convert(bytes).toString();
 
 void main() {
@@ -1068,6 +1077,46 @@ void main() {
         expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
         expect(legacy.existsSync(), isTrue);
         expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+      });
+
+      test('a failed record write never serves new bytes as the old ones',
+          () async {
+        final digestA = upstream.sha(_name, '1.0.0');
+        await bytesOf(await get(route));
+        await cachedFile('1.0.0').delete();
+
+        // The upstream now offers other bytes, and no hash to check them by.
+        upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
+        final digestB = upstream.sha(_name, '1.0.0');
+        upstream.sendHashes = false;
+        upstream.listingVersion = 'b';
+        now = now.add(const Duration(minutes: 11));
+        final failing = buildProxy(
+            requireSha256: false,
+            cache: _FailingRecords(MongoUpstreamCacheStore(db)));
+        addTearDown(failing.close);
+        final lenient = buildApp(using: failing);
+        upstream.requests.clear();
+
+        for (final attempt in [1, 2]) {
+          final response = await get(route, using: lenient);
+          expect(response.statusCode, 200);
+          expect(response.headers['etag'], 'W/"$digestB"');
+          expect(await expectMatchesValidator(response), digestB);
+          expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), attempt,
+              reason: 'nothing usable is recorded, so it is fetched again');
+        }
+
+        final record =
+            await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0');
+        expect(record!.sha256, digestA);
+        expect(objectFile('1.0.0', digestA).existsSync(), isFalse);
+        final revalidated = await get(route,
+            using: lenient, headers: {'if-none-match': '"$digestA"'});
+        expect(revalidated.statusCode, 200,
+            reason: 'the record names an object that is gone');
+        expect(revalidated.headers['etag'], 'W/"$digestB"');
+        await bytesOf(revalidated);
       });
 
       group('shared by two instances that interleave', () {
