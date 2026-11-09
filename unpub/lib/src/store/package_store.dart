@@ -3,6 +3,8 @@ import 'dart:io';
 
 int _temporaryFiles = 0;
 
+final _digestPattern = RegExp(r'^[0-9a-f]{64}$');
+
 abstract class PackageStore {
   bool supportsDownloadUrl = false;
 
@@ -29,25 +31,42 @@ abstract class PackageStore {
           'unpub-upstream-$pid-${_temporaryFiles++}-'
           '${DateTime.now().microsecondsSinceEpoch}.tmp');
 
-  /// Keeps [temporary], a verified upstream archive of [size] bytes, apart
-  /// from locally published ones, and returns whether it was kept.
+  /// Keeps [temporary], an upstream archive of [size] bytes whose SHA-256 is
+  /// [digest], apart from locally published ones, and returns whether it was
+  /// kept.
+  ///
+  /// The object is named by [digest] and never changes: committing bytes that
+  /// are already kept leaves them as they are. Which object is current is only
+  /// ever said by the record in the upstream cache.
   ///
   /// A store that keeps this default caches nothing, so the proxy goes to the
   /// upstream on every download.
-  Future<bool> commitUpstream(
-          String name, String version, File temporary, int size) async =>
+  Future<bool> commitUpstream(String name, String version, String digest,
+          File temporary, int size) async =>
       false;
 
-  /// Whether a copy of this upstream archive is kept.
-  Future<bool> upstreamCached(String name, String version) async => false;
+  /// Whether the upstream archive with this [digest] is kept.
+  Future<bool> upstreamCached(
+          String name, String version, String digest) async =>
+      false;
 
-  /// The copy of this upstream archive. Only valid if [upstreamCached].
-  Stream<List<int>> downloadUpstream(String name, String version) {
+  /// The upstream archive with this [digest]. Only valid if [upstreamCached].
+  Stream<List<int>> downloadUpstream(
+      String name, String version, String digest) {
     throw 'downloadUpstream not implemented';
   }
 
-  /// Forgets the copy of this upstream archive, if there is one.
-  Future<void> deleteUpstream(String name, String version) async {}
+  /// Forgets the upstream archive with this [digest], if it is kept.
+  Future<void> deleteUpstream(
+      String name, String version, String digest) async {}
+
+  /// Throws an [ArgumentError] unless [digest] is a lowercase hex SHA-256, for
+  /// stores that build a path or key from one.
+  static void checkDigest(String digest) {
+    if (!_digestPattern.hasMatch(digest)) {
+      throw ArgumentError('not a SHA-256 digest');
+    }
+  }
 
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}

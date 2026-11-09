@@ -524,11 +524,18 @@ class App {
       return _badGateway(error);
     }
     if (archive == null) return _notFound();
+    final headers = {
+      ..._archiveHeaders(null),
+      HttpHeaders.etagHeader: archive.etag,
+    };
+    if (etagMatches(req.headers[HttpHeaders.ifNoneMatchHeader], archive.etag)) {
+      return shelf.Response.notModified(headers: headers);
+    }
     return shelf.Response.ok(
       archive.content,
       headers: {
         HttpHeaders.contentTypeHeader: ContentType.binary.mimeType,
-        ..._archiveHeaders(archive.sha256),
+        ...headers,
       },
     );
   }

@@ -96,18 +96,25 @@ class UpstreamDocument {
 class UpstreamArchive {
   final Stream<List<int>> content;
 
-  /// Lowercase hex SHA-256, when known.
-  final String? sha256;
+  /// Lowercase hex SHA-256 of the bytes in [content].
+  final String digest;
 
-  const UpstreamArchive(this.content, this.sha256);
+  /// Whether [digest] matched a hash published by the upstream.
+  final bool verified;
+
+  const UpstreamArchive(this.content, this.digest, {required this.verified});
+
+  /// Weak for bytes no hash from the upstream vouches for.
+  String get etag => verified ? '"$digest"' : 'W/"$digest"';
 }
 
-/// A fetched and verified archive, kept in the store or else still in [spool].
+/// A fetched archive, kept in the store or else still in [spool].
 class _FetchedArchive {
   final File? spool;
-  final String? sha256;
+  final String digest;
+  final bool verified;
 
-  const _FetchedArchive(this.spool, this.sha256);
+  const _FetchedArchive(this.spool, this.digest, {required this.verified});
 }
 
 /// Limits how many archives are fetched at once.
@@ -467,18 +474,21 @@ class UpstreamProxy {
         'archive:$name@$version', () => _fetchArchive(name, version));
     if (fetched == null) return null;
     return UpstreamArchive(
-        fetched.spool?.openRead() ?? archives.downloadUpstream(name, version),
-        fetched.sha256);
+        fetched.spool?.openRead() ??
+            archives.downloadUpstream(name, version, fetched.digest),
+        fetched.digest,
+        verified: fetched.verified);
   }
 
-  /// The copy of the archive in the store, if it can be served as it is.
+  /// The archive the record points to, if it can be served as it is.
   ///
-  /// A copy with no record of its hash is left for fetching again, and so is
-  /// one the current listing no longer agrees with.
+  /// With no record, or no object under the digest it names, there is nothing
+  /// cached. A copy the current listing no longer agrees with is left for
+  /// fetching again.
   Future<UpstreamArchive?> _keptArchive(String name, String version) async {
-    if (!await _isStored(name, version)) return null;
     final record = await cache.readArchive(name, version);
     if (record == null) return null;
+    if (!await _isStored(name, version, record.sha256)) return null;
 
     final listing = await _cachedListing(name);
     if (listing?.invalidHashes.contains(version) ?? false) return null;
@@ -490,15 +500,16 @@ class UpstreamProxy {
     }
     final isVerified = listed != null || record.verified;
     if (!isVerified && requireSha256) return null;
-    return UpstreamArchive(archives.downloadUpstream(name, version),
-        isVerified ? record.sha256 : null);
+    return UpstreamArchive(
+        archives.downloadUpstream(name, version, record.sha256), record.sha256,
+        verified: isVerified);
   }
 
   /// A store that cannot be read is treated as not holding the archive, so
   /// that the upstream can still serve it.
-  Future<bool> _isStored(String name, String version) async {
+  Future<bool> _isStored(String name, String version, String digest) async {
     try {
-      return await archives.upstreamCached(name, version);
+      return await archives.upstreamCached(name, version, digest);
     } catch (error, stackTrace) {
       _log.warning(
           LogEvent('failed to look up cached archive',
@@ -568,13 +579,14 @@ class UpstreamProxy {
             'the upstream archive did not match its published hash');
       }
 
+      final verified = expected != null;
       if (await _keep(name, version, temporary, size, actual,
-          verified: expected != null)) {
+          verified: verified)) {
         await _delete(temporary);
-        return _FetchedArchive(null, expected);
+        return _FetchedArchive(null, actual, verified: verified);
       }
       _expire(temporary);
-      return _FetchedArchive(temporary, expected);
+      return _FetchedArchive(temporary, actual, verified: verified);
     } catch (_) {
       await _delete(temporary);
       rethrow;
@@ -620,7 +632,8 @@ class UpstreamProxy {
       {required bool verified}) async {
     final event = {'name': name, 'version': version};
     try {
-      if (!await archives.commitUpstream(name, version, temporary, size)) {
+      if (!await archives.commitUpstream(
+          name, version, digest, temporary, size)) {
         return false;
       }
     } catch (error, stackTrace) {
@@ -638,7 +651,8 @@ class UpstreamProxy {
         verified: verified,
       ));
     } catch (error, stackTrace) {
-      // Without a record the copy is fetched again next time.
+      // The record still names the previous object, if any, whose bytes still
+      // match it. Without one the archive is fetched again next time.
       _log.warning(LogEvent('failed to record upstream archive', event), error,
           stackTrace);
     }
@@ -667,7 +681,7 @@ class UpstreamProxy {
     final record = await cache.readArchive(name, version);
     if (record == null || expected == null || record.sha256 == expected) return;
     await cache.deleteArchive(name, version);
-    await archives.deleteUpstream(name, version);
+    await archives.deleteUpstream(name, version, record.sha256);
   }
 
   Future<_Response?> _getJson(String path, {String? etag}) =>

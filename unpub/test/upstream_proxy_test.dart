@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -193,9 +194,47 @@ class _FailingCommitStore extends FileStore {
   _FailingCommitStore(super.baseDir);
 
   @override
-  Future<bool> commitUpstream(
-          String name, String version, File temporary, int size) =>
+  Future<bool> commitUpstream(String name, String version, String digest,
+          File temporary, int size) =>
       throw const FileSystemException('disk full');
+}
+
+/// Stops before writing an archive record, as a stalled instance would.
+class _PausingRecords implements UpstreamCacheStore {
+  final UpstreamCacheStore inner;
+  final reached = Completer<void>();
+  final resume = Completer<void>();
+
+  _PausingRecords(this.inner);
+
+  @override
+  Future<UpstreamCacheEntry?> read(String key) => inner.read(key);
+
+  @override
+  Future<void> write(UpstreamCacheEntry entry, DateTime expiresAt) =>
+      inner.write(entry, expiresAt);
+
+  @override
+  Future<void> touch(String key, DateTime fetchedAt, DateTime expiresAt) =>
+      inner.touch(key, fetchedAt, expiresAt);
+
+  @override
+  Future<void> delete(String key) => inner.delete(key);
+
+  @override
+  Future<UpstreamArchiveRecord?> readArchive(String name, String version) =>
+      inner.readArchive(name, version);
+
+  @override
+  Future<void> writeArchive(UpstreamArchiveRecord record) async {
+    if (!reached.isCompleted) reached.complete();
+    await resume.future;
+    await inner.writeArchive(record);
+  }
+
+  @override
+  Future<void> deleteArchive(String name, String version) =>
+      inner.deleteArchive(name, version);
 }
 
 String sha256Of(List<int> bytes) => crypto.sha256.convert(bytes).toString();
@@ -233,6 +272,7 @@ void main() {
     bool requireSha256 = true,
     int maxArchiveBytes = UpstreamConfig.defaultMaxArchiveBytes,
     int maxConcurrentFetches = UpstreamConfig.defaultMaxConcurrentFetches,
+    UpstreamCacheStore? cache,
   }) =>
       UpstreamProxy(
         config: UpstreamConfig(
@@ -246,7 +286,7 @@ void main() {
           maxArchiveBytes: maxArchiveBytes,
           maxConcurrentFetches: maxConcurrentFetches,
         ),
-        cache: MongoUpstreamCacheStore(db),
+        cache: cache ?? MongoUpstreamCacheStore(db),
         archives: archives ?? FileStore(storage.path),
         clock: () => now,
       );
@@ -280,8 +320,22 @@ void main() {
   Future<List<int>> bytesOf(shelf.Response response) =>
       response.read().expand((chunk) => chunk).toList();
 
-  File cachedFile(String version) => File(
-      path.join(storage.path, 'upstream', _name, '$_name-$version.tar.gz'));
+  File objectFile(String version, String digest) => File(path.join(
+      storage.path, 'upstream', _name, '$_name-$version-$digest.tar.gz'));
+
+  /// Where the bytes the fake upstream holds for [version] are kept.
+  File cachedFile(String version) =>
+      objectFile(version, sha256Of(upstream.packages[_name]![version]!));
+
+  /// The bytes of [response] must be the ones its `ETag` names.
+  Future<String> expectMatchesValidator(shelf.Response response) async {
+    expect(response.statusCode, 200);
+    final digest = RegExp(r'^(?:W/)?"([0-9a-f]{64})"$')
+        .firstMatch(response.headers['etag']!)!
+        .group(1)!;
+    expect(sha256Of(await bytesOf(response)), digest);
+    return digest;
+  }
 
   List<String> filesInStorage() => [
         for (final entity in storage.listSync(recursive: true))
@@ -630,7 +684,7 @@ void main() {
         final response = await get(route, using: lenient());
 
         expect(response.statusCode, 200);
-        expect(response.headers.containsKey('etag'), isFalse);
+        expect(response.headers['etag'], 'W/"${upstream.sha(_name, '1.0.0')}"');
         expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
         expect(cachedFile('1.0.0').existsSync(), isTrue);
       });
@@ -961,7 +1015,7 @@ void main() {
             isNotNull);
       });
 
-      test('that was not verified gets no strong validator', () async {
+      test('that was not verified gets a weak validator', () async {
         upstream.sendHashes = false;
         final relaxed = buildProxy(requireSha256: false);
         addTearDown(relaxed.close);
@@ -971,9 +1025,119 @@ void main() {
         final second = await get(route, using: lenient);
 
         expect(second.statusCode, 200);
-        expect(second.headers.containsKey('etag'), isFalse);
+        expect(second.headers['etag'], 'W/"${upstream.sha(_name, '1.0.0')}"');
         expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
         await bytesOf(second);
+      });
+
+      test('that was not verified honours its weak validator', () async {
+        upstream.sendHashes = false;
+        final relaxed = buildProxy(requireSha256: false);
+        addTearDown(relaxed.close);
+        final lenient = buildApp(using: relaxed);
+        final etag = (await get(route, using: lenient)).headers['etag']!;
+
+        final second =
+            await get(route, using: lenient, headers: {'if-none-match': etag});
+
+        expect(second.statusCode, 304);
+        expect(second.headers['etag'], etag);
+      });
+
+      test('whose object is gone counts as not cached', () async {
+        await bytesOf(await get(route));
+        await cachedFile('1.0.0').delete();
+        upstream.requests.clear();
+
+        final response = await get(route);
+
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+        expect(cachedFile('1.0.0').existsSync(), isTrue);
+      });
+
+      test('a file at the mutable path of earlier commits is ignored',
+          () async {
+        final legacy = File(
+            path.join(storage.path, 'upstream', _name, '$_name-1.0.0.tar.gz'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync('stale bytes of an earlier development build');
+
+        final response = await get(route);
+
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+        expect(legacy.existsSync(), isTrue);
+        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+      });
+
+      group('shared by two instances that interleave', () {
+        late _PausingRecords stalled;
+        late App instanceA;
+        late App instanceB;
+
+        void startInstances({required bool requireSha256}) {
+          stalled = _PausingRecords(MongoUpstreamCacheStore(db));
+          final proxyA =
+              buildProxy(cache: stalled, requireSha256: requireSha256);
+          final proxyB = buildProxy(requireSha256: requireSha256);
+          addTearDown(proxyA.close);
+          addTearDown(proxyB.close);
+          instanceA = buildApp(using: proxyA);
+          instanceB = buildApp(using: proxyB);
+        }
+
+        /// A commits its bytes and stalls before recording them, while B
+        /// commits and records other bytes, and then A records its own.
+        Future<(String, String)> interleave() async {
+          final running = get(route, using: instanceA);
+          await stalled.reached.future;
+          final digestA = upstream.sha(_name, '1.0.0');
+
+          upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
+          await MongoUpstreamCacheStore(db).delete(_name);
+          final digestB =
+              await expectMatchesValidator(await get(route, using: instanceB));
+          expect(digestB, upstream.sha(_name, '1.0.0'));
+          expect(digestB, isNot(digestA));
+
+          stalled.resume.complete();
+          expect(await expectMatchesValidator(await running), digestA);
+          return (digestA, digestB);
+        }
+
+        test('with hashes, every response matches its validator', () async {
+          startInstances(requireSha256: true);
+          final (digestA, digestB) = await interleave();
+
+          // A recorded last, but the listing asks for B, so B is fetched
+          // again rather than A served under either name.
+          for (final instance in [instanceA, instanceB, instanceA]) {
+            expect(
+                await expectMatchesValidator(await get(route, using: instance)),
+                digestB);
+          }
+          expect(
+              (await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'))!
+                  .sha256,
+              digestB);
+          expect(objectFile('1.0.0', digestA).existsSync(), isFalse,
+              reason: 'the listing rules it out, so it is forgotten');
+        });
+
+        test('without hashes, the last record wins with its own bytes',
+            () async {
+          upstream.sendHashes = false;
+          startInstances(requireSha256: false);
+          final (digestA, digestB) = await interleave();
+
+          for (final instance in [instanceA, instanceB]) {
+            final response = await get(route, using: instance);
+            expect(response.headers['etag'], startsWith('W/'));
+            expect(await expectMatchesValidator(response), digestA);
+          }
+          expect(objectFile('1.0.0', digestA).existsSync(), isTrue);
+          expect(objectFile('1.0.0', digestB).existsSync(), isTrue);
+        });
       });
 
       test('that was not verified is refused once a hash is required',
@@ -999,7 +1163,9 @@ void main() {
       await bytesOf(await get(route));
       expect(await FileStore(storage.path).exists(_name, '1.0.0'), isFalse);
       expect(
-          await FileStore(storage.path).upstreamCached(_name, '1.0.0'), isTrue);
+          await FileStore(storage.path)
+              .upstreamCached(_name, '1.0.0', upstream.sha(_name, '1.0.0')),
+          isTrue);
     });
   });
 

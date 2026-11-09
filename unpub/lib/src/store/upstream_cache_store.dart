@@ -36,12 +36,14 @@ class UpstreamCacheEntry {
   });
 }
 
-/// What is known about an archive kept from the upstream.
+/// The one pointer to the archive kept from the upstream for a version: the
+/// object it names is the one served, and it is replaced as a whole, so its
+/// digest always matches the bytes of the object it points to.
 class UpstreamArchiveRecord {
   final String name;
   final String version;
 
-  /// Lowercase hex SHA-256 of the kept bytes.
+  /// Lowercase hex SHA-256 of the kept bytes, which also names the object.
   final String sha256;
 
   /// The size of the archive.

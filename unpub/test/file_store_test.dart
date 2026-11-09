@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:async/async.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart' as unpub;
@@ -11,11 +12,15 @@ const testPackageData = [
   0x02, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 //
 ];
 
+String digestOf(List<int> data) => crypto.sha256.convert(data).toString();
+
 Future<void> cacheUpstream(unpub.PackageStore store, String name,
     String version, List<int> data) async {
   final temporary = await store.upstreamTemporaryFile(name, version);
   await temporary.writeAsBytes(data);
-  expect(await store.commitUpstream(name, version, temporary, data.length),
+  expect(
+      await store.commitUpstream(
+          name, version, digestOf(data), temporary, data.length),
       isTrue);
 }
 
@@ -130,29 +135,72 @@ void main() {
 
   group('upstream namespace', () {
     const data = [1, 2, 3];
+    final digest = digestOf(data);
 
-    test('is under upstream/<name>/', () async {
+    test('is under upstream/<name>/, named by the digest', () async {
       var baseDir = setupFixture('upstream-layout');
       var store = unpub.FileStore(baseDir.path);
       await cacheUpstream(store, 'foo', '1.0.0+1', data);
       expect(
-          File(path.join(baseDir.path, 'upstream', 'foo', 'foo-1.0.0+1.tar.gz'))
+          File(path.join(baseDir.path, 'upstream', 'foo',
+                  'foo-1.0.0+1-$digest.tar.gz'))
               .readAsBytesSync(),
           data);
     });
 
     test('reads back and reports what is cached', () async {
       var store = unpub.FileStore(setupFixture('upstream-read').path);
-      expect(await store.upstreamCached('foo', '1.0.0'), isFalse);
+      expect(await store.upstreamCached('foo', '1.0.0', digest), isFalse);
       await cacheUpstream(store, 'foo', '1.0.0', data);
-      expect(await store.upstreamCached('foo', '1.0.0'), isTrue);
+      expect(await store.upstreamCached('foo', '1.0.0', digest), isTrue);
       expect(
           await store
-              .downloadUpstream('foo', '1.0.0')
+              .downloadUpstream('foo', '1.0.0', digest)
               .expand((b) => b)
               .toList(),
           data);
     });
+
+    test('keeps different bytes of one version side by side', () async {
+      var store = unpub.FileStore(setupFixture('upstream-two').path);
+      await cacheUpstream(store, 'foo', '1.0.0', data);
+      await cacheUpstream(store, 'foo', '1.0.0', [4, 5]);
+      expect(await collectBytes(store.downloadUpstream('foo', '1.0.0', digest)),
+          data);
+      expect(
+          await collectBytes(
+              store.downloadUpstream('foo', '1.0.0', digestOf([4, 5]))),
+          [4, 5]);
+    });
+
+    test('drops the temporary file when the digest is already kept', () async {
+      var baseDir = setupFixture('upstream-repeat');
+      var store = unpub.FileStore(baseDir.path);
+      await cacheUpstream(store, 'foo', '1.0.0', data);
+      await cacheUpstream(store, 'foo', '1.0.0', data);
+      expect(Directory(path.join(baseDir.path, 'upstream', 'foo')).listSync(),
+          hasLength(1));
+    });
+
+    test('never serves a file at the mutable path of earlier commits',
+        () async {
+      var baseDir = setupFixture('upstream-legacy');
+      var store = unpub.FileStore(baseDir.path);
+      File(path.join(baseDir.path, 'upstream', 'foo', 'foo-1.0.0.tar.gz'))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([9]);
+      expect(await store.upstreamCached('foo', '1.0.0', digest), isFalse);
+      expect(
+          await store.upstreamCached('foo', '1.0.0', digestOf([9])), isFalse);
+    });
+
+    for (var bad in ['abc', 'A' * 64, '../${'a' * 61}', 'g' * 64]) {
+      test('refuses "$bad" as a digest', () {
+        var store = unpub.FileStore(setupFixture('upstream-digest').path);
+        expect(() => store.upstreamCached('foo', '1.0.0', bad),
+            throwsArgumentError);
+      });
+    }
 
     test('is apart from published archives, even a custom layout', () async {
       var baseDir = setupFixture('upstream-apart');
@@ -161,7 +209,7 @@ void main() {
       expect(await store.exists('foo', '1.0.0'), isFalse);
       await store.upload('upstream', '1.0.0', [9]);
       expect(await store.exists('upstream', '1.0.0'), isTrue);
-      expect(await store.upstreamCached('upstream', '1.0.0'), isFalse);
+      expect(await store.upstreamCached('upstream', '1.0.0', digest), isFalse);
     });
 
     test('leaves no temporary file behind', () async {
@@ -177,21 +225,21 @@ void main() {
       var temporary = await store.upstreamTemporaryFile('foo', '1.0.0');
       expect(path.dirname(temporary.path),
           path.join(path.absolute(baseDir.path), 'upstream', 'foo'));
-      expect(await store.upstreamCached('foo', '1.0.0'), isFalse);
+      expect(await store.upstreamCached('foo', '1.0.0', digest), isFalse);
     });
 
     test('forgets a cached archive, and tolerates a missing one', () async {
       var store = unpub.FileStore(setupFixture('upstream-delete').path);
-      await store.deleteUpstream('foo', '1.0.0');
+      await store.deleteUpstream('foo', '1.0.0', digest);
       await cacheUpstream(store, 'foo', '1.0.0', data);
-      await store.deleteUpstream('foo', '1.0.0');
-      expect(await store.upstreamCached('foo', '1.0.0'), isFalse);
+      await store.deleteUpstream('foo', '1.0.0', digest);
+      expect(await store.upstreamCached('foo', '1.0.0', digest), isFalse);
     });
 
     test('rejects a name that would escape the directory', () async {
       var store = unpub.FileStore(setupFixture('upstream-escape').path);
-      expect(
-          () => store.upstreamCached('../../x', '1.0.0'), throwsArgumentError);
+      expect(() => store.upstreamCached('../../x', '1.0.0', digest),
+          throwsArgumentError);
     });
   });
 }

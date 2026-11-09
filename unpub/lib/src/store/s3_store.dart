@@ -85,11 +85,13 @@ class S3Store extends PackageStore {
     return key;
   }
 
-  /// The object key of a proxied archive. It has three path segments, while
-  /// the default key of a locally published archive has two.
-  String _getUpstreamKey(String name, String version) {
+  /// The object key of a proxied archive, named by the digest of its bytes.
+  /// It has three path segments, while the default key of a locally published
+  /// archive has two.
+  String _getUpstreamKey(String name, String version, String digest) {
     _checkComponents(name, version);
-    return 'upstream/$name/$name-$version.tar.gz';
+    PackageStore.checkDigest(digest);
+    return 'upstream/$name/$name-$version-$digest.tar.gz';
   }
 
   static void _checkComponents(String name, String version) {
@@ -125,14 +127,15 @@ class S3Store extends PackageStore {
     yield* await _minio.getObject(bucketName, _getObjectKey(name, version));
   }
 
-  /// Streams the file, so that its size does not matter. [temporary] stays
-  /// where it is, for the caller to delete.
+  /// Streams the file, so that its size does not matter. Storing the same
+  /// digest twice stores the same bytes. [temporary] stays where it is, for
+  /// the caller to delete.
   @override
-  Future<bool> commitUpstream(
-      String name, String version, File temporary, int size) async {
+  Future<bool> commitUpstream(String name, String version, String digest,
+      File temporary, int size) async {
     await _minio.putObject(
       bucketName,
-      _getUpstreamKey(name, version),
+      _getUpstreamKey(name, version, digest),
       temporary.openRead().map(_asBytes),
       size: size,
     );
@@ -143,9 +146,11 @@ class S3Store extends PackageStore {
       chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
 
   @override
-  Future<bool> upstreamCached(String name, String version) async {
+  Future<bool> upstreamCached(
+      String name, String version, String digest) async {
     try {
-      await _minio.statObject(bucketName, _getUpstreamKey(name, version),
+      await _minio.statObject(
+          bucketName, _getUpstreamKey(name, version, digest),
           retrieveAcls: false);
       return true;
     } on MinioS3Error catch (error) {
@@ -155,13 +160,15 @@ class S3Store extends PackageStore {
   }
 
   @override
-  Stream<List<int>> downloadUpstream(String name, String version) async* {
-    yield* await _minio.getObject(bucketName, _getUpstreamKey(name, version));
+  Stream<List<int>> downloadUpstream(
+      String name, String version, String digest) async* {
+    yield* await _minio.getObject(
+        bucketName, _getUpstreamKey(name, version, digest));
   }
 
   @override
-  Future<void> deleteUpstream(String name, String version) =>
-      _minio.removeObject(bucketName, _getUpstreamKey(name, version));
+  Future<void> deleteUpstream(String name, String version, String digest) =>
+      _minio.removeObject(bucketName, _getUpstreamKey(name, version, digest));
 
   /// Verifies the bucket exists and accepts writes and deletes, by storing and
   /// removing a probe object.

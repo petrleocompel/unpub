@@ -16,10 +16,14 @@ class FileStore extends PackageStore {
   File _getTarballFile(String name, String version) =>
       _inBaseDir(getFilePath?.call(name, version) ?? '$name-$version.tar.gz');
 
-  /// A proxied archive, under `upstream/`. A locally published archive never
-  /// lands there, whatever the name, because it has no directory of its own.
-  File _getUpstreamFile(String name, String version) =>
-      _inBaseDir(path.join('upstream', name, '$name-$version.tar.gz'));
+  /// A proxied archive, under `upstream/`, named by the digest of its bytes.
+  /// A locally published archive never lands there, whatever the name, because
+  /// it has no directory of its own.
+  File _getUpstreamFile(String name, String version, String digest) {
+    PackageStore.checkDigest(digest);
+    return _inBaseDir(
+        path.join('upstream', name, '$name-$version-$digest.tar.gz'));
+  }
 
   File _inBaseDir(String relative) {
     final base = path.normalize(path.absolute(baseDir));
@@ -50,31 +54,53 @@ class FileStore extends PackageStore {
   /// partial file is never served.
   @override
   Future<File> upstreamTemporaryFile(String name, String version) async {
-    final file = _getUpstreamFile(name, version);
+    final file = _inBaseDir(path.join('upstream', name, '$name-$version'));
     await file.parent.create(recursive: true);
     final stamp = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-    return File('${file.path}.$stamp.tmp');
+    return File('${file.path}.tar.gz.$stamp.tmp');
   }
 
+  /// Identical digests mean identical bytes, so an archive that is already
+  /// there stays and [temporary] is dropped.
   @override
-  Future<bool> commitUpstream(
-      String name, String version, File temporary, int size) async {
-    await temporary.rename(_getUpstreamFile(name, version).path);
+  Future<bool> commitUpstream(String name, String version, String digest,
+      File temporary, int size) async {
+    final target = _getUpstreamFile(name, version, digest);
+    if (await target.exists()) {
+      await temporary.delete();
+      return true;
+    }
+    await _flushToDisk(temporary);
+    await temporary.rename(target.path);
     return true;
   }
 
-  @override
-  Future<bool> upstreamCached(String name, String version) =>
-      _getUpstreamFile(name, version).exists();
+  static Future<void> _flushToDisk(File file) async {
+    final handle = await file.open(mode: FileMode.append);
+    try {
+      await handle.flush();
+    } finally {
+      await handle.close();
+    }
+  }
 
   @override
-  Stream<List<int>> downloadUpstream(String name, String version) =>
-      _getUpstreamFile(name, version).openRead();
+  Future<bool> upstreamCached(String name, String version, String digest) =>
+      _getUpstreamFile(name, version, digest).exists();
 
   @override
-  Future<void> deleteUpstream(String name, String version) async {
-    final file = _getUpstreamFile(name, version);
-    if (await file.exists()) await file.delete();
+  Stream<List<int>> downloadUpstream(
+          String name, String version, String digest) =>
+      _getUpstreamFile(name, version, digest).openRead();
+
+  @override
+  Future<void> deleteUpstream(
+      String name, String version, String digest) async {
+    try {
+      await _getUpstreamFile(name, version, digest).delete();
+    } on PathNotFoundException {
+      // Never kept, or another instance got there first.
+    }
   }
 
   /// Creates [baseDir] if it is missing, and returns whether it did.

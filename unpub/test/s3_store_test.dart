@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:async/async.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:minio/minio.dart';
@@ -222,6 +223,12 @@ void main() {
       });
     }
 
+    test('rejects a digest that is not one', () async {
+      await expectLater(
+          store.upstreamCached('fine', '1.0.0', '../../${'a' * 58}'),
+          throwsArgumentError);
+    });
+
     for (var key in ['a/../b', 'a\x7fb']) {
       test('rejects a custom key of ${json.encode(key)}', () async {
         var custom = S3Store(s3Bucket,
@@ -261,7 +268,8 @@ void main() {
       // The bucket outlives a test run.
       final name = 'proxied_${DateTime.now().microsecondsSinceEpoch}';
       var store = S3Store(s3Bucket, minio: minio);
-      expect(await store.upstreamCached(name, '1.0.0'), isFalse);
+      final digest = crypto.sha256.convert(testPackageData).toString();
+      expect(await store.upstreamCached(name, '1.0.0', digest), isFalse);
 
       final temporary = await store.upstreamTemporaryFile(name, '1.0.0');
       addTearDown(() => temporary.delete());
@@ -270,21 +278,21 @@ void main() {
 
       expect(
           await store.commitUpstream(
-              name, '1.0.0', temporary, testPackageData.length),
+              name, '1.0.0', digest, temporary, testPackageData.length),
           isTrue);
 
       expect(await temporary.exists(), isTrue,
           reason: 'the caller deletes the temporary file');
-      expect(await store.upstreamCached(name, '1.0.0'), isTrue);
+      expect(await store.upstreamCached(name, '1.0.0', digest), isTrue);
       expect(await store.exists(name, '1.0.0'), isFalse);
-      expect(await collectBytes(store.downloadUpstream(name, '1.0.0')),
+      expect(await collectBytes(store.downloadUpstream(name, '1.0.0', digest)),
           testPackageData);
-      var stat =
-          await minio.statObject(s3Bucket, 'upstream/$name/$name-1.0.0.tar.gz');
+      var stat = await minio.statObject(
+          s3Bucket, 'upstream/$name/$name-1.0.0-$digest.tar.gz');
       expect(stat.size, testPackageData.length);
 
-      await store.deleteUpstream(name, '1.0.0');
-      expect(await store.upstreamCached(name, '1.0.0'), isFalse);
+      await store.deleteUpstream(name, '1.0.0', digest);
+      expect(await store.upstreamCached(name, '1.0.0', digest), isFalse);
     });
 
     test('exists reflects the stored objects', () async {
