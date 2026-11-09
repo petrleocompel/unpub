@@ -61,6 +61,7 @@ class UnpubServer {
       await audit.ensureIndexes();
       final service = AccountService(accounts, audit: audit);
       await service.bootstrapAdmin(config.auth.admin);
+      await accounts.reconcileAdminSet(DateTime.now());
       _warnAboutStaticTokens(config.auth);
 
       final app = App(

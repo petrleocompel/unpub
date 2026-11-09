@@ -54,6 +54,7 @@ abstract class _DatabaseCommand extends Command<int> {
       if (!readOnly) {
         await store.ensureIndexes();
         await audit.ensureIndexes();
+        await store.reconcileAdminSet(DateTime.now());
       }
       return await runWith(
           config, connection, AccountService(store, audit: audit));

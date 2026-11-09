@@ -91,11 +91,11 @@ Set `auth.admin.email` and `auth.admin.password` (or `UNPUB_AUTH_ADMIN_EMAIL` an
 | `unpub admin list-users` | List users. |
 | `unpub admin create-token --email <address> --name <label> [--scopes read,publish] [--expires-in 30d]` | Print a new token secret. Lifetimes use `s`, `m`, `h`, `d` or `w`. |
 
-Each takes `--config <path>`. The last enabled administrator cannot be demoted or disabled. The server and these commands take turns through a lock document in the `locks` collection, which needs MongoDB 4.2 or later.
+Each takes `--config <path>`. The last enabled administrator cannot be demoted or disabled. The ids of the enabled administrators are kept in one document, `enabled_admins` in the `admin_set` collection. Taking someone out of it is a single atomic update that refuses to empty it, so the rule holds even when a process stalls or dies partway through. The server and every `unpub admin` command except `list-users` rebuild this document from `users` when they start.
 
 ### HTTP API
 
-JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409, 429 or 503.
+JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409 or 429.
 
 | Endpoint | Description |
 | --- | --- |
@@ -192,7 +192,7 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 - Run `unpub migrate` after creating your first administrator, or use `unpub admin create-user` afterwards: `auth.admin.*` is ignored once any user exists.
 - `auth.bootstrapToken` and `auth.readTokens` keep working but are deprecated. Replace them with personal tokens. Neither these nor personal tokens can manage users over HTTP, so use `unpub admin` or log in.
 - Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
-- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `locks` and `migrations`.
+- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`.
 
 ### Behind a reverse proxy
 

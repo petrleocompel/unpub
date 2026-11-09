@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:mongo_dart/mongo_dart.dart' show Db, where;
+import 'package:mongo_dart/mongo_dart.dart' show Db, ObjectId, where;
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
@@ -79,7 +79,8 @@ void main() {
         'sessions',
         'audit',
         'migrations',
-        'packages'
+        'packages',
+        'admin_set',
       ]) {
         await db.dropCollection(name);
       }
@@ -252,6 +253,24 @@ void main() {
       var result = await admin(['disable', '--email', 'admin@b.c']);
       expect(result.exitCode, 1);
       expect(result.stderr, contains('last enabled administrator'));
+    });
+
+    test('a command rebuilds the admin set before it runs', () async {
+      await admin(['create-user', '--email', 'admin@b.c', '--role', 'admin']);
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      await db
+          .collection('admin_set')
+          .deleteMany(where.eq('_id', 'enabled_admins'));
+
+      final result =
+          await admin(['set-role', '--email', 'a@b.c', '--role', 'publisher']);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      final set = await db
+          .collection('admin_set')
+          .findOne(where.eq('_id', 'enabled_admins'));
+      expect(set!['userIds'],
+          [((await findUser('admin@b.c'))!['_id'] as ObjectId).oid]);
     });
 
     test('an unknown user is reported', () async {

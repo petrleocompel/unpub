@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show max;
 
 import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
@@ -46,7 +45,7 @@ void main() {
       userCollection,
       tokenCollection,
       sessionCollection,
-      lockCollection,
+      adminSetCollection,
       auditCollection,
       packageCollection,
       statsCollection,
@@ -1610,6 +1609,7 @@ void main() {
         final reply = await send('PATCH', '/webapi/users/${admin.id}',
             browser: browser, body: body);
         expect(reply.status, HttpStatus.conflict);
+        expect(reply.errorCode, 'last_admin');
       }
       expect((await store.findUserById(admin.id))!.role, Role.admin);
     });
@@ -1666,12 +1666,17 @@ void main() {
       }
     }
 
-    Future<Map<String, dynamic>?> lock() =>
-        db.collection(lockCollection).findOne(where.eq('_id', 'admin_guard'));
+    Future<Map<String, dynamic>?> adminSet() => db
+        .collection(adminSetCollection)
+        .findOne(where.eq('_id', 'enabled_admins'));
 
-    Future<void> holdLock(DateTime expiresAt) =>
-        db.collection(lockCollection).insertOne(
-            {'_id': 'admin_guard', 'owner': 'other', 'expiresAt': expiresAt});
+    Future<List<String>> setIds() async =>
+        ((await adminSet())?['userIds'] as List? ?? const []).cast<String>();
+
+    Future<List<String>> enabledAdmins() async => [
+          for (final user in await store.listUsers())
+            if (user.isEnabledAdmin) user.id,
+        ];
 
     for (final (name, change)
         in <(String, Future<User> Function(AccountService, User))>[
@@ -1693,6 +1698,9 @@ void main() {
 
         for (var round = 0; round < 10; round++) {
           await db.collection(userCollection).deleteMany(<String, Object>{});
+          await db
+              .collection(adminSetCollection)
+              .deleteMany(<String, Object>{});
           final first = await user('first@b.c', Role.admin);
           final second = await user('second@b.c', Role.admin);
 
@@ -1704,12 +1712,183 @@ void main() {
           expect(
               outcomes, unorderedEquals([HttpStatus.ok, HttpStatus.conflict]),
               reason: 'round $round');
-          expect(await store.countEnabledAdmins(), 1, reason: 'round $round');
+          expect(await enabledAdmins(), hasLength(1), reason: 'round $round');
         }
       });
     }
 
-    test('the state is read again once the guard is held', () async {
+    /// An [AccountService] whose next demotion stops between its two writes,
+    /// as a process does when it is suspended or loses its CPU.
+    (AccountService, Future<void>, void Function()) stalled() {
+      final entered = Completer<void>();
+      final resume = Completer<void>();
+      final service = AccountService(store, beforeAdminUserWrite: () async {
+        entered.complete();
+        await resume.future;
+      });
+      return (service, entered.future, resume.complete);
+    }
+
+    test('a stalled demotion cannot be overtaken by another one', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final (slow, entered, resume) = stalled();
+
+      final demotion = slow.updateUser(first, role: Role.reader);
+      await entered;
+      expect(await setIds(), [second.id]);
+
+      expect(
+          await statusOf(() => accounts.updateUser(second, role: Role.reader)),
+          HttpStatus.conflict);
+      resume();
+      await demotion;
+
+      expect(await enabledAdmins(), [second.id]);
+      expect(await setIds(), [second.id]);
+      expect((await adminSet())!['removing'], isEmpty);
+    });
+
+    test('a rebuild does not bring back a demotion still under way', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final (slow, entered, resume) = stalled();
+
+      final demotion = slow.updateUser(first, role: Role.reader);
+      await entered;
+      await store.reconcileAdminSet(DateTime.now());
+      expect(await setIds(), [second.id]);
+
+      expect(await statusOf(() => accounts.updateUser(second, disabled: true)),
+          HttpStatus.conflict);
+      resume();
+      await demotion;
+      expect(await enabledAdmins(), [second.id]);
+    });
+
+    test('a failed write of the user puts the administrator back', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final failing = AccountService(store,
+          beforeAdminUserWrite: () => Future.error(StateError('write lost')));
+
+      await expectLater(failing.updateUser(first, role: Role.reader),
+          throwsA(isA<StateError>()));
+
+      expect(await enabledAdmins(), unorderedEquals([first.id, second.id]));
+      expect(await setIds(), unorderedEquals([first.id, second.id]));
+      expect((await adminSet())!['removing'], isEmpty);
+      await accounts.updateUser(second, role: Role.reader);
+      expect(await setIds(), [first.id]);
+    });
+
+    test('a process that died mid-demotion heals once its removal ages out',
+        () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final now = DateTime.now();
+      expect(await store.takeFromAdminSet(first.id, now), isTrue);
+
+      await store.reconcileAdminSet(
+          now.add(adminRemovalGrace - const Duration(seconds: 1)));
+      expect(await setIds(), [second.id]);
+
+      await store.reconcileAdminSet(
+          now.add(adminRemovalGrace + const Duration(seconds: 1)));
+      expect(await setIds(), unorderedEquals([first.id, second.id]));
+      expect((await adminSet())!['removing'], isEmpty);
+    });
+
+    test('a rebuild does not undo a removal made after it read the set',
+        () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+
+      await store.reconcileAdminSet(DateTime.now(),
+          beforeReplace: () =>
+              store.takeFromAdminSet(first.id, DateTime.now()).then((_) {}));
+
+      expect(await setIds(), [second.id]);
+    });
+
+    test('a rebuild keeps a user promoted after it read the set', () async {
+      final admin = await user('a@b.c', Role.admin);
+      final promoted = await user('p@b.c', Role.publisher);
+
+      var promotedYet = false;
+      await store.reconcileAdminSet(DateTime.now(), beforeReplace: () async {
+        if (promotedYet) return;
+        promotedYet = true;
+        await store.updateUser(promoted.id, DateTime.now(), role: Role.admin);
+        await store.addToAdminSet(promoted.id);
+      });
+
+      expect(await setIds(), unorderedEquals([admin.id, promoted.id]));
+    });
+
+    test('a rebuild replaces a corrupted set', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final disabled = await user('c@b.c', Role.admin);
+      await store.updateUser(disabled.id, DateTime.now(), disabled: true);
+      await user('d@b.c', Role.publisher);
+      await db
+          .collection(adminSetCollection)
+          .replaceOne(where.eq('_id', 'enabled_admins'), {
+        'userIds': ['ghost', disabled.id],
+        'removing': 'garbage'
+      });
+
+      await store.reconcileAdminSet(DateTime.now());
+
+      expect(await setIds(), unorderedEquals([first.id, second.id]));
+      expect((await adminSet())!['removing'], isEmpty);
+      expect((await adminSet())!['version'], isA<int>());
+    });
+
+    test('an empty or missing set is rebuilt before refusing', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      await db.collection(adminSetCollection).deleteMany(<String, Object>{});
+
+      await accounts.updateUser(first, role: Role.reader);
+
+      expect(await enabledAdmins(), [second.id]);
+      expect(await setIds(), [second.id]);
+    });
+
+    test('an id that is no longer an administrator does not count', () async {
+      final only = await user('a@b.c', Role.admin);
+      await db.collection(adminSetCollection).updateOne(
+          where.eq('_id', 'enabled_admins'),
+          modify.set('userIds', [only.id, '0123456789abcdef01234567']));
+
+      expect(await statusOf(() => accounts.updateUser(only, role: Role.reader)),
+          HttpStatus.conflict);
+      expect((await store.findUserById(only.id))!.isEnabledAdmin, isTrue);
+      expect(await setIds(), [only.id]);
+    });
+
+    test('the last id cannot be taken from the set', () async {
+      final only = await user('a@b.c', Role.admin);
+      final before = (await adminSet())!['version'];
+
+      expect(await store.takeFromAdminSet(only.id, DateTime.now()), isFalse);
+
+      final after = (await adminSet())!;
+      expect(after['version'], before);
+      expect(after['userIds'], [only.id]);
+    });
+
+    test('a refused removal changes nothing', () async {
+      final only = await user('a@b.c', Role.admin);
+      expect(await statusOf(() => accounts.updateUser(only, role: Role.reader)),
+          HttpStatus.conflict);
+      expect(await setIds(), [only.id]);
+      expect((await adminSet())!['removing'] ?? const {}, isEmpty);
+    });
+
+    test('the state is read again before changing anything', () async {
       final admin = await user('a@b.c', Role.admin);
       final stale = await user('p@b.c', Role.publisher);
       await store.updateUser(stale.id, DateTime.now(), role: Role.admin);
@@ -1721,80 +1900,66 @@ void main() {
       expect((await store.findUserById(stale.id))!.role, Role.admin);
     });
 
-    test('the guard is free again after a refused change', () async {
+    test('a change of a non-admin leaves the set alone', () async {
       final admin = await user('a@b.c', Role.admin);
-      expect(
-          await statusOf(() => accounts.updateUser(admin, role: Role.reader)),
-          HttpStatus.conflict);
-      expect(await lock(), isNull);
-    });
-
-    test('a change of a non-admin is not refused by the guard', () async {
-      await user('a@b.c', Role.admin);
       final other = await user('o@b.c', Role.publisher);
+      final before = (await adminSet())!['version'];
       await accounts.updateUser(other, role: Role.reader);
-      expect((await store.findUserById(other.id))!.role, Role.reader);
-      expect(await lock(), isNull);
+      await accounts.updateUser(other, disabled: true);
+      expect((await store.findUserById(other.id))!.disabled, isTrue);
+      expect(await setIds(), [admin.id]);
+      expect((await adminSet())!['version'], before);
     });
 
-    test('waits for a process holding the guard', () async {
+    test('becoming or ceasing to be an enabled admin updates the set',
+        () async {
       final admin = await user('a@b.c', Role.admin);
-      await user('b@b.c', Role.admin);
-      final release = Completer<void>();
-      final holder = store.withAdminGuard(() => release.future);
+      final other = await user('o@b.c', Role.publisher);
 
-      final waiting = accounts.updateUser(admin, role: Role.reader);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      expect((await store.findUserById(admin.id))!.role, Role.admin);
+      await accounts.updateUser(other, role: Role.admin);
+      expect(await setIds(), unorderedEquals([admin.id, other.id]));
 
-      release.complete();
-      await holder;
-      expect((await waiting).role, Role.reader);
+      await accounts.updateUser(other, disabled: true);
+      expect(await setIds(), [admin.id]);
+
+      await accounts.updateUser(other, disabled: false);
+      expect(await setIds(), unorderedEquals([admin.id, other.id]));
+
+      await accounts.updateUser(other, role: Role.publisher);
+      expect(await setIds(), [admin.id]);
     });
 
-    test('takes over a guard whose lease is over', () async {
-      final admin = await user('a@b.c', Role.admin);
+    test('a refusal by the database is not taken for the last admin', () async {
+      final first = await user('a@b.c', Role.admin);
       await user('b@b.c', Role.admin);
-      await holdLock(DateTime.now().subtract(const Duration(seconds: 1)));
-      await accounts.updateUser(admin, role: Role.reader);
-      expect((await store.findUserById(admin.id))!.role, Role.reader);
-      expect(await lock(), isNull);
-    });
-
-    test('gives up on a guard that stays held and changes nothing', () async {
-      final admin = await user('a@b.c', Role.admin);
-      await user('b@b.c', Role.admin);
-      await holdLock(DateTime.now().add(const Duration(hours: 1)));
-      final impatient = AccountService(
-          AccountStore(db, lockWait: const Duration(milliseconds: 50)));
-
-      expect(
-          await statusOf(() => impatient.updateUser(admin, role: Role.reader)),
-          HttpStatus.serviceUnavailable);
-      expect((await store.findUserById(admin.id))!.role, Role.admin);
-      expect((await lock())!['owner'], 'other');
-    });
-
-    test('does not release a guard that someone else took over', () async {
-      await store.withAdminGuard(() async {
-        await db.collection(lockCollection).updateOne(
-            where.eq('_id', 'admin_guard'), modify.set('owner', 'x'));
+      final reply = await db.runCommand({
+        'collMod': adminSetCollection,
+        'validator': {
+          'version': {r'$type': 'string'},
+        },
       });
-      expect((await lock())!['owner'], 'x');
+      expect(reply['ok'], 1.0);
+
+      await expectLater(store.takeFromAdminSet(first.id, DateTime.now()),
+          throwsA(isA<AdminSetException>()));
     });
 
-    test('many first acquisitions do not collide', () async {
-      var inside = 0;
-      var most = 0;
-      await Future.wait([
-        for (var i = 0; i < 8; i++)
-          store.withAdminGuard(() async {
-            most = max(most, ++inside);
-            await Future<void>.delayed(const Duration(milliseconds: 2));
-            inside--;
-          }),
-      ]);
-      expect(most, 1);
+    test('a user the database refuses to change stays an admin', () async {
+      final first = await user('a@b.c', Role.admin);
+      final second = await user('b@b.c', Role.admin);
+      final reply = await db.runCommand({
+        'collMod': userCollection,
+        'validator': {
+          'role': {r'$eq': 'admin'},
+        },
+      });
+      expect(reply['ok'], 1.0);
+
+      await expectLater(accounts.updateUser(first, role: Role.reader),
+          throwsA(isA<StateError>()));
+
+      expect(await setIds(), unorderedEquals([first.id, second.id]));
+      expect((await store.findUserById(first.id))!.role, Role.admin);
     });
   });
 
@@ -2013,7 +2178,12 @@ auth:
       ));
       addTearDown(server.stop);
 
-      expect(await store.findUserByEmail('root@b.c'), isNotNull);
+      final root = (await store.findUserByEmail('root@b.c'))!;
+      expect(
+          (await db
+              .collection(adminSetCollection)
+              .findOne(where.eq('_id', 'enabled_admins')))!['userIds'],
+          [root.id]);
       final messages = records.map((r) => r.message).toList();
       expect(messages, contains(contains('auth.bootstrapToken is deprecated')));
       expect(messages, contains(contains('auth.readTokens is deprecated')));
@@ -2032,6 +2202,35 @@ auth:
           0);
       expect((await indexes(auditCollection)).keys, contains('at_desc'));
     });
+  });
+
+  test('the server rebuilds the admin set when it starts', () async {
+    final admin = await user('a@b.c', Role.admin);
+    await db
+        .collection(adminSetCollection)
+        .replaceOne(where.eq('_id', 'enabled_admins'), {
+      'userIds': const ['ghost']
+    });
+    final server = await UnpubServer.start(Config.parse(
+      '''
+server:
+  host: 127.0.0.1
+  port: 0
+mongo:
+  uri: $testMongoUri
+storage:
+  file:
+    path: ${path.join(storage.path, 'rebuild')}
+''',
+      environment: const {},
+    ));
+    addTearDown(server.stop);
+
+    expect(
+        (await db
+            .collection(adminSetCollection)
+            .findOne(where.eq('_id', 'enabled_admins')))!['userIds'],
+        [admin.id]);
   });
 
   group('cors', () {

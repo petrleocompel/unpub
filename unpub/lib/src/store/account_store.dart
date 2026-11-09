@@ -7,15 +7,22 @@ import 'mongo_indexes.dart';
 final userCollection = 'users';
 final tokenCollection = 'tokens';
 final sessionCollection = 'sessions';
-final lockCollection = 'locks';
+final adminSetCollection = 'admin_set';
 
 final _log = Logger('unpub.accounts');
 
-const _adminGuardLock = 'admin_guard';
+const _adminSetId = 'enabled_admins';
 
-/// How long the holder of a lock keeps it if it never releases it, because
-/// the process died. Far longer than the few writes a lock protects.
-const _lockLease = Duration(seconds: 10);
+/// How long a removal from the admin set counts as still running.
+///
+/// [AccountStore.reconcileAdminSet] leaves a user out of the set for this long
+/// after a removal started, so that it cannot put back someone whose demotion
+/// is still on its way to the `users` collection. After that the process is
+/// taken to have died and the user, still an enabled admin, is put back.
+const adminRemovalGrace = Duration(minutes: 5);
+
+/// How often a change of the admin set is retried after losing a race.
+const _adminSetAttempts = 5;
 
 const _duplicateKeyCode = 11000;
 
@@ -27,9 +34,15 @@ class DuplicateEmailException implements Exception {
   const DuplicateEmailException();
 }
 
-/// Raised when a lock is still held after waiting for it.
-class LockUnavailableException implements Exception {
-  const LockUnavailableException();
+/// Raised when MongoDB refuses a change of the admin set.
+class AdminSetException implements Exception {
+  final int? code;
+  final String? message;
+
+  const AdminSetException(this.code, this.message);
+
+  @override
+  String toString() => 'cannot change the admin set: $message (code $code)';
 }
 
 /// The fields of a new user.
@@ -70,16 +83,12 @@ class NewToken {
 class AccountStore {
   final Db db;
 
-  /// How long to wait for a lock. Longer than a lease, so that a process that
-  /// died holding the lock does not fail the next caller.
-  final Duration lockWait;
-
-  AccountStore(this.db, {this.lockWait = const Duration(seconds: 15)});
+  AccountStore(this.db);
 
   DbCollection get _users => db.collection(userCollection);
   DbCollection get _tokens => db.collection(tokenCollection);
   DbCollection get _sessions => db.collection(sessionCollection);
-  DbCollection get _locks => db.collection(lockCollection);
+  DbCollection get _adminSet => db.collection(adminSetCollection);
 
   /// Creates the indexes the collections rely on. Safe to call repeatedly.
   Future<void> ensureIndexes() async {
@@ -198,87 +207,168 @@ class AccountStore {
   Future<List<User>> listUsers() =>
       _users.find(where.sortBy('email')).map(_userFromDocument).toList();
 
-  Future<int> countEnabledAdmins() =>
-      _users.count(where.eq('role', Role.admin.name).ne('disabled', true));
+  SelectorBuilder get _enabledAdmins =>
+      where.eq('role', Role.admin.name).ne('disabled', true);
 
-  /// Runs [action] while no other server or command line process is inside
-  /// this method, or throws [LockUnavailableException].
+  /// One atomic change of the admin set, or null when [query] matched nothing.
   ///
-  /// Standalone MongoDB has no multi-document transactions, so this is what
-  /// makes a check over several users and the update depending on it atomic.
-  Future<T> withAdminGuard<T>(Future<T> Function() action) async {
-    final owner = ObjectId().oid;
-    await _acquireLock(_adminGuardLock, owner);
-    try {
-      return await action();
-    } finally {
-      await _releaseLock(_adminGuardLock, owner);
-    }
-  }
-
-  Future<void> _acquireLock(String name, String owner) async {
-    final deadline = DateTime.now().add(lockWait);
-    var pause = const Duration(milliseconds: 10);
-    while (!await _tryLock(name, owner)) {
-      if (!DateTime.now().isBefore(deadline)) {
-        throw const LockUnavailableException();
-      }
-      await Future<void>.delayed(pause);
-      if (pause < const Duration(milliseconds: 500)) pause *= 2;
-    }
-  }
-
-  /// Takes the lock if it is absent or its lease is over.
-  ///
-  /// One atomic update, compared with the clock of the database so that the
-  /// server and a command line on another host agree on when a lease ends.
-  Future<bool> _tryLock(String name, String owner) async {
-    final free = {
-      r'$lte': [
-        {
-          r'$ifNull': [
-            r'$expiresAt',
-            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-          ],
-        },
-        r'$$NOW',
-      ],
-    };
-    final result = await _locks.modernFindAndModify(
-      query: {'_id': name},
-      update: [
-        {
-          r'$set': {
-            'owner': {
-              r'$cond': [free, owner, r'$owner'],
-            },
-            'expiresAt': {
-              r'$cond': [
-                free,
-                {
-                  r'$add': [r'$$NOW', _lockLease.inMilliseconds],
-                },
-                r'$expiresAt',
-              ],
-            },
-          },
-        },
-      ],
-      upsert: true,
+  /// `findAndModify` reports a failed command in its reply rather than by
+  /// throwing, and a failure must not read as "matched nothing", which callers
+  /// take to mean this is the last administrator.
+  Future<Map<String, dynamic>?> _modifyAdminSet(
+    Map<String, Object?> query,
+    Map<String, Object?> update, {
+    bool upsert = false,
+  }) async {
+    final result = await _adminSet.modernFindAndModify(
+      query: query,
+      update: update,
+      upsert: upsert,
       returnNew: true,
     );
-    // Without a document, a concurrent first insert won the race.
-    return result.value?['owner'] == owner;
+    if (result.failure) {
+      throw AdminSetException(result.code, result.errmsg);
+    }
+    return result.value;
   }
 
-  /// Gives the lock back unless its lease ended and someone else took it. A
-  /// failure must not replace the outcome of the work the lock protected, and
-  /// the lease ends anyway.
-  Future<void> _releaseLock(String name, String owner) async {
+  /// Takes [userId] out of the set of enabled administrators, unless that
+  /// would empty it, and records that the removal is under way.
+  ///
+  /// This one atomic update is what upholds the last-administrator rule, so a
+  /// caller that is suspended afterwards cannot break it: nobody else can take
+  /// the last remaining id. Returns false if the set does not allow it.
+  Future<bool> takeFromAdminSet(String userId, DateTime now) async {
+    final remaining = await _modifyAdminSet(
+      {
+        '_id': _adminSetId,
+        'userIds': userId,
+        'userIds.1': {r'$exists': true},
+      },
+      {
+        r'$pull': {'userIds': userId},
+        r'$set': {'removing.$userId': now},
+        r'$inc': {'version': 1},
+      },
+    );
+    if (remaining == null) return false;
+
+    // An id left in the set by something outside this class must not count
+    // as the administrator who remains.
+    final others = [
+      for (final id in remaining['userIds'] as List)
+        if (_objectId(id as String) case final objectId?) objectId,
+    ];
+    final another = await _users.findOne(_enabledAdmins.oneFrom('_id', others));
+    if (another != null) return true;
+    await addToAdminSet(userId);
+    return false;
+  }
+
+  /// Adds [userId] to the set of enabled administrators.
+  Future<void> addToAdminSet(String userId) async {
+    for (var attempt = 1;; attempt++) {
+      try {
+        await _modifyAdminSet(
+          {'_id': _adminSetId},
+          {
+            r'$addToSet': {'userIds': userId},
+            r'$unset': {'removing.$userId': ''},
+            r'$inc': {'version': 1},
+          },
+          upsert: true,
+        );
+        return;
+      } on AdminSetException catch (error) {
+        // Two first inserts of the document can collide.
+        if (error.code != _duplicateKeyCode || attempt == _adminSetAttempts) {
+          rethrow;
+        }
+      }
+    }
+  }
+
+  /// Removes [userId], who is no longer an enabled administrator, from the
+  /// set. Never refused: this id does not stand for an administrator.
+  Future<void> dropFromAdminSet(String userId) async {
+    await _modifyAdminSet(
+      {'_id': _adminSetId},
+      {
+        r'$pull': {'userIds': userId},
+        r'$unset': {'removing.$userId': ''},
+        r'$inc': {'version': 1},
+      },
+    );
+  }
+
+  /// Forgets that the removal of [userId] is under way. The record ages out
+  /// by itself, so a failure here must not replace the outcome of the removal.
+  Future<void> finishAdminRemoval(String userId) async {
     try {
-      await _locks.deleteOne({'_id': name, 'owner': owner});
+      await _modifyAdminSet(
+        {'_id': _adminSetId},
+        {
+          r'$unset': {'removing.$userId': ''},
+          r'$inc': {'version': 1},
+        },
+      );
     } catch (error) {
-      _log.warning('cannot release the lock $name', error);
+      _log.warning('cannot finish the removal of an administrator', error);
+    }
+  }
+
+  /// Rebuilds the admin set from the `users` collection.
+  ///
+  /// Users with a removal started in the last [adminRemovalGrace] stay out,
+  /// except [abandoned], whose removal the caller knows has failed. Every
+  /// change of the set increases `version`, and the set is only replaced at
+  /// the version it was read at, so that a concurrent change is not undone.
+  ///
+  /// [beforeReplace] runs after the reads, to let tests change the set in
+  /// between.
+  Future<void> reconcileAdminSet(
+    DateTime now, {
+    String? abandoned,
+    Future<void> Function()? beforeReplace,
+  }) async {
+    for (var attempt = 1;; attempt++) {
+      final current = await _adminSet.findOne(where.eq('_id', _adminSetId));
+      final version = current?['version'] as int?;
+      final enabled = await _users
+          .find(_enabledAdmins)
+          .map((doc) => (doc['_id'] as ObjectId).oid)
+          .toSet();
+      final removing = <String, DateTime>{
+        if (current?['removing'] case final Map<String, dynamic> started)
+          for (final MapEntry(:key, :value) in started.entries)
+            if (key != abandoned &&
+                enabled.contains(key) &&
+                value is DateTime &&
+                now.difference(value) < adminRemovalGrace)
+              key: value,
+      };
+      await beforeReplace?.call();
+
+      try {
+        final replaced = await _modifyAdminSet(
+          {'_id': _adminSetId, 'version': version},
+          {
+            '_id': _adminSetId,
+            'userIds': enabled.difference(removing.keys.toSet()).toList()
+              ..sort(),
+            'removing': removing,
+            'version': (version ?? 0) + 1,
+          },
+          upsert: true,
+        );
+        if (replaced != null) return;
+      } on AdminSetException catch (error) {
+        // The upsert of a version that changed meanwhile.
+        if (error.code != _duplicateKeyCode) rethrow;
+      }
+      if (attempt == _adminSetAttempts) {
+        throw StateError('the admin set keeps changing, cannot rebuild it');
+      }
     }
   }
 
@@ -293,7 +383,11 @@ class AccountStore {
     if (displayName != null) update = update.set('displayName', displayName);
     if (role != null) update = update.set('role', role.name);
     if (disabled != null) update = update.set('disabled', disabled);
-    await _users.updateOne(where.id(_objectId(id)!), update);
+    final result = await _users.updateOne(where.id(_objectId(id)!), update);
+    if (result.hasWriteErrors || !result.operationSucceeded) {
+      throw StateError('cannot update user: '
+          '${result.writeError?.errmsg ?? result.errmsg}');
+    }
   }
 
   Future<void> setPasswordHash(String id, String hash, DateTime now) async {

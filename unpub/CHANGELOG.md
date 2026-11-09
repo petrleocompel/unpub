@@ -9,7 +9,7 @@ Adds user accounts. See "Authentication" and "Upgrading from 2.x" in the README.
 - Adds an audit trail in the `audit` collection and the `AuditStore` interface. An event the database refuses is now reported as a failure and logged.
 - Adds `Principal.credentialKind`. A custom `Authenticator` that does not set it is treated as an API token.
 - Creating a user, setting a password and `PATCH /webapi/users/<id>` need a password login and answer 403 `session_required` to every kind of token.
-- The last enabled administrator is now protected against concurrent changes, by a lock document in the new `locks` collection shared by the server and `unpub admin`. This needs MongoDB 4.2 or later.
+- The last enabled administrator is protected by one authoritative document in the new `admin_set` collection, updated atomically so that it cannot lose its last id, shared by the server and `unpub admin`, and rebuilt from `users` at startup. Trying to remove the last one answers 409 `last_admin`.
 - A session holds only the scopes of its role. Every method other than GET, HEAD and OPTIONS needs a credential that can publish, except a session on its own logout, password and token routes.
 - The login rate limit never forgets a locked counter or one close to the limit, and answers 429 to new addresses and emails when it has no room left.
 - `/healthz` and `/readyz` are exempt from authentication with a trailing slash too.

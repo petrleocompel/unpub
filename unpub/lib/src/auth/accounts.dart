@@ -130,6 +130,9 @@ class User {
     required this.lastLoginAt,
   });
 
+  /// Whether this user can administer the registry right now.
+  bool get isEnabledAdmin => role == Role.admin && !disabled;
+
   /// The form sent to clients. Never includes the password hash.
   Map<String, Object?> toJson() => {
         'id': id,
@@ -229,9 +232,10 @@ class AccountException implements Exception {
       : statusCode = 409,
         code = 'conflict';
 
-  const AccountException.unavailable(this.message)
-      : statusCode = 503,
-        code = 'unavailable';
+  const AccountException.lastAdmin()
+      : statusCode = 409,
+        code = 'last_admin',
+        message = 'this is the last enabled administrator';
 
   @override
   String toString() => message;

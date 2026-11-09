@@ -46,11 +46,16 @@ class AccountService {
   final PasswordHasher hasher;
   final DateTime Function() clock;
 
+  /// Called after the admin set changed and before the user is written, to
+  /// let tests stall or fail between the two.
+  final Future<void> Function()? beforeAdminUserWrite;
+
   AccountService(
     this.store, {
     this.audit = const NullAuditStore(),
     this.hasher = const PasswordHasher(),
     this.clock = DateTime.now,
+    this.beforeAdminUserWrite,
   });
 
   /// Compared against when a login has no hash to check, to take the same
@@ -97,6 +102,7 @@ class AccountService {
     } on DuplicateEmailException {
       throw AccountException.conflict('user $normalized already exists');
     }
+    if (user.isEnabledAdmin) await _recordEnabledAdmin(user.id);
     await audit.recordSafely(AuditEvent(
       actor: by.actor,
       ip: by.ip,
@@ -122,11 +128,13 @@ class AccountService {
     return user;
   }
 
-  /// Applies the changes that differ from the current state of [user].
+  /// Applies the changes that differ from the current state of the user.
   ///
-  /// Refuses to leave the registry without an enabled administrator. Anything
-  /// that can take that role away is serialized across servers and the command
-  /// line, and looks at the user again once it is its turn.
+  /// Refuses to leave the registry without an enabled administrator. MongoDB
+  /// has no transaction across the `users` collection and the admin set, so
+  /// the writes come in the order that keeps the rule when a process stalls or
+  /// dies between them: the set first when an administrator goes away, the
+  /// user first when one is added.
   Future<User> updateUser(
     User user, {
     String? displayName,
@@ -138,25 +146,88 @@ class AccountService {
     if (newName != null && newName.isEmpty) {
       throw const AccountException.invalid('displayName must not be empty');
     }
-    Future<User> apply(User current) => _applyChanges(current,
-        displayName: newName, role: role, disabled: disabled, by: by);
+    final current = await requireUserById(user.id);
+    final staysAdmin =
+        (role ?? current.role) == Role.admin && !(disabled ?? current.disabled);
 
-    final canRemoveAdmin =
-        (role != null && role != Role.admin) || disabled == true;
-    if (!canRemoveAdmin) return apply(user);
+    if (current.isEnabledAdmin && !staysAdmin) {
+      return _removeEnabledAdmin(current,
+          displayName: newName, role: role, disabled: disabled, by: by);
+    }
+    final updated = await _applyChanges(current,
+        displayName: newName, role: role, disabled: disabled, by: by);
+    if (!current.isEnabledAdmin && staysAdmin) {
+      await _recordEnabledAdmin(updated.id);
+    }
+    return updated;
+  }
+
+  Future<User> _removeEnabledAdmin(
+    User user, {
+    required String? displayName,
+    required Role? role,
+    required bool? disabled,
+    required AuditContext by,
+  }) async {
+    final bool claimed;
     try {
-      return await store.withAdminGuard(() async {
-        final current = await requireUserById(user.id);
-        final isEnabledAdmin = current.role == Role.admin && !current.disabled;
-        if (isEnabledAdmin && await store.countEnabledAdmins() <= 1) {
-          throw const AccountException.conflict(
-              'this is the last enabled administrator');
-        }
-        return apply(current);
-      });
-    } on LockUnavailableException {
-      throw const AccountException.unavailable(
-          'another change to an administrator is in progress, try again');
+      claimed = await _claimAdminRemoval(user.id);
+    } catch (_) {
+      await _reconcileAfterFailure(abandoned: user.id);
+      rethrow;
+    }
+    if (!claimed) {
+      final latest = await requireUserById(user.id);
+      if (latest.isEnabledAdmin) throw const AccountException.lastAdmin();
+      // Another request removed this administrator first.
+      return _applyChanges(latest,
+          displayName: displayName, role: role, disabled: disabled, by: by);
+    }
+    try {
+      await beforeAdminUserWrite?.call();
+      final updated = await _applyChanges(user,
+          displayName: displayName, role: role, disabled: disabled, by: by);
+      await store.finishAdminRemoval(user.id);
+      return updated;
+    } catch (_) {
+      await _reconcileAfterFailure(abandoned: user.id);
+      rethrow;
+    }
+  }
+
+  /// Takes the user out of the admin set. The set can be behind the `users`
+  /// collection after a crash, so it is rebuilt before refusing.
+  Future<bool> _claimAdminRemoval(String userId) async {
+    if (await store.takeFromAdminSet(userId, clock())) return true;
+    await store.reconcileAdminSet(clock());
+    return store.takeFromAdminSet(userId, clock());
+  }
+
+  /// Adds a user who has just become an enabled administrator to the set.
+  ///
+  /// Afterwards the user is read again, as a demotion cannot see someone who
+  /// is not in the set yet and could have run in between.
+  Future<void> _recordEnabledAdmin(String userId) async {
+    try {
+      await store.addToAdminSet(userId);
+      final latest = await store.findUserById(userId);
+      if (latest == null || !latest.isEnabledAdmin) {
+        await store.dropFromAdminSet(userId);
+      }
+    } catch (_) {
+      await _reconcileAfterFailure();
+      rethrow;
+    }
+  }
+
+  /// Brings the set back in line after one of its two writes failed. The
+  /// original failure is what the caller needs to see, and the next start or
+  /// `unpub admin` command repairs the set anyway.
+  Future<void> _reconcileAfterFailure({String? abandoned}) async {
+    try {
+      await store.reconcileAdminSet(clock(), abandoned: abandoned);
+    } catch (error) {
+      _log.warning('cannot rebuild the admin set', error);
     }
   }
 
