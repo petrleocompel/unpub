@@ -274,7 +274,7 @@ class AccountService {
       action: 'user.login',
       target: user.email,
     ));
-    return LoginResult(user, session, cookieValue);
+    return LoginResult(await requireUserById(user.id), session, cookieValue);
   }
 
   /// Ends the session with the cookie value [cookieValue], if it exists.

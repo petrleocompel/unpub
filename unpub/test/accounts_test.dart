@@ -864,6 +864,15 @@ void main() {
       expect((await store.findUserById(reader.id))!.lastLoginAt, isNotNull);
     });
 
+    test('the login response carries the new login time', () async {
+      final reader = await user('r@b.c', Role.reader);
+      final reply = await send('POST', '/webapi/login',
+          body: {'email': 'r@b.c', 'password': _password});
+      final stored = (await store.findUserById(reader.id))!.lastLoginAt!;
+      expect(
+          reply.body['user']['lastLoginAt'], stored.toUtc().toIso8601String());
+    });
+
     for (final failure in ['bad password', 'unknown user']) {
       test('a failed login is the same for $failure', () async {
         await user('r@b.c', Role.reader);
