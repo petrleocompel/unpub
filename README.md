@@ -71,7 +71,7 @@ A request is authenticated by the first of these that matches. Anything else is 
 
 Personal tokens have the scopes `read` and `publish`. A scope narrows what the role allows and never widens it, so a `read` token cannot change anything even for an administrator. A session holds the scopes its role allows. Only the hash of a secret is stored. It is shown once, when created.
 
-Credentials and roles can only be changed with a password login or `unpub admin`. Every kind of token, including `auth.bootstrapToken`, gets 403 with the code `session_required` when it tries to create a user, set a password or change a user. A token can still create tokens for its own user, within its own scopes and expiry.
+Credentials and roles can only be changed with a password login or `unpub admin`. Every kind of token, including `auth.bootstrapToken`, gets 403 with the code `session_required` when it tries to create a user, set a password or change a user. A token can still create tokens for its own user, within its own scopes and expiry, and revoke tokens of its own user.
 
 ```sh
 unpub admin create-token --email you@example.com --name laptop --scopes read,publish --expires-in 90d
@@ -104,7 +104,7 @@ JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look
 | `GET /webapi/me` | The current user and scopes, and `csrfToken` for a session. |
 | `POST /webapi/me/password` | Session only: `{currentPassword, newPassword}`. Ends the other sessions of the user. |
 | `GET`, `POST /webapi/tokens` | List or create your own tokens. Create takes `{name, scopes?, expiresIn?}` and returns the `secret` once. A token cannot create a token with more scopes or a later expiry than its own. |
-| `DELETE /webapi/tokens/<id>` | Revoke your own token. Administrators can revoke any. |
+| `DELETE /webapi/tokens/<id>` | Revoke your own token. An administrator logged in with a password can revoke any. A token or `auth.bootstrapToken` can only revoke tokens of its own user: revoking another user's token answers 403 `session_required` to an administrator's token and 404 to anyone else's. |
 | `GET`, `POST /webapi/users` | Administrators: list users, or with a session create one from `{email, role, displayName?, password?}`. |
 | `PATCH /webapi/users/<id>` | Administrators, session only: change `role`, `disabled` or `displayName`. Answers 503 if another change to an administrator stays in progress. |
 | `POST /webapi/users/<id>/password` | Administrators, session only: `{password}`. |

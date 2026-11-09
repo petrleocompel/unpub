@@ -1243,6 +1243,76 @@ void main() {
           HttpStatus.ok);
     });
 
+    group('revoking the token of another user', () {
+      Future<Reply> revoke(ApiToken target,
+              {String? bearer, Browser? browser, App? using}) =>
+          send('DELETE', '/webapi/tokens/${target.id}',
+              bearer: bearer, browser: browser, using: using);
+
+      Future<void> expectStillActive(ApiToken target) async =>
+          expect((await store.findTokenById(target.id))!.revokedAt, isNull);
+
+      Future<Map<String, dynamic>> revocationAudit() async {
+        final events = await auditEvents('token.revoked');
+        expect(events, hasLength(1));
+        return events.single;
+      }
+
+      test('needs a password login for an admin API token', () async {
+        final admin = await user('a@b.c', Role.admin);
+        final target = (await accounts.createToken(owner, name: 'x')).token;
+        final reply = await revoke(target,
+            bearer: await token(admin, scopes: {Scope.publish}));
+        expect(reply.status, HttpStatus.forbidden);
+        expect(reply.errorCode, 'session_required');
+        await expectStillActive(target);
+        expect(await auditEvents('token.revoked'), isEmpty);
+      });
+
+      test('needs a password login for the bootstrap token', () async {
+        final target = (await accounts.createToken(owner, name: 'x')).token;
+        final reply = await revoke(target,
+            bearer: 'legacy', using: buildApp(bootstrapToken: 'legacy'));
+        expect(reply.status, HttpStatus.forbidden);
+        expect(reply.errorCode, 'session_required');
+        await expectStillActive(target);
+      });
+
+      test('works for an admin with a password login, and says so', () async {
+        final admin = await user('a@b.c', Role.admin);
+        final target = (await accounts.createToken(owner, name: 'x')).token;
+        final reply = await revoke(target, browser: await login(admin));
+        expect(reply.status, HttpStatus.ok);
+        expect((await store.findTokenById(target.id))!.revokedAt, isNotNull);
+
+        final event = await revocationAudit();
+        expect(event['actor'], admin.email);
+        expect(event['details']['actorKind'], 'session');
+        expect(event['details']['ownerId'], owner.id);
+      });
+
+      test('looks absent to a token of someone who is not an admin', () async {
+        final other = await user('o@b.c', Role.publisher);
+        final target = (await accounts.createToken(other, name: 'x')).token;
+        final reply = await revoke(target,
+            bearer: await token(owner, scopes: {Scope.publish}));
+        expect(reply.status, HttpStatus.notFound);
+        expect(reply.errorCode, 'not_found');
+        await expectStillActive(target);
+      });
+
+      test('an API token can still revoke a token of its own user', () async {
+        final admin = await user('a@b.c', Role.admin);
+        final target = (await accounts.createToken(admin, name: 'x')).token;
+        final reply = await revoke(target,
+            bearer: await token(admin, scopes: {Scope.publish}));
+        expect(reply.status, HttpStatus.ok);
+
+        final event = await revocationAudit();
+        expect(event['details']['actorKind'], 'apiToken');
+      });
+    });
+
     test('a malformed or unknown id is a 404', () async {
       for (final id in ['nope', '0123456789abcdef01234567']) {
         expect(

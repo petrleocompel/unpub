@@ -143,7 +143,8 @@ class AccountApi {
       clientAddress(request, trustForwardedFor: trustForwardedFor);
 
   AuditContext _by(shelf.Request request, Principal principal) =>
-      AuditContext(principal.actor, ip: _address(request));
+      AuditContext(principal.actor,
+          ip: _address(request), kind: principal.credentialKind.name);
 
   static Principal _principal(shelf.Request request) {
     final principal = principalOf(request);
@@ -370,10 +371,14 @@ class AccountApi {
   Future<shelf.Response> _revokeToken(shelf.Request request, String id) async {
     final principal = _principal(request);
     final token = await accounts.store.findTokenById(id);
-    // Someone else's token is reported as absent, not as forbidden.
-    if (token == null ||
-        !(principal.isAdmin || token.userId == principal.userId)) {
-      throw const AccountException.notFound('no such token');
+    if (token == null) throw const AccountException.notFound('no such token');
+    if (token.userId != principal.userId) {
+      // Someone else's token is reported as absent, not as forbidden.
+      if (!principal.isAdmin) {
+        throw const AccountException.notFound('no such token');
+      }
+      // A leaked or narrowed token must not be able to lock other people out.
+      _requireSession(principal);
     }
     await accounts.revokeToken(token, by: _by(request, principal));
     final revoked = await accounts.store.findTokenById(id);

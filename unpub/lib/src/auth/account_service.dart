@@ -14,7 +14,10 @@ class AuditContext {
   final String actor;
   final String? ip;
 
-  const AuditContext(this.actor, {this.ip});
+  /// How the actor proved who it is, a [CredentialKind] name or `system`.
+  final String kind;
+
+  const AuditContext(this.actor, {this.ip, this.kind = 'system'});
 
   /// The server itself, or an operator at the command line.
   static const system = AuditContext('system');
@@ -418,7 +421,11 @@ class AccountService {
       ip: by.ip,
       action: 'token.revoked',
       target: 'token:${token.prefix}',
-      details: {'name': token.name},
+      details: {
+        'name': token.name,
+        'ownerId': token.userId,
+        'actorKind': by.kind,
+      },
     ));
   }
 
