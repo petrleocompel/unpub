@@ -19,6 +19,7 @@ import 'store/file_store.dart';
 import 'store/mongo_store.dart';
 import 'store/mongo_version.dart';
 import 'store/package_store_factory.dart';
+import 'store/temporary_reclaimer.dart';
 import 'store/upstream_cache_store.dart';
 import 'upstream/upstream_proxy.dart';
 
@@ -33,9 +34,10 @@ class UnpubServer {
   final HttpServer _http;
   final Db _db;
   final UpstreamProxy? _upstreamProxy;
+  final TemporaryReclaimer _reclaimer;
   Future<void>? _stopping;
 
-  UnpubServer._(this._http, this._db, this._upstreamProxy);
+  UnpubServer._(this._http, this._db, this._upstreamProxy, this._reclaimer);
 
   int get port => _http.port;
 
@@ -116,7 +118,8 @@ class UnpubServer {
         publicUrl: config.server.publicUrl,
       );
       final http = await app.serve(config.server.host, config.server.port);
-      return UnpubServer._(http, db, upstreamProxy);
+      final reclaimer = TemporaryReclaimer(packageStore)..start();
+      return UnpubServer._(http, db, upstreamProxy, reclaimer);
     } catch (_) {
       await db.close().catchError((Object _) {});
       rethrow;
@@ -154,6 +157,7 @@ class UnpubServer {
       await _http.close(force: true);
     }
     _upstreamProxy?.close();
+    _reclaimer.stop();
     await _db.close();
     _log.info('stopped');
   }

@@ -23,6 +23,7 @@ export 'src/store/mongo_version.dart';
 export 'src/store/package_store.dart';
 export 'src/store/package_store_factory.dart';
 export 'src/store/s3_store.dart';
+export 'src/store/temporary_reclaimer.dart';
 export 'src/store/upstream_cache_store.dart';
 export 'src/upstream/upstream_proxy.dart';
 export 'src/version.dart';

@@ -145,6 +145,35 @@ class FileStore extends PackageStore {
     }
   }
 
+  /// A spool file under `upstream/`, or a staged publish next to its archive.
+  static final _temporaryPattern =
+      RegExp(r'\.tar\.gz\.(\d+-\d+\.tmp|[0-9A-Za-z]+\.staging)$');
+
+  @override
+  Future<int> reclaimTemporary(
+      {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
+    final directory = Directory(baseDir);
+    if (!await directory.exists()) return 0;
+    final cutoff = (now ?? DateTime.now()).subtract(maxAge);
+    var count = 0;
+    await for (final entity
+        in directory.list(recursive: true, followLinks: false)) {
+      if (entity is! File ||
+          !_temporaryPattern.hasMatch(path.basename(entity.path))) {
+        continue;
+      }
+      try {
+        if ((await entity.stat()).modified.isBefore(cutoff)) {
+          await entity.delete();
+          count++;
+        }
+      } on FileSystemException {
+        // Committed, or another instance got there first.
+      }
+    }
+    return count;
+  }
+
   /// Creates [baseDir] if it is missing, and returns whether it did.
   ///
   /// Call this once at startup, so that [checkHealth] can report a directory

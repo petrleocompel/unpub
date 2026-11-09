@@ -1,8 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:path/path.dart' as path;
+
 int _temporaryFiles = 0;
 
+/// How old a temporary file has to be before it counts as left behind. Long
+/// enough that a fetch or publish that is still running has touched it since.
+const temporaryFileMaxAge = Duration(hours: 1);
+
+final _spoolFilePattern = RegExp(r'^unpub-upstream-\d+-\d+-\d+\.tmp$');
 final _digestPattern = RegExp(r'^[0-9a-f]{64}$');
 final _stagingIdPattern = RegExp(r'^[0-9A-Za-z]+$');
 
@@ -118,6 +125,30 @@ abstract class PackageStore {
     if (!_stagingIdPattern.hasMatch(id)) {
       throw ArgumentError('unsafe staging id');
     }
+  }
+
+  /// Deletes temporary files older than [maxAge] that a crash left behind, and
+  /// returns how many. Nothing that does not carry the temporary naming of
+  /// this store is touched.
+  Future<int> reclaimTemporary(
+      {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
+    final cutoff = (now ?? DateTime.now()).subtract(maxAge);
+    var count = 0;
+    await for (final entity in Directory.systemTemp.list(followLinks: false)) {
+      if (entity is! File ||
+          !_spoolFilePattern.hasMatch(path.basename(entity.path))) {
+        continue;
+      }
+      try {
+        if ((await entity.stat()).modified.isBefore(cutoff)) {
+          await entity.delete();
+          count++;
+        }
+      } on FileSystemException {
+        // Finished, or another instance got there first.
+      }
+    }
+    return count;
   }
 
   /// Throws if the store cannot currently serve requests.

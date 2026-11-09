@@ -220,6 +220,34 @@ class S3Store extends PackageStore {
   Future<void> deleteUpstream(String name, String version, String digest) =>
       _minio.removeObject(bucketName, _getUpstreamKey(name, version, digest));
 
+  /// `staging/<name>/<name>-<version>-<id>.tar.gz`, and nothing else.
+  static final _stagingKeyPattern =
+      RegExp(r'^staging/([^/]+)/\1-.+-[0-9A-Za-z]+\.tar\.gz$');
+
+  /// Also clears the local spool files that the upstream proxy writes to,
+  /// since those are the temporary files of this store too.
+  @override
+  Future<int> reclaimTemporary(
+      {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
+    var count = await super.reclaimTemporary(now: now, maxAge: maxAge);
+    final cutoff = (now ?? DateTime.now()).subtract(maxAge);
+    final listed = await _minio.listAllObjects(bucketName,
+        prefix: 'staging/', recursive: true);
+    for (final object in listed.objects) {
+      final key = object.key;
+      final modified = object.lastModified;
+      if (key == null ||
+          modified == null ||
+          !_stagingKeyPattern.hasMatch(key) ||
+          !modified.isBefore(cutoff)) {
+        continue;
+      }
+      await _minio.removeObject(bucketName, key);
+      count++;
+    }
+    return count;
+  }
+
   /// Verifies the bucket exists and accepts writes and deletes, by storing and
   /// removing a probe object.
   ///

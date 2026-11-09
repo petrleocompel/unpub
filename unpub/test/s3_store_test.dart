@@ -204,6 +204,32 @@ void main() {
     });
   });
 
+  group('reclaiming temporary objects', () {
+    final now = DateTime.now();
+    final old = now.subtract(const Duration(hours: 2));
+
+    test('deletes only old objects carrying the staging naming', () async {
+      var minio = FakeMinio()
+        ..listed = {
+          'staging/foo/foo-1.0.0-abc.tar.gz': old,
+          'staging/foo/foo-1.0.0-rc.1-abc.tar.gz': old,
+          'staging/fresh/fresh-1.0.0-abc.tar.gz': now,
+          'staging/bar/foo-1.0.0-abc.tar.gz': old,
+          'staging/foo-1.0.0.tar.gz': old,
+          'staging/notes.txt': old,
+        };
+
+      var count =
+          await S3Store(s3Bucket, minio: minio).reclaimTemporary(now: now);
+
+      expect(minio.removed, [
+        'staging/foo/foo-1.0.0-abc.tar.gz',
+        'staging/foo/foo-1.0.0-rc.1-abc.tar.gz',
+      ]);
+      expect(count, greaterThanOrEqualTo(2));
+    });
+  });
+
   group('committing a staged archive', () {
     test('quotes the copy source, in which a + would read as a space',
         () async {
@@ -371,6 +397,23 @@ void main() {
       expect(listed.objects, isEmpty);
     });
 
+    test('reclaims an old staged object and keeps a fresh one', () async {
+      final name = 'reclaim_${DateTime.now().microsecondsSinceEpoch}';
+      var store = S3Store(s3Bucket, minio: minio);
+      await store.stageArchive(name, '1.0.0', 'r1', testPackageData);
+
+      await store.reclaimTemporary();
+      await minio.statObject(s3Bucket, 'staging/$name/$name-1.0.0-r1.tar.gz');
+
+      expect(
+          await store.reclaimTemporary(
+              now: DateTime.now().add(const Duration(hours: 2))),
+          greaterThanOrEqualTo(1));
+      var listed =
+          await minio.listAllObjects(s3Bucket, prefix: 'staging/$name/');
+      expect(listed.objects, isEmpty);
+    });
+
     test('exists reflects the stored objects', () async {
       var store = S3Store(s3Bucket, minio: minio);
       await store.upload('exists_package', '1.0.0', testPackageData);
@@ -419,6 +462,7 @@ class FakeMinio extends Minio {
   final written = <String>[];
   final removed = <String>[];
   final copies = <List<String>>[];
+  Map<String, DateTime> listed = const {};
 
   FakeMinio()
       : super(
@@ -445,6 +489,17 @@ class FakeMinio extends Minio {
     written.add(object);
     return 'etag';
   }
+
+  @override
+  Future<s3.ListObjectsResult> listAllObjects(
+    String bucket, {
+    String prefix = '',
+    bool recursive = false,
+  }) async =>
+      s3.ListObjectsResult(objects: [
+        for (final entry in listed.entries)
+          s3.Object('etag', entry.key, entry.value, null, 1, 'STANDARD'),
+      ], prefixes: const []);
 
   @override
   Future<s3.CopyObjectResult> copyObject(

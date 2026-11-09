@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart' as unpub;
@@ -222,6 +223,135 @@ void main() {
     });
   });
 
+  group('reclaiming temporary files', () {
+    late Directory baseDir;
+    late unpub.FileStore store;
+
+    setUp(() {
+      baseDir = setupFixture('reclaim');
+      store = unpub.FileStore(baseDir.path);
+    });
+
+    test('deletes old files of both kinds, and counts them', () async {
+      var spool =
+          _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.123-456.tmp');
+      var staged = _temporaryFile(baseDir, 'foo-1.0.0.tar.gz.abc123.staging');
+      var nested = _temporaryFile(baseDir,
+          'packages/f/fo/foo/versions/foo-1.0.0.tar.gz.abc123.staging');
+
+      expect(await store.reclaimTemporary(), 3);
+
+      expect(spool.existsSync(), isFalse);
+      expect(staged.existsSync(), isFalse);
+      expect(nested.existsSync(), isFalse);
+    });
+
+    test('leaves a fresh temporary file alone', () async {
+      var spool = _temporaryFile(
+          baseDir, 'upstream/foo/foo-1.0.0.tar.gz.123-456.tmp',
+          old: false);
+      var staged = _temporaryFile(baseDir, 'foo-1.0.0.tar.gz.abc123.staging',
+          old: false);
+
+      expect(await store.reclaimTemporary(), 0);
+
+      expect(spool.existsSync(), isTrue);
+      expect(staged.existsSync(), isTrue);
+    });
+
+    for (var name in [
+      'foo-1.0.0.tar.gz',
+      'upstream/foo/foo-1.0.0-${'a' * 64}.tar.gz',
+      'notes.tmp',
+      'other.staging',
+      'foo-1.0.0.tar.gz.bad.tmp',
+      'foo-1.0.0.tar.gz.a.b.staging',
+      '.unpub-health-1-2',
+    ]) {
+      test('never deletes $name, however old', () async {
+        var file = _temporaryFile(baseDir, name);
+        expect(await store.reclaimTemporary(), 0);
+        expect(file.existsSync(), isTrue);
+      });
+    }
+
+    test('tolerates a missing storage directory', () async {
+      expect(
+          await unpub.FileStore(path.join(baseDir.path, 'missing'))
+              .reclaimTemporary(),
+          0);
+    });
+
+    test('the default clears only old spool files in the system temp',
+        () async {
+      var store = _UploadOnlyStore();
+      var old = File(path.join(Directory.systemTemp.path,
+          'unpub-upstream-${pid + 1}-7-${DateTime.now().microsecondsSinceEpoch}.tmp'))
+        ..writeAsStringSync('x')
+        ..setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
+      var fresh = File(path.join(Directory.systemTemp.path,
+          'unpub-upstream-${pid + 2}-7-${DateTime.now().microsecondsSinceEpoch}.tmp'))
+        ..writeAsStringSync('x');
+      var unrelated = File(path.join(Directory.systemTemp.path,
+          'unrelated-${DateTime.now().microsecondsSinceEpoch}.tmp'))
+        ..writeAsStringSync('x')
+        ..setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
+      addTearDown(() {
+        for (var file in [old, fresh, unrelated]) {
+          if (file.existsSync()) file.deleteSync();
+        }
+      });
+
+      expect(await store.reclaimTemporary(), greaterThanOrEqualTo(1));
+
+      expect(old.existsSync(), isFalse);
+      expect(fresh.existsSync(), isTrue);
+      expect(unrelated.existsSync(), isTrue);
+    });
+
+    group('on a schedule', () {
+      test('runs at startup, then on the interval, and logs a count', () async {
+        var records = <LogRecord>[];
+        var previous = Logger.root.level;
+        Logger.root.level = Level.ALL;
+        var subscription = Logger('unpub.reclaim').onRecord.listen(records.add);
+        addTearDown(() async {
+          Logger.root.level = previous;
+          await subscription.cancel();
+        });
+
+        var first =
+            _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.1-1.tmp');
+        var reclaimer = unpub.TemporaryReclaimer(store,
+            interval: const Duration(milliseconds: 50))
+          ..start();
+        addTearDown(reclaimer.stop);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(first.existsSync(), isFalse);
+
+        var second =
+            _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.2-2.tmp');
+        for (var i = 0; i < 100 && second.existsSync(); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        expect(second.existsSync(), isFalse);
+        expect(records.map((r) => r.message),
+            everyElement(contains('reclaimed temporary files')));
+        expect(records, hasLength(2));
+
+        reclaimer.stop();
+        var third =
+            _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.3-3.tmp');
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        expect(third.existsSync(), isTrue);
+      });
+
+      test('a failing store is only logged', () async {
+        expect(await unpub.TemporaryReclaimer(_FailingReclaimStore()).run(), 0);
+      });
+    });
+  });
+
   group('upstream namespace', () {
     const data = [1, 2, 3];
     final digest = digestOf(data);
@@ -331,6 +461,26 @@ void main() {
           throwsArgumentError);
     });
   });
+}
+
+const _hourAndABit = Duration(hours: 1, minutes: 5);
+
+File _temporaryFile(Directory baseDir, String relative, {bool old = true}) {
+  var file = File(path.join(baseDir.path, relative))
+    ..createSync(recursive: true)
+    ..writeAsStringSync('partial');
+  if (old) file.setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
+  return file;
+}
+
+class _FailingReclaimStore extends unpub.PackageStore {
+  @override
+  Future<void> upload(String name, String version, List<int> content) async {}
+
+  @override
+  Future<int> reclaimTemporary(
+          {DateTime? now, Duration maxAge = unpub.temporaryFileMaxAge}) =>
+      throw const FileSystemException('no access');
 }
 
 class _UploadOnlyStore extends unpub.PackageStore {

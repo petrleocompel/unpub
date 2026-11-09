@@ -374,6 +374,31 @@ void main() {
     });
   });
 
+  test('the server clears crash leftovers when it starts', () async {
+    final left = File('${storage.path}/$_name-1.0.0.tar.gz.abc.staging')
+      ..writeAsStringSync('partial')
+      ..setLastModifiedSync(DateTime.now().subtract(const Duration(hours: 2)));
+    final server = await UnpubServer.start(Config.parse(
+      '''
+server:
+  host: 127.0.0.1
+  port: 0
+mongo:
+  uri: $testMongoUri
+storage:
+  file:
+    path: ${storage.path}
+''',
+      environment: const {},
+    ));
+    addTearDown(server.stop);
+
+    for (var i = 0; i < 100 && left.existsSync(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    expect(left.existsSync(), isFalse);
+  });
+
   group('publish.uploadTimeout', () {
     test('fails a stalled write, retryably, and cleans up after it', () async {
       final store = _PausingStore(storage.path)
