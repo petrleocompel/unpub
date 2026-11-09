@@ -508,6 +508,32 @@ void main() {
       expect(data['packages'][0]['name'], package1);
     });
 
+    test('keyword search ignores case', () async {
+      var res = await http.get(baseUri.resolve('/webapi/packages?q=PACKAGE_1'));
+      var data = json.decode(res.body)['data'];
+      expect(data['count'], 1);
+      expect(data['packages'][0]['name'], package1);
+    });
+
+    for (var keyword in ['package.1', 'package_[01]', '.*']) {
+      test('keyword search treats $keyword literally', () async {
+        var res = await http.get(Uri(
+            scheme: baseUri.scheme,
+            host: baseUri.host,
+            port: baseUri.port,
+            path: '/webapi/packages',
+            queryParameters: {'q': keyword}));
+        expect(res.statusCode, HttpStatus.ok);
+        expect(json.decode(res.body)['data']['count'], 0);
+      });
+    }
+
+    test('a keyword that is not a valid regular expression works', () async {
+      var res = await http.get(baseUri.resolve('/webapi/packages?q=pack%28'));
+      expect(res.statusCode, HttpStatus.ok);
+      expect(json.decode(res.body)['data']['count'], 0);
+    });
+
     test('returns package detail', () async {
       var res =
           await http.get(baseUri.resolve('/webapi/package/$package0/latest'));

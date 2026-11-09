@@ -93,7 +93,8 @@ class MongoStore extends MetaStore {
         where.sortBy(sort, descending: true).limit(size).skip(page * size);
 
     if (keyword != null) {
-      selector = selector.match('name', '.*$keyword.*');
+      selector =
+          selector.match('name', RegExp.escape(keyword), caseInsensitive: true);
     }
     if (uploader != null) {
       selector = selector.eq('uploaders', uploader);
