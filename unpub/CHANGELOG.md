@@ -1,3 +1,19 @@
+## 3.0.0-dev.2
+
+Adds user accounts. See "Authentication" and "Upgrading from 2.x" in the README.
+
+- Adds users with the roles `admin`, `publisher` and `reader`, personal API tokens with `read` and `publish` scopes, and web sessions with CSRF protection. Passwords are hashed with Argon2id, in pure Dart.
+- Adds the JSON endpoints `/webapi/login`, `logout`, `me`, `me/password`, `tokens` and `users`, with a login rate limit per client address and per email.
+- Adds `auth.admin.email` and `auth.admin.password`, which create the first administrator on a server without users, and `server.trustForwardedFor`.
+- Adds the commands `unpub admin` (`create-user`, `set-password`, `set-role`, `disable`, `enable`, `list-users`, `create-token`) and `unpub migrate`, which creates placeholder users from existing `uploaders`.
+- Adds an audit trail in the `audit` collection and the `AuditStore` interface.
+- **Breaking:** `auth.bootstrapToken` now acts as an administrator and `auth.readTokens` as readers. Both still work but are deprecated. `auth.readAccess: authenticated` no longer needs either of them.
+- **Breaking:** publishing to, or managing the uploaders of, a package without an `uploaders` list is now reserved to administrators.
+- **Breaking:** a credential that is valid but not allowed to publish now gets 403 instead of 401, so that `dart pub` keeps the token.
+- **Breaking:** `Authenticator.authenticate` returns null for a request without an accepted credential. `StaticTokenAuthenticator` replaces `BootstrapTokenAuthenticator` and `ReadTokenAuthenticator`, and `App.readAccess` replaces `App.readAuthenticator`.
+- An administrator publishing to someone else's package no longer joins its `uploaders`. Uploader emails are matched ignoring case and new ones are stored in lowercase.
+- Security: CORS responses no longer allow credentialed requests.
+
 ## 3.0.0-dev.1
 
 Requires Dart 3. See "Upgrading from 2.x" in the README.
