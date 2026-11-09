@@ -57,7 +57,7 @@ Dart clients only send tokens over HTTPS, except to localhost, so deploy behind 
 | --- | --- |
 | `admin` | Everything: manage users, publish to any package, manage the uploaders of any package. |
 | `publisher` | Publish new packages, publish to packages where their email is in `uploaders`, and manage the uploaders of those packages. |
-| `reader` | Read only. This matters when `auth.readAccess` is `authenticated`. |
+| `reader` | Read only, and look after their own account: log out, change their password, manage their own `read` tokens. This matters when `auth.readAccess` is `authenticated`. |
 
 Package `uploaders` remain a list of email addresses, matched against the authenticated user ignoring case. A package without an `uploaders` list can only be changed by an administrator.
 
@@ -69,7 +69,9 @@ A request is authenticated by the first of these that matches. Anything else is 
 2. The `unpub_session` cookie from `POST /webapi/login`. Requests other than GET, HEAD and OPTIONS must also send its CSRF token, in the `X-CSRF-Token` header or the `csrf_token` form field.
 3. The deprecated static tokens: `auth.bootstrapToken` acts as an administrator with the email `auth.bootstrapEmail`, and each entry of `auth.readTokens` acts as a reader. The server logs a warning when they are set. Move to personal tokens.
 
-Personal tokens have the scopes `read` and `publish`. A scope narrows what the role allows and never widens it, so a `read` token cannot change anything even for an administrator. Only the hash of a secret is stored. It is shown once, when created.
+Personal tokens have the scopes `read` and `publish`. A scope narrows what the role allows and never widens it, so a `read` token cannot change anything even for an administrator. A session holds the scopes its role allows. Only the hash of a secret is stored. It is shown once, when created.
+
+Credentials and roles can only be changed with a password login or `unpub admin`. Every kind of token, including `auth.bootstrapToken`, gets 403 with the code `session_required` when it tries to create a user, set a password or change a user. A token can still create tokens for its own user, within its own scopes and expiry.
 
 ```sh
 unpub admin create-token --email you@example.com --name laptop --scopes read,publish --expires-in 90d
@@ -89,25 +91,25 @@ Set `auth.admin.email` and `auth.admin.password` (or `UNPUB_AUTH_ADMIN_EMAIL` an
 | `unpub admin list-users` | List users. |
 | `unpub admin create-token --email <address> --name <label> [--scopes read,publish] [--expires-in 30d]` | Print a new token secret. Lifetimes use `s`, `m`, `h`, `d` or `w`. |
 
-Each takes `--config <path>`. The last enabled administrator cannot be demoted or disabled.
+Each takes `--config <path>`. The last enabled administrator cannot be demoted or disabled. The server and these commands take turns through a lock document in the `locks` collection, which needs MongoDB 4.2 or later.
 
 ### HTTP API
 
-JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409 or 429.
+JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409, 429 or 503.
 
 | Endpoint | Description |
 | --- | --- |
 | `POST /webapi/login` | `{email, password}`. Sets the session cookie and returns the user and `csrfToken`. |
 | `POST /webapi/logout` | Ends the session. |
 | `GET /webapi/me` | The current user and scopes, and `csrfToken` for a session. |
-| `POST /webapi/me/password` | `{currentPassword, newPassword}`. Ends the other sessions of the user. |
+| `POST /webapi/me/password` | Session only: `{currentPassword, newPassword}`. Ends the other sessions of the user. |
 | `GET`, `POST /webapi/tokens` | List or create your own tokens. Create takes `{name, scopes?, expiresIn?}` and returns the `secret` once. A token cannot create a token with more scopes or a later expiry than its own. |
 | `DELETE /webapi/tokens/<id>` | Revoke your own token. Administrators can revoke any. |
-| `GET`, `POST /webapi/users` | Administrators: list or create users, with `{email, role, displayName?, password?}`. |
-| `PATCH /webapi/users/<id>` | Administrators: change `role`, `disabled` or `displayName`. |
-| `POST /webapi/users/<id>/password` | Administrators: `{password}`. |
+| `GET`, `POST /webapi/users` | Administrators: list users, or with a session create one from `{email, role, displayName?, password?}`. |
+| `PATCH /webapi/users/<id>` | Administrators, session only: change `role`, `disabled` or `displayName`. Answers 503 if another change to an administrator stays in progress. |
+| `POST /webapi/users/<id>/password` | Administrators, session only: `{password}`. |
 
-After 10 failed attempts within 15 minutes, for one email or one client address, login answers 429 with `Retry-After`. The count is kept per process, so several instances each allow their own attempts. Sessions last 24 hours.
+After 10 failed attempts within 15 minutes, for one email or one client address, login answers 429 with `Retry-After`. The count is kept per process, so several instances each allow their own attempts. Each process tracks up to 50 000 addresses and emails. When that is full it forgets only expired counters and those below half the limit, and if that frees nothing it answers 429 to addresses and emails it does not know yet and logs a warning. Sessions last 24 hours.
 
 Logins, token and user changes, publishes and uploader changes are recorded in the `audit` collection.
 
@@ -188,9 +190,9 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 - A package without an `uploaders` list can now only be changed by an administrator.
 - Accounts: run `unpub migrate` once. It creates a placeholder `publisher` for every email in existing `uploaders`, and an `admin` for `auth.bootstrapEmail` if it appears there. Check first with `unpub migrate --dry-run`. Placeholders cannot log in, so give them a password with `unpub admin set-password` or a token with `unpub admin create-token`.
 - Run `unpub migrate` after creating your first administrator, or use `unpub admin create-user` afterwards: `auth.admin.*` is ignored once any user exists.
-- `auth.bootstrapToken` and `auth.readTokens` keep working but are deprecated. Replace them with personal tokens.
+- `auth.bootstrapToken` and `auth.readTokens` keep working but are deprecated. Replace them with personal tokens. Neither these nor personal tokens can manage users over HTTP, so use `unpub admin` or log in.
 - Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
-- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit` and `migrations`.
+- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `locks` and `migrations`.
 
 ### Behind a reverse proxy
 
