@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:path/path.dart' as path;
 import 'package:shelf/shelf.dart' as shelf;
@@ -34,6 +36,12 @@ class FakeUpstream {
   final packages = <String, Map<String, List<int>>>{};
   final hashOverride = <String, String>{};
   final retracted = <String>{};
+
+  /// Replaces the `archive_url` of the listing, by package name.
+  String Function(String name, String version)? archiveUrlOf;
+
+  /// Route → the `Location` it redirects to.
+  final redirects = <String, String>{};
   bool discontinued = false;
   String? replacedBy;
   int? failWith;
@@ -66,6 +74,10 @@ class FakeUpstream {
     authorizations.add(request.headers['authorization']);
 
     if (hang) await Future<void>.delayed(const Duration(seconds: 2));
+    final redirect = redirects[route];
+    if (redirect != null) {
+      return shelf.Response.found(redirect);
+    }
     if (failWith != null) return shelf.Response(failWith!, body: 'boom');
 
     final listing = RegExp(r'^/api/packages/(\w+)$').firstMatch(route);
@@ -111,7 +123,8 @@ class FakeUpstream {
             'environment': {'sdk': '^3.5.0'},
             'weird.key': {r'$odd': true},
           },
-          'archive_url': '$url/storage/$name-$version.tar.gz',
+          'archive_url': archiveUrlOf?.call(name, version) ??
+              '$url/storage/$name-$version.tar.gz',
           if (sendHashes)
             'archive_sha256':
                 hashOverride['$name@$version'] ?? sha(name, version),
@@ -161,6 +174,7 @@ void main() {
     Duration cacheTtl = const Duration(minutes: 10),
     Duration timeout = const Duration(seconds: 5),
     PackageStore? archives,
+    List<String> allowedArchiveHosts = const [],
   }) =>
       UpstreamProxy(
         config: UpstreamConfig(
@@ -169,6 +183,7 @@ void main() {
           cacheTtl: cacheTtl,
           allowlist: allowlist,
           timeout: timeout,
+          allowedArchiveHosts: allowedArchiveHosts,
         ),
         cache: MongoUpstreamCacheStore(db),
         archives: archives ?? FileStore(storage.path),
@@ -484,6 +499,141 @@ void main() {
       expect(await FileStore(storage.path).exists(_name, '1.0.0'), isFalse);
       expect(
           await FileStore(storage.path).upstreamCached(_name, '1.0.0'), isTrue);
+    });
+  });
+
+  group('archive locations', () {
+    const route = '/packages/$_name/versions/1.0.0.tar.gz';
+    late HttpServer elsewhere;
+    late List<String> elsewhereRequests;
+
+    /// A server with another host and port than [upstream], holding the
+    /// archive.
+    setUp(() async {
+      elsewhereRequests = [];
+      elsewhere = await shelf_io.serve((shelf.Request request) {
+        elsewhereRequests.add('/${request.url.path}');
+        return shelf.Response.ok(upstream.packages[_name]!['1.0.0']);
+      }, InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => elsewhere.close(force: true));
+    });
+
+    String elsewhereUrl([int? port]) =>
+        'http://127.0.0.1:${port ?? elsewhere.port}/a.tar.gz';
+
+    App withHosts(List<String> hosts) {
+      final limited = buildProxy(allowedArchiveHosts: hosts);
+      addTearDown(limited.close);
+      return buildApp(using: limited);
+    }
+
+    test('a listing pointing at another port is refused', () async {
+      final other = await HttpServer.bind('localhost', 0);
+      addTearDown(() => other.close(force: true));
+      final requests = <String>[];
+      other.listen((request) {
+        requests.add(request.uri.path);
+        request.response.close();
+      });
+      upstream.archiveUrlOf = (name, version) =>
+          'http://localhost:${other.port}/storage/$name-$version.tar.gz';
+
+      final response = await get(route);
+
+      expect(response.statusCode, 502);
+      expect(requests, isEmpty);
+      expect(cachedFile('1.0.0').existsSync(), isFalse);
+    });
+
+    test('a listing pointing at another host is refused', () async {
+      upstream.archiveUrlOf = (_, __) => elsewhereUrl();
+      expect((await get(route)).statusCode, 502);
+      expect(elsewhereRequests, isEmpty);
+    });
+
+    test('the listing itself still works', () async {
+      upstream.archiveUrlOf = (_, __) => elsewhereUrl();
+      expect((await get('/api/packages/$_name')).statusCode, 200);
+    });
+
+    test('a redirect to a host that is not allowed is refused', () async {
+      upstream.redirects['/storage/$_name-1.0.0.tar.gz'] = elsewhereUrl();
+      final response = await get(route);
+      expect(response.statusCode, 502);
+      expect(elsewhereRequests, isEmpty);
+    });
+
+    test('an allowed host works, directly and by redirect', () async {
+      upstream.archiveUrlOf = (_, __) => elsewhereUrl();
+      final direct = await get(route, using: withHosts(['127.0.0.1']));
+      expect(await bytesOf(direct), upstream.packages[_name]!['1.0.0']);
+      expect(elsewhereRequests, ['/a.tar.gz']);
+
+      await cachedFile('1.0.0').delete();
+      upstream.archiveUrlOf = null;
+      upstream.redirects['/storage/$_name-1.0.0.tar.gz'] = elsewhereUrl();
+      final redirected = await get(route, using: withHosts(['127.0.0.1']));
+      expect(await bytesOf(redirected), upstream.packages[_name]!['1.0.0']);
+      expect(elsewhereRequests, hasLength(2));
+    });
+
+    test('three redirects on the upstream are followed', () async {
+      upstream.archiveUrlOf = (_, __) => '${upstream.url}/hop/1';
+      upstream.redirects['/hop/1'] = '/hop/2';
+      upstream.redirects['/hop/2'] = '${upstream.url}/hop/3';
+      upstream.redirects['/hop/3'] = '/storage/$_name-1.0.0.tar.gz';
+
+      expect(
+          await bytesOf(await get(route)), upstream.packages[_name]!['1.0.0']);
+    });
+
+    test('a fourth redirect is refused', () async {
+      upstream.archiveUrlOf = (_, __) => '${upstream.url}/hop/1';
+      upstream.redirects['/hop/1'] = '/hop/2';
+      upstream.redirects['/hop/2'] = '/hop/3';
+      upstream.redirects['/hop/3'] = '/hop/4';
+      upstream.redirects['/hop/4'] = '/storage/$_name-1.0.0.tar.gz';
+
+      expect((await get(route)).statusCode, 502);
+      expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 0);
+    });
+
+    test('a redirect from https to http is refused', () async {
+      final seen = <Uri>[];
+      final client = MockClient((request) async {
+        seen.add(request.url);
+        if (request.url.path == '/api/packages/$_name') {
+          return http.Response(
+              json.encode({
+                'name': _name,
+                'versions': [
+                  {
+                    'version': '1.0.0',
+                    'pubspec': {'name': _name, 'version': '1.0.0'},
+                    'archive_url': 'https://registry.test/a.tar.gz',
+                    'archive_sha256': 'a' * 64,
+                  },
+                ],
+              }),
+              200);
+        }
+        return http.Response('', 302,
+            headers: {'location': 'http://registry.test/a.tar.gz'});
+      });
+      final secure = UpstreamProxy(
+        config: UpstreamConfig(
+            url: Uri.parse('https://registry.test'),
+            mode: UpstreamMode.proxy,
+            allowedArchiveHosts: const ['registry.test']),
+        cache: MongoUpstreamCacheStore(db),
+        archives: FileStore(storage.path),
+        client: client,
+      );
+      addTearDown(secure.close);
+
+      expect(
+          (await get(route, using: buildApp(using: secure))).statusCode, 502);
+      expect(seen.map((uri) => uri.scheme), everyElement('https'));
     });
   });
 

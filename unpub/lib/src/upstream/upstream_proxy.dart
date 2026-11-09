@@ -25,6 +25,9 @@ const _maxArchiveBytes = 256 * 1024 * 1024;
 /// cached archive keeps its validator.
 const _staleRetention = Duration(days: 7);
 
+/// How many redirects one upstream request may follow.
+const _maxRedirects = 3;
+
 const _pubAccept = 'application/vnd.pub.v2+json';
 final _userAgent = 'unpub/$packageVersion '
     '(+https://github.com/petrleocompel/unpub)';
@@ -100,6 +103,7 @@ class UpstreamProxy {
   final Duration timeout;
   final UpstreamCacheStore cache;
   final PackageStore archives;
+  final Set<String> allowedArchiveHosts;
   final http.Client _client;
   final DateTime Function() clock;
 
@@ -115,6 +119,7 @@ class UpstreamProxy {
         cacheTtl = config.cacheTtl,
         allowlist = config.allowlist.toSet(),
         timeout = config.timeout,
+        allowedArchiveHosts = config.allowedArchiveHosts.toSet(),
         _client = client ?? http.Client();
 
   void close() => _client.close();
@@ -420,21 +425,64 @@ class UpstreamProxy {
   Future<_Response?> _getJson(String path, {String? etag}) =>
       _get(_resolve(path), _maxMetadataBytes, accept: _pubAccept, etag: etag);
 
-  /// Sends a GET for [uri], giving up after [timeout] without an answer.
+  /// Refuses to go to [target] from [origin], which is a URL of the upstream
+  /// or the one that redirected here.
+  ///
+  /// The URLs come from the upstream, and must not be able to point this
+  /// server at something on its own network.
+  void _checkTarget(Uri origin, Uri target) {
+    final isHttp = target.isScheme('http') || target.isScheme('https');
+    final isDowngrade = origin.isScheme('https') && target.isScheme('http');
+    final isUpstream = target.scheme == url.scheme &&
+        target.host == url.host &&
+        target.port == url.port;
+    if (isHttp &&
+        !isDowngrade &&
+        (isUpstream || allowedArchiveHosts.contains(target.host))) {
+      return;
+    }
+    _log.warning(LogEvent('refused an upstream URL',
+        {'scheme': target.scheme, 'host': target.host, 'port': target.port}));
+    throw const UpstreamException(
+        'the upstream pointed at a location that is not allowed');
+  }
+
+  /// Sends a GET for [uri], following redirects itself so that each hop is
+  /// checked, and giving up after [timeout] without an answer.
   Future<http.StreamedResponse> _send(Uri uri,
       {String? accept, String? etag}) async {
-    final abort = Completer<void>();
-    final request =
-        http.AbortableRequest('GET', uri, abortTrigger: abort.future)
-          ..headers['user-agent'] = _userAgent
-          ..headers.addAll({
-            if (accept != null) 'accept': accept,
-            if (etag != null) 'if-none-match': etag,
-          });
-    return _client.send(request).timeout(timeout, onTimeout: () {
-      abort.complete();
-      throw TimeoutException('no answer from the upstream', timeout);
-    });
+    var origin = url;
+    var target = uri;
+    for (var redirects = 0;; redirects++) {
+      _checkTarget(origin, target);
+      final abort = Completer<void>();
+      final request =
+          http.AbortableRequest('GET', target, abortTrigger: abort.future)
+            ..followRedirects = false
+            ..headers['user-agent'] = _userAgent
+            ..headers.addAll({
+              if (accept != null) 'accept': accept,
+              if (etag != null) 'if-none-match': etag,
+            });
+      final response =
+          await _client.send(request).timeout(timeout, onTimeout: () {
+        abort.complete();
+        throw TimeoutException('no answer from the upstream', timeout);
+      });
+      if (!const {301, 302, 303, 307, 308}.contains(response.statusCode)) {
+        return response;
+      }
+      await _discard(response);
+      final location = response.headers['location'];
+      if (location == null) {
+        throw const UpstreamException('the upstream sent an invalid redirect');
+      }
+      if (redirects == _maxRedirects) {
+        throw const UpstreamException('the upstream sent too many redirects');
+      }
+      origin = target;
+      target = target.resolve(location);
+    }
   }
 
   /// Reads the [response] body to its end and drops it. The whole body has to

@@ -592,6 +592,15 @@ upstream:
       expect(upstream.allowlist, ['http', 'path']);
     });
 
+    test('archive hosts are normalized to lowercase', () {
+      final hosts = parse(
+              'upstream:\n  allowedArchiveHosts: [CDN.Example.com, b.example]\n')
+          .upstream
+          .allowedArchiveHosts;
+      expect(hosts, ['cdn.example.com', 'b.example']);
+      expect(parse(null).upstream.allowedArchiveHosts, isEmpty);
+    });
+
     test('a cache TTL of 0 always asks the upstream', () {
       expect(
           parse('upstream:\n  cacheTtl: 0\n').upstream.cacheTtl, Duration.zero);
@@ -602,6 +611,10 @@ upstream:
       'upstream:\n  cacheTtl: later\n': 'upstream.cacheTtl',
       'upstream:\n  timeout: 0\n': 'upstream.timeout',
       'upstream:\n  allowlist: [Not-A-Package]\n': 'upstream.allowlist',
+      'upstream:\n  allowedArchiveHosts: [https://cdn.example.com]\n':
+          'upstream.allowedArchiveHosts',
+      'upstream:\n  allowedArchiveHosts: [cdn.example.com:8443]\n':
+          'upstream.allowedArchiveHosts',
       'upstream:\n  mode: proxy\n  url: https://u:p@example.com\n':
           'must not contain credentials',
     };

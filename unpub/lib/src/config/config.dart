@@ -45,6 +45,7 @@ const _schema = <String, _ValueKind>{
   'upstream.cacheTtl': _ValueKind.string,
   'upstream.allowlist': _ValueKind.stringList,
   'upstream.timeout': _ValueKind.string,
+  'upstream.allowedArchiveHosts': _ValueKind.stringList,
   'publish.allowedNamePrefixes': _ValueKind.stringList,
   'publish.maxArchiveBytes': _ValueKind.integer,
   'publish.requiredFiles': _ValueKind.stringList,
@@ -240,12 +241,16 @@ class UpstreamConfig {
   /// How long an upstream may stay silent during a request.
   final Duration timeout;
 
+  /// Hosts besides that of [url] that archives may be fetched from.
+  final List<String> allowedArchiveHosts;
+
   const UpstreamConfig({
     required this.url,
     this.mode = UpstreamMode.redirect,
     this.cacheTtl = defaultCacheTtl,
     this.allowlist = const [],
     this.timeout = defaultTimeout,
+    this.allowedArchiveHosts = const [],
   });
 }
 
@@ -630,6 +635,13 @@ class _ConfigReader {
       _problems.add('${_describe('upstream.allowlist')} must contain package '
           'names, got ${invalid.join(', ')}');
     }
+    final archiveHosts = _stringList('upstream.allowedArchiveHosts');
+    final badHosts = archiveHosts.where(
+        (host) => Uri.tryParse('http://$host')?.host != host.toLowerCase());
+    if (badHosts.isNotEmpty) {
+      _problems.add('${_describe('upstream.allowedArchiveHosts')} must contain '
+          'host names, without a scheme or port, got ${badHosts.join(', ')}');
+    }
     return UpstreamConfig(
       url: url,
       mode: mode ?? UpstreamMode.redirect,
@@ -638,6 +650,7 @@ class _ConfigReader {
       allowlist: allowlist,
       timeout: _duration('upstream.timeout', allowZero: false) ??
           UpstreamConfig.defaultTimeout,
+      allowedArchiveHosts: [for (final h in archiveHosts) h.toLowerCase()],
     );
   }
 
