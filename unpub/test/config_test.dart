@@ -611,6 +611,15 @@ upstream:
       expect(upstream.maxConcurrentFetches, 2);
     });
 
+    test('publishing during an outage is off unless turned on', () {
+      expect(parse(null).upstream.allowPublishWhenUnavailable, isFalse);
+      expect(
+          parse('upstream:\n  allowPublishWhenUnavailable: true\n')
+              .upstream
+              .allowPublishWhenUnavailable,
+          isTrue);
+    });
+
     test('requireSha256 is on unless turned off', () {
       expect(parse(null).upstream.requireSha256, isTrue);
       expect(

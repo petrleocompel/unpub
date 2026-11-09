@@ -53,6 +53,16 @@ const _maxJsonBodyBytes = 64 * 1024;
 /// older server does not match.
 const _listingFormat = 'listing-v2';
 
+/// An upload that cannot be decided right now, and can be sent again.
+class _UploadRetryLater implements Exception {
+  final String message;
+
+  const _UploadRetryLater(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class App {
   /// meta information store
   final MetaStore metaStore;
@@ -643,7 +653,8 @@ class App {
       return shelf.Response.found(_resolveUrl(
           req,
           '/api/packages/versions/newUploadFinish'
-          '?error=${Uri.encodeQueryComponent('$err')}'));
+          '?error=${Uri.encodeQueryComponent('$err')}'
+          '${err is _UploadRetryLater ? '&retryable=true' : ''}'));
     } finally {
       if (uploadKey != null) _uploadsInProgress.remove(uploadKey);
     }
@@ -696,8 +707,9 @@ class App {
     return archive.takeBytes();
   }
 
-  /// Refuses a new package that the upstream has, in proxy mode. A package the
-  /// allowlist keeps from being proxied can be published here.
+  /// Refuses a new package unless the upstream definitely does not have it,
+  /// in proxy mode. A package the allowlist keeps from being proxied can be
+  /// published here.
   Future<void> _rejectUpstreamPackage(String name) async {
     final proxy = upstreamProxy;
     if (proxy == null || !proxy.allows(name)) return;
@@ -705,7 +717,11 @@ class App {
     try {
       exists = await proxy.packageExists(name);
     } on UpstreamException catch (error) {
-      _log.warning(LogEvent('could not check the upstream before publishing',
+      if (!proxy.allowPublishWhenUnavailable) {
+        throw _UploadRetryLater('upstream registry unavailable, cannot verify '
+            'that $name is free, try again');
+      }
+      _log.warning(LogEvent('publishing without an answer from the upstream',
           {'name': name, 'reason': error.message}));
       return;
     }
@@ -717,9 +733,13 @@ class App {
 
   @Route.get('/api/packages/versions/newUploadFinish')
   Future<shelf.Response> uploadFinish(shelf.Request req) async {
-    var error = req.requestedUri.queryParameters['error'];
+    final query = req.requestedUri.queryParameters;
+    final error = query['error'];
     if (error != null) {
-      return _badRequest(error);
+      return _badRequest(error,
+          status: query['retryable'] == 'true'
+              ? HttpStatus.serviceUnavailable
+              : HttpStatus.badRequest);
     }
     return _successMessage('Successfully uploaded package.');
   }

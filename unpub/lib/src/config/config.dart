@@ -47,6 +47,7 @@ const _schema = <String, _ValueKind>{
   'upstream.timeout': _ValueKind.string,
   'upstream.allowedArchiveHosts': _ValueKind.stringList,
   'upstream.requireSha256': _ValueKind.boolean,
+  'upstream.allowPublishWhenUnavailable': _ValueKind.boolean,
   'upstream.maxArchiveBytes': _ValueKind.integer,
   'upstream.maxConcurrentFetches': _ValueKind.integer,
   'publish.allowedNamePrefixes': _ValueKind.stringList,
@@ -253,6 +254,11 @@ class UpstreamConfig {
   /// served and cached unverified.
   final bool requireSha256;
 
+  /// Accept a new package name, with a warning, when the upstream cannot say
+  /// whether it has that name. Off by default, because a name published during
+  /// an outage would shadow the upstream package from then on.
+  final bool allowPublishWhenUnavailable;
+
   /// Largest archive fetched from the upstream.
   final int maxArchiveBytes;
 
@@ -267,6 +273,7 @@ class UpstreamConfig {
     this.timeout = defaultTimeout,
     this.allowedArchiveHosts = const [],
     this.requireSha256 = true,
+    this.allowPublishWhenUnavailable = false,
     this.maxArchiveBytes = defaultMaxArchiveBytes,
     this.maxConcurrentFetches = defaultMaxConcurrentFetches,
   });
@@ -679,6 +686,8 @@ class _ConfigReader {
           UpstreamConfig.defaultTimeout,
       allowedArchiveHosts: [for (final h in archiveHosts) h.toLowerCase()],
       requireSha256: _boolean('upstream.requireSha256') ?? true,
+      allowPublishWhenUnavailable:
+          _boolean('upstream.allowPublishWhenUnavailable') ?? false,
       maxArchiveBytes: _integer('upstream.maxArchiveBytes') ??
           UpstreamConfig.defaultMaxArchiveBytes,
       maxConcurrentFetches: _integer('upstream.maxConcurrentFetches') ??

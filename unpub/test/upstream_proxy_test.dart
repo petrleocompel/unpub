@@ -295,12 +295,25 @@ void main() {
             reason: Uri.decodeFull(response.headers['location'] ?? ''));
   }
 
-  Future<String> publishError(String name, String version) async {
-    final response = await app
+  Future<String> publishError(String name, String version, {App? using}) async {
+    final response = await (using ?? app)
         .handler(uploadRequest('name: $name\nversion: $version\n', auth));
     final location = Uri.parse(response.headers['location']!);
     return location.queryParameters['error'] ?? '';
   }
+
+  /// What `dart pub publish` is told when it follows the upload's redirect.
+  Future<shelf.Response> publishOutcome(String name, String version,
+      {App? using}) async {
+    final response = await (using ?? app)
+        .handler(uploadRequest('name: $name\nversion: $version\n', auth));
+    final location = Uri.parse(response.headers['location']!);
+    return get(location.toString().substring('http://internal:4000'.length),
+        headers: auth, using: using);
+  }
+
+  Future<Map<String, dynamic>?> localPackage(String name) =>
+      db.collection(packageCollection).findOne(where.eq('name', name));
 
   setUpAll(() async {
     db = Db(testMongoUri);
@@ -1138,14 +1151,145 @@ void main() {
           isNotNull);
     });
 
-    test('allows the publish with a warning if the upstream fails', () async {
+    test('refuses a name in a fresh cache without asking', () async {
+      await get('/api/packages/$_name');
+      upstream.requests.clear();
+
+      expect(await publishError(_name, '1.0.0'),
+          contains('exists on the upstream registry'));
+      expect(upstream.requests, isEmpty);
+    });
+
+    test('a stale cache asks the upstream, and a 404 accepts', () async {
+      await get('/api/packages/$_name');
+      upstream.packages.remove(_name);
+      now = now.add(const Duration(minutes: 11));
+
+      await publishLocally(_name, '1.0.0');
+
+      expect(await localPackage(_name), isNotNull);
+      expect(upstream.count('/api/packages/$_name'), 2);
+    });
+
+    test('a stale cache the upstream confirms is refused', () async {
+      await get('/api/packages/$_name');
+      now = now.add(const Duration(minutes: 11));
+
+      expect(await publishError(_name, '1.0.0'),
+          contains('exists on the upstream registry'));
+      expect(upstream.count('/api/packages/$_name'), 2);
+    });
+
+    test('a 200 is remembered as a fresh entry', () async {
+      expect(await publishError(_name, '1.0.0'),
+          contains('exists on the upstream registry'));
+      upstream.requests.clear();
+
+      expect(await publishError(_name, '1.0.0'),
+          contains('exists on the upstream registry'));
+      expect(upstream.requests, isEmpty);
+    });
+
+    test('an outage answers a retryable 503, and recovery accepts', () async {
       upstream.failWith = 500;
-      await publishLocally('brand_new', '1.0.0');
+
+      final outcome = await publishOutcome('brand_new', '1.0.0');
+
+      expect(outcome.statusCode, 503);
       expect(
-          await db
-              .collection(packageCollection)
-              .findOne(where.eq('name', 'brand_new')),
-          isNotNull);
+          json.decode(await outcome.readAsString())['error']['message'],
+          'upstream registry unavailable, cannot verify that brand_new is '
+          'free, try again');
+      expect(await localPackage('brand_new'), isNull);
+      expect(filesInStorage(), isEmpty);
+
+      upstream.failWith = null;
+      await publishLocally('brand_new', '1.0.0');
+      expect(await localPackage('brand_new'), isNotNull);
+    });
+
+    test('recovery that finds the name upstream still refuses it', () async {
+      upstream.failWith = 500;
+      expect((await publishOutcome(_name, '1.0.0')).statusCode, 503);
+      expect(await localPackage(_name), isNull);
+
+      upstream.failWith = null;
+      expect(await publishError(_name, '1.0.0'),
+          contains('exists on the upstream registry'));
+      expect(await localPackage(_name), isNull);
+    });
+
+    test('a stale cache during an outage does not accept', () async {
+      await get('/api/packages/$_name');
+      upstream.packages.remove(_name);
+      upstream.failWith = 500;
+      now = now.add(const Duration(minutes: 11));
+
+      expect((await publishOutcome(_name, '1.0.0')).statusCode, 503);
+      expect(await localPackage(_name), isNull);
+    });
+
+    test('an unreachable upstream does not accept', () async {
+      await upstream.stop();
+      expect((await publishOutcome('brand_new', '1.0.0')).statusCode, 503);
+      expect(await localPackage('brand_new'), isNull);
+    });
+
+    test('a listing that is not JSON does not accept', () async {
+      final fake = await shelf_io.serve(
+          (_) => shelf.Response.ok('<html>maintenance</html>'), 'localhost', 0);
+      addTearDown(() => fake.close(force: true));
+      final broken = UpstreamProxy(
+        config: UpstreamConfig(
+            url: Uri.parse('http://localhost:${fake.port}'),
+            mode: UpstreamMode.proxy),
+        cache: MongoUpstreamCacheStore(db),
+        archives: FileStore(storage.path),
+      );
+      addTearDown(broken.close);
+
+      expect(
+          (await publishOutcome('brand_new', '1.0.0',
+                  using: buildApp(using: broken)))
+              .statusCode,
+          503);
+      expect(await localPackage('brand_new'), isNull);
+    });
+
+    test('allowPublishWhenUnavailable accepts with a warning', () async {
+      upstream.failWith = 500;
+      final lenient = UpstreamProxy(
+        config: UpstreamConfig(
+          url: upstream.url,
+          mode: UpstreamMode.proxy,
+          allowPublishWhenUnavailable: true,
+        ),
+        cache: MongoUpstreamCacheStore(db),
+        archives: FileStore(storage.path),
+      );
+      addTearDown(lenient.close);
+
+      await publishLocally('brand_new', '1.0.0',
+          using: buildApp(using: lenient));
+
+      expect(await localPackage('brand_new'), isNotNull);
+    });
+
+    test('allowPublishWhenUnavailable still refuses a known name', () async {
+      final lenient = UpstreamProxy(
+        config: UpstreamConfig(
+          url: upstream.url,
+          mode: UpstreamMode.proxy,
+          allowPublishWhenUnavailable: true,
+        ),
+        cache: MongoUpstreamCacheStore(db),
+        archives: FileStore(storage.path),
+      );
+      addTearDown(lenient.close);
+
+      expect(
+          await publishError(_name, '1.0.0', using: buildApp(using: lenient)),
+          contains('exists on the upstream registry'));
     });
 
     test('a new version of a local package does not ask the upstream',
@@ -1320,6 +1464,30 @@ void main() {
     tearDownAll(tearDownPubClient);
 
     tearDown(() => server.close());
+
+    // Without --skip-validation pub stops earlier, at its own listing request,
+    // which is answered 502 during an outage and is not accepted either.
+    test('dart pub publish reports an upstream outage', () async {
+      final proxied = App(
+        metaStore: MongoStore(db),
+        packageStore: FileStore(storage.path),
+        authenticator: const FakeAuthenticator(testToken, 'dev@b.c'),
+        upstreamProxy: proxy,
+        upstream: upstream.url.toString(),
+      );
+      server = await proxied.serve('0.0.0.0', 4000);
+      upstream.failWith = 503;
+
+      final result = await pubPublishGenerated('brand_new', '1.0.0',
+          arguments: ['--skip-validation']);
+
+      expect(result.exitCode, isNot(0), reason: '${result.stdout}');
+      expect(
+          result.stderr,
+          contains('upstream registry unavailable, cannot verify that '
+              'brand_new is free, try again'));
+      expect(await localPackage('brand_new'), isNull);
+    }, timeout: const Timeout(Duration(minutes: 5)));
 
     test('resolves and downloads a proxied package', () async {
       server = await app.serve('0.0.0.0', 4000);

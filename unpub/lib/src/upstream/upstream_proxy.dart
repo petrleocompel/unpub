@@ -170,6 +170,7 @@ class UpstreamProxy {
   final PackageStore archives;
   final Set<String> allowedArchiveHosts;
   final bool requireSha256;
+  final bool allowPublishWhenUnavailable;
   final int maxArchiveBytes;
   final http.Client _client;
   final DateTime Function() clock;
@@ -190,6 +191,7 @@ class UpstreamProxy {
         timeout = config.timeout,
         allowedArchiveHosts = config.allowedArchiveHosts.toSet(),
         requireSha256 = config.requireSha256,
+        allowPublishWhenUnavailable = config.allowPublishWhenUnavailable,
         maxArchiveBytes = config.maxArchiveBytes,
         _slots = _FetchSlots(config.maxConcurrentFetches),
         _client = client ?? http.Client();
@@ -236,13 +238,11 @@ class UpstreamProxy {
   DateTime _expiry(DateTime fetchedAt) =>
       fetchedAt.add(cacheTtl).add(_staleRetention);
 
-  /// Whether the upstream has [name], preferring what is already cached.
+  /// Whether the upstream has [name]: a fresh listing says so without asking,
+  /// and anything else takes an answer from the upstream.
   ///
-  /// Throws an [UpstreamException] if the upstream cannot tell.
-  Future<bool> packageExists(String name) async {
-    if (await cache.read(name) != null) return true;
-    return await listing(name) != null;
-  }
+  /// Throws an [UpstreamException] if the upstream gives no definitive answer.
+  Future<bool> packageExists(String name) async => await listing(name) != null;
 
   /// The listing of [name], or null if the upstream does not have it.
   ///

@@ -157,6 +157,7 @@ Future<ProcessResult> pubPublishGenerated(
   String name,
   String version, {
   Map<String, String> files = const {},
+  List<String> arguments = const [],
 }) async {
   final directory = await _pubHome.createTemp('package-');
   await File(path.join(directory.path, 'pubspec.yaml')).writeAsString('''
@@ -171,7 +172,7 @@ environment:
   for (final entry in files.entries) {
     await File(path.join(directory.path, entry.key)).writeAsString(entry.value);
   }
-  return Process.run('dart', ['pub', 'publish', '--force'],
+  return Process.run('dart', ['pub', 'publish', '--force', ...arguments],
       workingDirectory: directory.path, environment: _pubEnvironment);
 }
 
