@@ -22,10 +22,11 @@ class ListApiPackage {
   DateTime updatedAt;
   bool isDiscontinued;
   String? replacedBy;
+  int downloads;
 
   ListApiPackage(
       this.name, this.description, this.tags, this.latest, this.updatedAt,
-      {this.isDiscontinued = false, this.replacedBy});
+      {this.isDiscontinued = false, this.replacedBy, this.downloads = 0});
 
   factory ListApiPackage.fromJson(Map<String, dynamic> map) =>
       _$ListApiPackageFromJson(map);
@@ -37,8 +38,11 @@ class DetailViewVersion {
   String version;
   DateTime createdAt;
   bool isRetracted;
+  int downloads;
+  String? uploader;
 
-  DetailViewVersion(this.version, this.createdAt, {this.isRetracted = false});
+  DetailViewVersion(this.version, this.createdAt,
+      {this.isRetracted = false, this.downloads = 0, this.uploader});
 
   factory DetailViewVersion.fromJson(Map<String, dynamic> map) =>
       _$DetailViewVersionFromJson(map);
@@ -64,6 +68,7 @@ class WebapiDetailView {
   DateTime? retractedAt;
   bool isDiscontinued;
   String? replacedBy;
+  DateTime? discontinuedAt;
 
   /// Download counts, keyed `version` and `package`.
   Map<String, int> downloads;
@@ -85,6 +90,7 @@ class WebapiDetailView {
       this.retractedAt,
       this.isDiscontinued = false,
       this.replacedBy,
+      this.discontinuedAt,
       this.downloads = const {}});
 
   factory WebapiDetailView.fromJson(Map<String, dynamic> map) =>

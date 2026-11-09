@@ -27,6 +27,7 @@ ListApiPackage _$ListApiPackageFromJson(Map<String, dynamic> json) =>
       DateTime.parse(json['updatedAt'] as String),
       isDiscontinued: json['isDiscontinued'] as bool? ?? false,
       replacedBy: json['replacedBy'] as String?,
+      downloads: (json['downloads'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$ListApiPackageToJson(ListApiPackage instance) =>
@@ -38,6 +39,7 @@ Map<String, dynamic> _$ListApiPackageToJson(ListApiPackage instance) =>
       'updatedAt': instance.updatedAt.toIso8601String(),
       'isDiscontinued': instance.isDiscontinued,
       'replacedBy': instance.replacedBy,
+      'downloads': instance.downloads,
     };
 
 DetailViewVersion _$DetailViewVersionFromJson(Map<String, dynamic> json) =>
@@ -45,6 +47,8 @@ DetailViewVersion _$DetailViewVersionFromJson(Map<String, dynamic> json) =>
       json['version'] as String,
       DateTime.parse(json['createdAt'] as String),
       isRetracted: json['isRetracted'] as bool? ?? false,
+      downloads: (json['downloads'] as num?)?.toInt() ?? 0,
+      uploader: json['uploader'] as String?,
     );
 
 Map<String, dynamic> _$DetailViewVersionToJson(DetailViewVersion instance) =>
@@ -52,6 +56,8 @@ Map<String, dynamic> _$DetailViewVersionToJson(DetailViewVersion instance) =>
       'version': instance.version,
       'createdAt': instance.createdAt.toIso8601String(),
       'isRetracted': instance.isRetracted,
+      'downloads': instance.downloads,
+      'uploader': instance.uploader,
     };
 
 WebapiDetailView _$WebapiDetailViewFromJson(Map<String, dynamic> json) =>
@@ -78,6 +84,9 @@ WebapiDetailView _$WebapiDetailViewFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['retractedAt'] as String),
       isDiscontinued: json['isDiscontinued'] as bool? ?? false,
       replacedBy: json['replacedBy'] as String?,
+      discontinuedAt: json['discontinuedAt'] == null
+          ? null
+          : DateTime.parse(json['discontinuedAt'] as String),
       downloads: (json['downloads'] as Map<String, dynamic>?)?.map(
             (k, e) => MapEntry(k, (e as num).toInt()),
           ) ??
@@ -102,5 +111,6 @@ Map<String, dynamic> _$WebapiDetailViewToJson(WebapiDetailView instance) =>
       'retractedAt': instance.retractedAt?.toIso8601String(),
       'isDiscontinued': instance.isDiscontinued,
       'replacedBy': instance.replacedBy,
+      'discontinuedAt': instance.discontinuedAt?.toIso8601String(),
       'downloads': instance.downloads,
     };

@@ -543,6 +543,48 @@ void main() {
       final other = await send('GET', '/webapi/package/$name/1.1.0');
       expect(other.body['data']['downloads'], {'version': 0, 'package': 1});
     });
+
+    test('the detail view reports downloads and uploader per version',
+        () async {
+      await publish('1.0.0');
+      await publish('1.1.0');
+      await send('GET', tarball, headers: _pubClient);
+      await waitForCount(1);
+
+      final detail = await send('GET', '/webapi/package/$name/1.0.0');
+
+      final versions = (detail.body['data']['versions'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(versions.map((v) => v['version']), ['1.1.0', '1.0.0']);
+      expect(versions.map((v) => v['downloads']), [0, 1]);
+      expect(versions.map((v) => v['uploader']), ['owner@b.c', 'owner@b.c']);
+      expect(versions.first['createdAt'], isA<String>());
+      expect(versions.first['isRetracted'], isFalse);
+    });
+
+    test('the package list reports the downloads of each package', () async {
+      await publish('1.0.0');
+      await send('GET', tarball, headers: _pubClient);
+      await waitForCount(1);
+
+      final list = await send('GET', '/webapi/packages');
+
+      expect(list.body['data']['packages'].single['downloads'], 1);
+    });
+
+    test('the detail view reports when a package was discontinued', () async {
+      await publish('1.0.0');
+      final route = '/webapi/package/$name/latest';
+      expect((await send('GET', route)).body['data']['discontinuedAt'], isNull);
+
+      await send('PUT', '/api/packages/$name/discontinue',
+          bearer: ownerToken, jsonBody: {'isDiscontinued': true});
+
+      final detail = await send('GET', route);
+      expect(DateTime.parse(detail.body['data']['discontinuedAt'] as String),
+          isA<DateTime>());
+      expect(detail.body['data']['isDiscontinued'], isTrue);
+    });
   });
 
   group('retraction', () {

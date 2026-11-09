@@ -33,6 +33,11 @@ abstract class MetaStore {
   /// How many downloads of [version] of [name] have been counted.
   Future<int> versionDownloads(String name, String version);
 
+  /// How many downloads of each of [versions] of [name] have been counted.
+  Future<Map<String, int>> versionDownloadCounts(
+          String name, Iterable<String> versions) async =>
+      {for (final v in versions) v: await versionDownloads(name, v)};
+
   /// Marks a version as retracted, or restores it when [retracted] is false.
   ///
   /// Returns false if the version was already in that state.

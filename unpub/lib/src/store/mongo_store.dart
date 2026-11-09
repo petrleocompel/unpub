@@ -195,6 +195,20 @@ class MongoStore extends MetaStore {
     return (stats?['count'] as num?)?.toInt() ?? 0;
   }
 
+  @override
+  Future<Map<String, int>> versionDownloadCounts(
+      String name, Iterable<String> versions) async {
+    final stats = await db
+        .collection(versionStatsCollection)
+        .find(where.eq('name', name).fields(['version', 'count']))
+        .toList();
+    final counted = {
+      for (final item in stats)
+        item['version'] as String: (item['count'] as num?)?.toInt() ?? 0,
+    };
+    return {for (final version in versions) version: counted[version] ?? 0};
+  }
+
   /// Selects [version] of [name] only while it is not yet in the target state,
   /// so that the first of two concurrent calls is the one that changes it.
   static Map<String, Object> _retractionSelector(

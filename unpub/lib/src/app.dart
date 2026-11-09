@@ -1001,6 +1001,7 @@ class App {
           package.updatedAt,
           isDiscontinued: package.isDiscontinued,
           replacedBy: package.replacedBy,
+          downloads: package.download ?? 0,
         )
     ]);
 
@@ -1055,9 +1056,13 @@ class App {
       return _okWithJson({'error': 'version not exists'});
     }
 
+    final downloadCounts = await metaStore.versionDownloadCounts(
+        name, package.versions.map((v) => v.version));
     var versions = package.versions
         .map((v) => DetailViewVersion(v.version, v.createdAt,
-            isRetracted: v.isRetracted))
+            isRetracted: v.isRetracted,
+            downloads: downloadCounts[v.version] ?? 0,
+            uploader: v.uploader))
         .toList();
     versions.sort((a, b) {
       return semver.Version.prioritize(
@@ -1098,9 +1103,9 @@ class App {
       retractedAt: packageVersion.retractedAt,
       isDiscontinued: package.isDiscontinued,
       replacedBy: package.replacedBy,
+      discontinuedAt: package.discontinuedAt,
       downloads: {
-        'version':
-            await metaStore.versionDownloads(name, packageVersion.version),
+        'version': downloadCounts[packageVersion.version] ?? 0,
         'package': package.download ?? 0,
       },
     );
