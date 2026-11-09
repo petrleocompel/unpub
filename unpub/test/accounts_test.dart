@@ -466,6 +466,16 @@ void main() {
       expect(await read(bearer: 'stale'), HttpStatus.ok);
     });
 
+    test('public mode accepts a user token', () async {
+      final reader = await user('r@b.c', Role.reader);
+      expect(await read(bearer: await token(reader)), HttpStatus.ok);
+    });
+
+    test('public mode accepts a session', () async {
+      final browser = await login(await user('r@b.c', Role.reader));
+      expect(await read(browser: browser), HttpStatus.ok);
+    });
+
     test('authenticated mode refuses anonymous clients', () async {
       expect(await read(using: private), HttpStatus.unauthorized);
     });
