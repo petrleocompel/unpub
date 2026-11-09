@@ -2,7 +2,7 @@
 
 Unpub is a self-hosted private Dart Pub server for teams, with a simple web interface to search and view package information. It is a single binary that stores metadata in MongoDB and package archives on disk or in S3.
 
-> **This is a modernization in progress.** Authentication is temporary: a single shared token gates publishing until user accounts arrive. The plan for accounts, policies, the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
+> **This is a modernization in progress.** Authentication is temporary: a single shared token gates publishing, and optional shared tokens gate reading, until user accounts arrive. The plan for accounts, policies, the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Screenshot](assets/screenshot.png)
 
@@ -41,7 +41,9 @@ dependencies:
 
 Packages not found locally redirect to the upstream, pub.dev by default, so setting `PUB_HOSTED_URL` to this server also works for mixed dependency trees.
 
-Reading is public. Only publishing and uploader management need the token. Dart clients only send tokens over HTTPS, except to localhost, so deploy behind TLS.
+Reading is public by default, and only publishing and uploader management need the token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz` and `/readyz` then needs a Bearer token from `auth.readTokens`, or the bootstrap token, which `dart pub get` sends once added with `dart pub token add`. The embedded web UI cannot send tokens, so it does not work in that mode until the new UI arrives.
+
+Dart clients only send tokens over HTTPS, except to localhost, so deploy behind TLS.
 
 ## Running from source
 
@@ -93,6 +95,8 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `upstream.url` | `UNPUB_UPSTREAM_URL` | `https://pub.dev` | Where unknown packages redirect. |
 | `auth.bootstrapToken` | `UNPUB_AUTH_BOOTSTRAP_TOKEN` | | Bearer token for publishing and uploader management. Publishing is disabled while unset. |
 | `auth.bootstrapEmail` | `UNPUB_AUTH_BOOTSTRAP_EMAIL` | `admin@localhost` | Uploader recorded for token publishes. |
+| `auth.readAccess` | `UNPUB_AUTH_READ_ACCESS` | `public` | `public`, or `authenticated` to require a Bearer token on every route except `/healthz` and `/readyz`. |
+| `auth.readTokens` | `UNPUB_AUTH_READ_TOKENS` | | Tokens that may read but not publish. A YAML list, or comma separated in the environment. |
 | `logging.level` | `UNPUB_LOGGING_LEVEL` | `info` | `fine`, `info`, `warning`, `severe` and other `package:logging` levels, or `off`. |
 | `logging.format` | `UNPUB_LOGGING_FORMAT` | `text` | `text` or `json`. |
 
@@ -101,8 +105,18 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 ### Upgrading from 2.x
 
 - The `--database` and `--proxy-origin` flags and the `proxy-origin` header are replaced by `mongo.uri` and `server.publicUrl`.
-- `UPLOAD_TOKEN`, `UPLOAD_EMAIL`, `ALLOWED_TOKENS` and Google sign-in are gone. Set `auth.bootstrapToken` instead.
-- Publishing to an existing package requires the uploader to be on its list, so set `auth.bootstrapEmail` to an email already listed in your packages' `uploaders`.
+- Google sign-in is gone. The environment variables map as follows:
+
+  | 2.x | 3.x |
+  | --- | --- |
+  | `UPLOAD_TOKEN` | `auth.bootstrapToken` |
+  | `UPLOAD_EMAIL` | `auth.bootstrapEmail` |
+  | `ALLOWED_TOKENS` | `auth.readAccess: authenticated` and `auth.readTokens` |
+
+- A registry that set `ALLOWED_TOKENS` was private. It becomes world-readable unless you set `auth.readAccess: authenticated`, which is not the default.
+- The embedded web UI cannot send tokens, so it is unusable in `authenticated` mode, as it was with `ALLOWED_TOKENS`, until the new UI replaces it.
+- `auth.bootstrapEmail` must match an email already present in the `uploaders` of your existing packages, because publishing to a package requires being on that list.
+- Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
 - MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default.
 
 ### Behind a reverse proxy

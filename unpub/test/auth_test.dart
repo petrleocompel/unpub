@@ -61,6 +61,84 @@ void main() {
     }
   });
 
+  group('read gate', () {
+    Principal? seen;
+    final handler = const Pipeline()
+        .addMiddleware(authMiddleware(
+      const BootstrapTokenAuthenticator(token: 'write-token'),
+      readAuthenticator:
+          const ReadTokenAuthenticator({'read-token', 'write-token'}),
+    ))
+        .addHandler((request) {
+      seen = principalOf(request);
+      return Response.ok('inner');
+    });
+
+    setUp(() => seen = null);
+
+    const readRoutes = [
+      ['GET', ''],
+      ['GET', 'main.dart.js'],
+      ['GET', 'api/packages/foo'],
+      ['GET', 'packages/foo/versions/1.0.0.tar.gz'],
+      ['GET', 'webapi/packages'],
+      ['HEAD', 'webapi/packages'],
+      ['GET', 'badge/v/foo'],
+      ['GET', 'healthz/'],
+    ];
+
+    for (var route in readRoutes) {
+      test('${route[0]} /${route[1]} needs a token', () async {
+        var response = await handler(request(route[0], route[1]));
+        expect(response.statusCode, HttpStatus.unauthorized);
+        expect(response.headers['content-type'], contains('json'));
+        expect(json.decode(await response.readAsString())['error']['message'],
+            contains('Bearer'));
+      });
+
+      test('${route[0]} /${route[1]} rejects a wrong token', () async {
+        var response = await handler(
+            request(route[0], route[1], authorization: 'Bearer wrong'));
+        expect(response.statusCode, HttpStatus.unauthorized);
+      });
+
+      for (var token in ['read-token', 'write-token']) {
+        test('${route[0]} /${route[1]} accepts $token', () async {
+          var response = await handler(
+              request(route[0], route[1], authorization: 'Bearer $token'));
+          expect(response.statusCode, HttpStatus.ok);
+          expect(seen, isNull);
+        });
+      }
+    }
+
+    for (var path in ['healthz', 'readyz']) {
+      test('$path stays open', () async {
+        expect((await handler(request('GET', path))).statusCode, HttpStatus.ok);
+      });
+    }
+
+    for (var route in const [
+      ['GET', 'api/packages/versions/new'],
+      ['POST', 'api/packages/versions/newUpload'],
+      ['POST', 'api/packages/foo/uploaders'],
+    ]) {
+      test('a read token cannot ${route[0]} ${route[1]}', () async {
+        var response = await handler(
+            request(route[0], route[1], authorization: 'Bearer read-token'));
+        expect(response.statusCode, HttpStatus.unauthorized);
+        expect(seen, isNull);
+      });
+
+      test('the bootstrap token can ${route[0]} ${route[1]}', () async {
+        var response = await handler(
+            request(route[0], route[1], authorization: 'Bearer write-token'));
+        expect(response.statusCode, HttpStatus.ok);
+        expect(seen, isNotNull);
+      });
+    }
+  });
+
   group('auth middleware', () {
     Principal? seen;
     final handler = const Pipeline()

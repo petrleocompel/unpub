@@ -87,6 +87,49 @@ void main() {
       }, timeout: const Timeout(Duration(minutes: 2)));
     }
 
+    test('authenticated read access is wired through the config', () async {
+      var config = File(path.join(directory.path, 'unpub.yaml'))
+        ..writeAsStringSync('''
+server:
+  host: 127.0.0.1
+mongo:
+  uri: $testMongoUri
+storage:
+  file:
+    path: ${path.join(directory.path, 'packages')}
+logging:
+  format: json
+auth:
+  readAccess: authenticated
+  readTokens:
+    - reader-token
+''');
+      var process = await Process.start(Platform.resolvedExecutable,
+          ['run', 'bin/unpub.dart', 'serve', '-c', config.path, '-p', '0']);
+      addTearDown(process.kill);
+      unawaited(process.stderr.drain<void>());
+      // Stays subscribed, as the server exits if its stdout closes.
+      var lines = process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .asBroadcastStream()
+        ..listen((_) {});
+      var listening = await lines
+          .firstWhere((line) => line.contains('"listening"'))
+          .timeout(const Duration(minutes: 1));
+      expect(json.decode(listening)['readAccess'], 'authenticated');
+      var base = Uri.parse(
+          'http://127.0.0.1:${json.decode(listening)['port'] as int}');
+
+      var open = await http.get(base.resolve('/healthz'));
+      expect(open.statusCode, HttpStatus.ok);
+      var denied = await http.get(base.resolve('/webapi/packages'));
+      expect(denied.statusCode, HttpStatus.unauthorized);
+      var allowed = await http.get(base.resolve('/webapi/packages'),
+          headers: {'authorization': 'Bearer reader-token'});
+      expect(allowed.statusCode, HttpStatus.ok);
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
     test('a missing config file is reported', () async {
       var result = await unpub(['serve', '--config', '/nonexistent.yaml']);
       expect(result.exitCode, 1);

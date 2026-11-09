@@ -18,7 +18,7 @@ class ConfigException implements Exception {
       '${problems.map((problem) => '  - $problem').join('\n')}';
 }
 
-enum _ValueKind { string, integer, boolean }
+enum _ValueKind { string, stringList, integer, boolean }
 
 /// Every key the configuration file and environment accept.
 const _schema = <String, _ValueKind>{
@@ -40,6 +40,8 @@ const _schema = <String, _ValueKind>{
   'upstream.url': _ValueKind.string,
   'auth.bootstrapToken': _ValueKind.string,
   'auth.bootstrapEmail': _ValueKind.string,
+  'auth.readAccess': _ValueKind.string,
+  'auth.readTokens': _ValueKind.stringList,
   'logging.level': _ValueKind.string,
   'logging.format': _ValueKind.string,
 };
@@ -50,6 +52,7 @@ const _secretKeys = {
   'storage.s3.secretKey',
   'storage.s3.sessionToken',
   'auth.bootstrapToken',
+  'auth.readTokens',
   'mongo.uri',
 };
 
@@ -197,6 +200,9 @@ class UpstreamConfig {
   const UpstreamConfig({required this.url});
 }
 
+/// Who may read packages.
+enum ReadAccess { public, authenticated }
+
 class AuthConfig {
   /// Bearer token that may publish. Publishing is disabled when null.
   final String? bootstrapToken;
@@ -204,8 +210,18 @@ class AuthConfig {
   /// Uploader email recorded for publishes using [bootstrapToken].
   final String bootstrapEmail;
 
-  const AuthConfig(
-      {required this.bootstrapToken, required this.bootstrapEmail});
+  final ReadAccess readAccess;
+
+  /// Bearer tokens that may read when [readAccess] is `authenticated`, in
+  /// addition to [bootstrapToken]. They cannot publish.
+  final List<String> readTokens;
+
+  const AuthConfig({
+    required this.bootstrapToken,
+    required this.bootstrapEmail,
+    this.readAccess = ReadAccess.public,
+    this.readTokens = const [],
+  });
 }
 
 class LoggingConfig {
@@ -385,6 +401,27 @@ class _ConfigReader {
     }
     _problems.add('${_describe(key)} must be a string');
     return null;
+  }
+
+  /// A YAML list, or a comma separated string as environment variables use.
+  List<String> _stringList(String key) {
+    assert(_schema[key] == _ValueKind.stringList);
+    final value = _values[key];
+    if (value == null) return const [];
+    final items = switch (value) {
+      String() => value.split(','),
+      YamlList() => value.map((item) => '$item').toList(),
+      _ => null,
+    };
+    if (items == null ||
+        (value is YamlList && value.any((item) => item is! String))) {
+      _problems.add('${_describe(key)} must be a list of strings');
+      return const [];
+    }
+    return [
+      for (final item in items)
+        if (item.trim().isNotEmpty) item.trim(),
+    ];
   }
 
   int? _integer(String key) {
@@ -575,7 +612,30 @@ class _ConfigReader {
       _problems.add('${_describe('auth.bootstrapEmail')} must be an email '
           'address, got ${_shown('auth.bootstrapEmail')}');
     }
-    return AuthConfig(bootstrapToken: token, bootstrapEmail: email);
+    final readAccessName = _string('auth.readAccess') ?? ReadAccess.public.name;
+    final readAccess =
+        ReadAccess.values.where((a) => a.name == readAccessName).firstOrNull;
+    if (readAccess == null) {
+      _problems.add('${_describe('auth.readAccess')} must be one of public, '
+          'authenticated, got ${_shown('auth.readAccess')}');
+    }
+    final readTokens = _stringList('auth.readTokens');
+    if (readTokens.any((t) => !_bearerTokenPattern.hasMatch(t))) {
+      _problems.add('${_describe('auth.readTokens')} may only contain tokens '
+          'with the characters a-z A-Z 0-9 . _ ~ + / = -');
+    }
+    if (readAccess == ReadAccess.authenticated &&
+        readTokens.isEmpty &&
+        token == null) {
+      _problems.add('auth.readAccess is authenticated, so at least one of '
+          'auth.readTokens and auth.bootstrapToken must be set');
+    }
+    return AuthConfig(
+      bootstrapToken: token,
+      bootstrapEmail: email,
+      readAccess: readAccess ?? ReadAccess.public,
+      readTokens: readTokens,
+    );
   }
 
   LoggingConfig _logging() {

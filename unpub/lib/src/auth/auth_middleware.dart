@@ -17,6 +17,12 @@ bool isWriteRequest(shelf.Request request) {
   return _publishPath.hasMatch(path) || _uploadersPath.hasMatch(path);
 }
 
+/// Whether [request] targets a probe that stays open in every read mode.
+bool isHealthRequest(shelf.Request request) {
+  final path = request.url.path;
+  return path == 'healthz' || path == 'readyz';
+}
+
 /// The principal set by [authMiddleware], if the request was authenticated.
 Principal? principalOf(shelf.Request request) =>
     request.context[_principalContextKey] as Principal?;
@@ -25,13 +31,28 @@ Principal? principalOf(shelf.Request request) =>
 ///
 /// Handlers read the identity with [principalOf] and stay unaware of how it
 /// was established.
+///
+/// When [readAuthenticator] is set, every other request except the health
+/// probes must pass it. Its principal is not exposed to handlers, because it
+/// only grants reading and must never count as an uploader.
 shelf.Middleware authMiddleware(
   Authenticator authenticator, {
   bool Function(shelf.Request) requiresAuthentication = isWriteRequest,
+  Authenticator? readAuthenticator,
 }) {
   return (shelf.Handler inner) {
     return (shelf.Request request) async {
-      if (!requiresAuthentication(request)) return inner(request);
+      if (!requiresAuthentication(request)) {
+        if (readAuthenticator == null || isHealthRequest(request)) {
+          return inner(request);
+        }
+        try {
+          await readAuthenticator.authenticate(request);
+        } on AuthException catch (error) {
+          return _denied(error);
+        }
+        return inner(request);
+      }
       final Principal principal;
       try {
         principal = await authenticator.authenticate(request);

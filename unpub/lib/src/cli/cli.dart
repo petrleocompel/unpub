@@ -96,6 +96,7 @@ class _ServeCommand extends Command<int> {
     _log.info(LogEvent('listening', {
       'host': config.server.host,
       'port': server.port,
+      'readAccess': config.auth.readAccess.name,
     }));
     if (config.auth.bootstrapToken == null) {
       _log.warning('auth.bootstrapToken is not set, publishing is disabled');

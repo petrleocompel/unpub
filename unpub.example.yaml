@@ -46,6 +46,15 @@ auth:
   # Recorded as the uploader of publishes that use the token, and checked
   # against the uploaders of existing packages.
   bootstrapEmail: admin@localhost
+  # public: anyone can read. authenticated: every route except /healthz and
+  # /readyz needs a Bearer token from readTokens, or the bootstrap token.
+  # The embedded web UI cannot send tokens, so it does not work when
+  # authenticated.
+  readAccess: public
+  # Tokens that may read but not publish. As UNPUB_AUTH_READ_TOKENS, separate
+  # them with commas.
+  # readTokens:
+  #   - replace-with-a-long-random-token
 
 logging:
   # finest, finer, fine (debug), config, info, warning, severe (error), shout, off

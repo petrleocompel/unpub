@@ -28,6 +28,7 @@ const testToken = 'test-bootstrap-token';
 Future<HttpServer> createServer(
   String opEmail, {
   String? token = testToken,
+  Set<String>? readTokens,
 }) async {
   final db = Db(testMongoUri);
   await db.open();
@@ -39,6 +40,8 @@ Future<HttpServer> createServer(
       token: token,
       email: opEmail,
     ),
+    readAuthenticator:
+        readTokens == null ? null : unpub.ReadTokenAuthenticator(readTokens),
   );
 
   return app.serve('0.0.0.0', 4000);
@@ -59,7 +62,11 @@ Future<void> setUpPubClient() async {
     'PUB_CACHE': path.join(_pubHome.path, 'cache'),
     'PUB_HOSTED_URL': pubHostedUrl,
   };
+  await addPubToken();
+}
 
+/// Stores [testToken] in the pub client, which forgets a token after a 401.
+Future<void> addPubToken() async {
   final process = await Process.start(
     'dart',
     ['pub', 'token', 'add', pubHostedUrl],

@@ -64,25 +64,53 @@ class BootstrapTokenAuthenticator implements Authenticator {
     }
     return Principal(email);
   }
+}
 
-  static String? _bearerToken(shelf.Request request) {
-    final header = request.headers[HttpHeaders.authorizationHeader];
-    if (header == null) return null;
-    final parts = header.trim().split(RegExp(r'\s+'));
-    if (parts.length != 2 || parts.first.toLowerCase() != 'bearer') {
-      return null;
-    }
-    return parts.last;
-  }
+/// Authenticates readers against a fixed set of Bearer tokens.
+///
+/// Used for `auth.readAccess: authenticated` until user accounts replace it.
+class ReadTokenAuthenticator implements Authenticator {
+  final Set<String> tokens;
 
-  /// Compares digests so the running time reveals nothing about the token.
-  static bool _constantTimeEquals(String a, String b) {
-    final digestA = sha256.convert(utf8.encode(a)).bytes;
-    final digestB = sha256.convert(utf8.encode(b)).bytes;
-    var difference = 0;
-    for (var i = 0; i < digestA.length; i++) {
-      difference |= digestA[i] ^ digestB[i];
+  const ReadTokenAuthenticator(this.tokens);
+
+  @override
+  Future<Principal> authenticate(shelf.Request request) async {
+    final presented = _bearerToken(request);
+    if (presented == null) {
+      throw const AuthException.unauthorized(
+          'This server requires a Bearer token to read packages. '
+          'Add one with: dart pub token add <server url>');
     }
-    return difference == 0;
+    // Checks every token so the running time does not reveal a match.
+    var matched = false;
+    for (final token in tokens) {
+      matched |= _constantTimeEquals(presented, token);
+    }
+    if (!matched) {
+      throw const AuthException.unauthorized('Invalid Bearer token.');
+    }
+    return const Principal('reader@localhost');
   }
+}
+
+String? _bearerToken(shelf.Request request) {
+  final header = request.headers[HttpHeaders.authorizationHeader];
+  if (header == null) return null;
+  final parts = header.trim().split(RegExp(r'\s+'));
+  if (parts.length != 2 || parts.first.toLowerCase() != 'bearer') {
+    return null;
+  }
+  return parts.last;
+}
+
+/// Compares digests so the running time reveals nothing about the token.
+bool _constantTimeEquals(String a, String b) {
+  final digestA = sha256.convert(utf8.encode(a)).bytes;
+  final digestB = sha256.convert(utf8.encode(b)).bytes;
+  var difference = 0;
+  for (var i = 0; i < digestA.length; i++) {
+    difference |= digestA[i] ^ digestB[i];
+  }
+  return difference == 0;
 }

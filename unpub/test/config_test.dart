@@ -35,6 +35,8 @@ void main() {
       expect(config.upstream.url.toString(), 'https://pub.dev');
       expect(config.auth.bootstrapToken, isNull);
       expect(config.auth.bootstrapEmail, 'admin@localhost');
+      expect(config.auth.readAccess, ReadAccess.public);
+      expect(config.auth.readTokens, isEmpty);
       expect(config.logging.level, Level.INFO);
       expect(config.logging.format, LogFormat.text);
     });
@@ -261,6 +263,54 @@ logging:
         expect(error.toString(), isNot(contains('se cret')));
         expect(error.toString(), isNot(contains('hunter2')));
       }
+    });
+  });
+
+  group('read access', () {
+    test('reads tokens from a yaml list', () {
+      var auth = parse('auth:\n  readAccess: authenticated\n'
+              '  readTokens:\n    - one\n    - two\n')
+          .auth;
+      expect(auth.readAccess, ReadAccess.authenticated);
+      expect(auth.readTokens, ['one', 'two']);
+    });
+
+    test('reads comma separated tokens from the environment', () {
+      var auth = parse(null, env: {
+        'UNPUB_AUTH_READ_ACCESS': 'authenticated',
+        'UNPUB_AUTH_READ_TOKENS': 'one, two,,three ',
+      }).auth;
+      expect(auth.readAccess, ReadAccess.authenticated);
+      expect(auth.readTokens, ['one', 'two', 'three']);
+    });
+
+    test('rejects an unknown mode', () {
+      expect(() => parse('auth:\n  readAccess: private\n'),
+          problemsContaining([contains('auth.readAccess')]));
+    });
+
+    test('authenticated needs some token', () {
+      expect(() => parse('auth:\n  readAccess: authenticated\n'),
+          problemsContaining([contains('at least one')]));
+    });
+
+    test('the bootstrap token is enough', () {
+      parse('auth:\n  readAccess: authenticated\n  bootstrapToken: abc\n');
+    });
+
+    test('rejects invalid tokens without printing them', () {
+      try {
+        parse('auth:\n  readTokens:\n    - "se cret"\n');
+        fail('expected a ConfigException');
+      } on ConfigException catch (error) {
+        expect(error.toString(), contains('auth.readTokens'));
+        expect(error.toString(), isNot(contains('se cret')));
+      }
+    });
+
+    test('rejects a value that is not a list of strings', () {
+      expect(() => parse('auth:\n  readTokens:\n    - 123\n'),
+          problemsContaining([contains('list of strings')]));
     });
   });
 

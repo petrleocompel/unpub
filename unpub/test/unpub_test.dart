@@ -542,6 +542,49 @@ void main() {
     });
   });
 
+  group('authenticated read access', () {
+    setUpAll(() async {
+      await cleanUpDb();
+      server = await createServer(email0, readTokens: {testToken});
+      await addPubToken();
+      await pubPublish(package0, '0.0.1');
+    });
+
+    tearDownAll(() async {
+      await server.close();
+    });
+
+    for (var route in [
+      '/',
+      '/main.dart.js',
+      '/api/packages/package_0',
+      '/api/packages/package_0/versions/0.0.1',
+      '/packages/package_0/versions/0.0.1.tar.gz',
+      '/packages/package_0.json',
+      '/webapi/packages',
+      '/webapi/package/package_0/latest',
+      '/badge/v/package_0',
+    ]) {
+      test('$route needs a token', () async {
+        var res = await http.get(baseUri.resolve(route));
+        expect(res.statusCode, HttpStatus.unauthorized);
+        expect(json.decode(res.body)['error']['message'], contains('Bearer'));
+      });
+    }
+
+    test('the probes stay open', () async {
+      expect((await http.get(baseUri.resolve('/healthz'))).statusCode,
+          HttpStatus.ok);
+      expect((await http.get(baseUri.resolve('/readyz'))).statusCode,
+          HttpStatus.ok);
+    });
+
+    test('dart pub get works with the token', () async {
+      var result = await pubGetConsumer(package0, '0.0.1');
+      expect(result.exitCode, 0, reason: '${result.stdout}${result.stderr}');
+    });
+  });
+
   group('ready', () {
     setUpAll(() async {
       server = await createServer(email0);

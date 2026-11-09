@@ -48,6 +48,9 @@ class App {
   /// Establishes the identity behind publishing and uploader requests.
   final Authenticator authenticator;
 
+  /// Gates every other request when set, except `/healthz` and `/readyz`.
+  final Authenticator? readAuthenticator;
+
   /// External URL of this server. When null, URLs derive from the request.
   final Uri? publicUrl;
 
@@ -59,6 +62,7 @@ class App {
     required this.metaStore,
     required this.packageStore,
     required this.authenticator,
+    this.readAuthenticator,
     this.upstream = 'https://pub.dev',
     this.uploadValidator,
     this.publicUrl,
@@ -116,7 +120,8 @@ class App {
   shelf.Handler get handler => const shelf.Pipeline()
       .addMiddleware(corsHeaders())
       .addMiddleware(requestLogger())
-      .addMiddleware(authMiddleware(authenticator))
+      .addMiddleware(
+          authMiddleware(authenticator, readAuthenticator: readAuthenticator))
       .addHandler(router.call);
 
   Future<HttpServer> serve([String host = '0.0.0.0', int port = 4000]) {

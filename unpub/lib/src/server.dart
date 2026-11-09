@@ -56,6 +56,7 @@ class UnpubServer {
           token: config.auth.bootstrapToken,
           email: config.auth.bootstrapEmail,
         ),
+        readAuthenticator: _createReadAuthenticator(config.auth),
         upstream: config.upstream.url.toString(),
         publicUrl: config.server.publicUrl,
       );
@@ -65,6 +66,14 @@ class UnpubServer {
       await db.close().catchError((Object _) {});
       rethrow;
     }
+  }
+
+  static Authenticator? _createReadAuthenticator(AuthConfig auth) {
+    if (auth.readAccess == ReadAccess.public) return null;
+    return ReadTokenAuthenticator({
+      ...auth.readTokens,
+      if (auth.bootstrapToken != null) auth.bootstrapToken!,
+    });
   }
 
   static Future<PackageStore> _createPackageStore(StorageConfig storage) async {
