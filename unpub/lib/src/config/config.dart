@@ -52,6 +52,7 @@ const _schema = <String, _ValueKind>{
   'upstream.maxConcurrentFetches': _ValueKind.integer,
   'publish.allowedNamePrefixes': _ValueKind.stringList,
   'publish.maxArchiveBytes': _ValueKind.integer,
+  'publish.maxUnpackedBytes': _ValueKind.integer,
   'publish.requiredFiles': _ValueKind.stringList,
   'publish.rejectOlderThanLatest': _ValueKind.boolean,
   'publish.requireVersionBump': _ValueKind.boolean,
@@ -282,10 +283,14 @@ class UpstreamConfig {
 /// Rules an upload must satisfy.
 class PublishConfig {
   static const defaultMaxArchiveBytes = 100 * 1024 * 1024;
+  static const defaultMaxUnpackedBytes = 512 * 1024 * 1024;
 
   /// Package names must start with one of these, or empty for any name.
   final List<String> allowedNamePrefixes;
   final int maxArchiveBytes;
+
+  /// Largest size an archive may inflate to, against compression bombs.
+  final int maxUnpackedBytes;
 
   /// Files the archive must hold at its root, matched ignoring case.
   final List<String> requiredFiles;
@@ -304,6 +309,7 @@ class PublishConfig {
   const PublishConfig({
     this.allowedNamePrefixes = const [],
     this.maxArchiveBytes = defaultMaxArchiveBytes,
+    this.maxUnpackedBytes = defaultMaxUnpackedBytes,
     this.requiredFiles = const [],
     this.rejectOlderThanLatest = false,
     this.requireVersionBump = true,
@@ -712,10 +718,16 @@ class _ConfigReader {
     if (maxBytes != null && maxBytes <= 0) {
       _problems.add('${_describe('publish.maxArchiveBytes')} must be positive');
     }
+    final maxUnpacked = _integer('publish.maxUnpackedBytes');
+    if (maxUnpacked != null && maxUnpacked <= 0) {
+      _problems
+          .add('${_describe('publish.maxUnpackedBytes')} must be positive');
+    }
     final window = _duration('publish.retractionWindow', allowZero: true);
     return PublishConfig(
       allowedNamePrefixes: prefixes,
       maxArchiveBytes: maxBytes ?? defaults.maxArchiveBytes,
+      maxUnpackedBytes: maxUnpacked ?? defaults.maxUnpackedBytes,
       requiredFiles: requiredFiles,
       rejectOlderThanLatest: _boolean('publish.rejectOlderThanLatest') ?? false,
       requireVersionBump: _boolean('publish.requireVersionBump') ?? true,

@@ -642,6 +642,7 @@ upstream:
       'upstream:\n  cacheTtl: later\n': 'upstream.cacheTtl',
       'upstream:\n  timeout: 0\n': 'upstream.timeout',
       'upstream:\n  allowlist: [Not-A-Package]\n': 'upstream.allowlist',
+      'publish:\n  maxUnpackedBytes: 0\n': 'publish.maxUnpackedBytes',
       'upstream:\n  maxArchiveBytes: 0\n': 'upstream.maxArchiveBytes',
       'upstream:\n  maxConcurrentFetches: 0\n': 'upstream.maxConcurrentFetches',
       'upstream:\n  allowedArchiveHosts: [https://cdn.example.com]\n':

@@ -540,7 +540,7 @@ class App {
     (String, String, String)? reservation;
     try {
       var tarballBytes = await _readUploadedArchive(req);
-      var tarBytes = GZipDecoder().decodeBytes(tarballBytes);
+      var tarBytes = publishPolicy.inflate(tarballBytes);
       var archive = TarDecoder().decodeBytes(tarBytes);
       ArchiveFile? pubspecArchiveFile;
       ArchiveFile? readmeFile;

@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:pub_semver/pub_semver.dart';
 
 import 'config/config.dart';
@@ -12,6 +15,27 @@ class PublishPolicyViolation implements Exception {
 
   @override
   String toString() => message;
+}
+
+class _LimitedBytesSink implements Sink<List<int>> {
+  final int limit;
+  final _bytes = BytesBuilder(copy: false);
+
+  _LimitedBytesSink(this.limit);
+
+  @override
+  void add(List<int> chunk) {
+    if (_bytes.length + chunk.length > limit) {
+      throw PublishPolicyViolation('publish.maxUnpackedBytes: the archive '
+          'unpacks to more than the limit of $limit bytes.');
+    }
+    _bytes.add(chunk);
+  }
+
+  @override
+  void close() {}
+
+  Uint8List takeBytes() => _bytes.takeBytes();
 }
 
 /// Applies the `publish` settings to an upload.
@@ -33,6 +57,18 @@ class PublishPolicy {
       PublishPolicyViolation('publish.maxArchiveBytes: the archive'
           '${size == null ? '' : ' is $size bytes, which'} exceeds the limit '
           'of ${config.maxArchiveBytes} bytes.');
+
+  /// [gzipped] inflated, refused as soon as it passes `maxUnpackedBytes`.
+  ///
+  /// The decoder hands over each block as it inflates, so a compression bomb
+  /// is stopped at the limit instead of filling the memory first.
+  Uint8List inflate(List<int> gzipped) {
+    final output = _LimitedBytesSink(config.maxUnpackedBytes);
+    final decoder = gzip.decoder.startChunkedConversion(output);
+    decoder.add(gzipped);
+    decoder.close();
+    return output.takeBytes();
+  }
 
   /// Refuses [name] unless it starts with an allowed prefix.
   void checkName(String name) {

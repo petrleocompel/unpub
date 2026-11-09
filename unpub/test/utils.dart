@@ -75,10 +75,14 @@ Future<HttpServer> createServer(
 }
 
 /// A `dart pub publish` upload of an archive holding [pubspec].
-shelf.Request uploadRequest(String pubspec, Map<String, String> headers) {
+shelf.Request uploadRequest(String pubspec, Map<String, String> headers) =>
+    uploadRequestOf(
+        Archive()..addFile(ArchiveFile.string('pubspec.yaml', pubspec)),
+        headers);
+
+/// A `dart pub publish` upload of [archive], packed as a `.tar.gz`.
+shelf.Request uploadRequestOf(Archive archive, Map<String, String> headers) {
   const boundary = 'test-boundary';
-  final archive = Archive()
-    ..addFile(ArchiveFile.string('pubspec.yaml', pubspec));
   final tarball = GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
   return shelf.Request(
     'POST',

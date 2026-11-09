@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:mongo_dart/mongo_dart.dart';
+import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
 
@@ -84,6 +88,79 @@ void main() {
           'publish.maxArchiveBytes');
       expect(await versionsOf('sized'), isEmpty);
     }, timeout: _timeout);
+  });
+
+  group('publish.maxUnpackedBytes', () {
+    late List<int> bomb;
+
+    setUpAll(() {
+      bomb = GZipEncoder().encodeBytes(Uint8List(32 * 1024 * 1024));
+    });
+
+    App buildApp(int limit) => App(
+          metaStore: MongoStore(db),
+          packageStore: FileStore(Directory.systemTemp.path),
+          authenticator: const FakeAuthenticator(testToken, 'dev@b.c'),
+          publishPolicy: PublishPolicy(PublishConfig(maxUnpackedBytes: limit)),
+        );
+
+    Archive archiveWithPadding(int padding) => Archive()
+      ..addFile(ArchiveFile.string(
+          'pubspec.yaml', 'name: inflated\nversion: 1.0.0\n'))
+      ..addFile(ArchiveFile.bytes('padding.bin', Uint8List(padding)));
+
+    Future<String?> uploadError(App app, Archive archive) async {
+      final response = await app.handler(uploadRequestOf(
+          archive, const {'authorization': 'Bearer $testToken'}));
+      return Uri.parse(response.headers['location']!).queryParameters['error'];
+    }
+
+    test('stops a compression bomb at the limit', () {
+      const limit = 1024 * 1024;
+      expect(bomb.length, lessThan(1024 * 1024));
+      expect(
+          () => const PublishPolicy(PublishConfig(maxUnpackedBytes: limit))
+              .inflate(bomb),
+          throwsA(isA<PublishPolicyViolation>().having(
+              (violation) => violation.message,
+              'message',
+              allOf(
+                  contains('publish.maxUnpackedBytes'), contains('$limit')))));
+    });
+
+    test('inflates what fits', () {
+      final inflated =
+          const PublishPolicy(PublishConfig(maxUnpackedBytes: 32 * 1024 * 1024))
+              .inflate(bomb);
+      expect(inflated.length, 32 * 1024 * 1024);
+    });
+
+    test('an upload that unpacks past the limit is refused', () async {
+      final error = await uploadError(
+          buildApp(1024 * 1024), archiveWithPadding(4 * 1024 * 1024));
+
+      expect(error, contains('publish.maxUnpackedBytes'));
+      expect(await versionsOf('inflated'), isEmpty);
+    });
+
+    test('a corrupt archive is refused', () async {
+      final response = await buildApp(1024 * 1024).handler(shelf.Request(
+        'POST',
+        Uri.parse('http://internal:4000/api/packages/versions/newUpload'),
+        headers: const {
+          'authorization': 'Bearer $testToken',
+          'content-type': 'multipart/form-data; boundary=b',
+        },
+        body: utf8.encode('--b\r\n'
+            'content-disposition: form-data; name="file"; filename="p.gz"\r\n'
+            '\r\nnot gzip\r\n--b--\r\n'),
+      ));
+      expect(response.headers['location'], contains('error='));
+    });
+
+    test('the limit defaults to 512 MiB', () {
+      expect(const PublishConfig().maxUnpackedBytes, 512 * 1024 * 1024);
+    });
   });
 
   group('publish.requiredFiles', () {
