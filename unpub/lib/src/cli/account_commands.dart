@@ -13,6 +13,7 @@ import '../redact.dart';
 import '../store/account_store.dart';
 import '../store/audit_store.dart';
 import '../store/mongo_version.dart';
+import '../store/package_store_factory.dart';
 
 const _connectTimeout = Duration(seconds: 30);
 
@@ -110,8 +111,9 @@ class MigrateCommand extends _DatabaseCommand {
 
   @override
   Future<int> runWith(Config config, Db db, AccountService accounts) async {
-    final outcomes =
-        await Migrator(db, accounts, config.auth).run(dryRun: _dryRun);
+    final packageStore = await createPackageStore(config.storage);
+    final outcomes = await Migrator(db, accounts, config.auth, packageStore)
+        .run(dryRun: _dryRun);
     for (final outcome in outcomes) {
       final status = switch (outcome.status) {
         MigrationStatus.applied => 'applied',

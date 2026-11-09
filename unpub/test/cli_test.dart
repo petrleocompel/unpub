@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:http/http.dart' as http;
 import 'package:mongo_dart/mongo_dart.dart' show Db, ObjectId, where;
 import 'package:path/path.dart' as path;
@@ -375,6 +376,42 @@ void main() {
       expect(second.exitCode, 0, reason: '${second.stderr}');
       expect(second.stdout, contains('already applied'));
     });
+
+    test('migrate backfills archive hashes from the configured store',
+        () async {
+      final storage = Directory(path.join(directory.path, 'archives'))
+        ..createSync();
+      File(configPath).writeAsStringSync('mongo:\n  uri: $testMongoUri\n'
+          'storage:\n  file:\n    path: ${storage.path}\n'
+          'auth:\n  bootstrapEmail: ops@example.com\n');
+      File(path.join(storage.path, 'p-1.0.0.tar.gz')).writeAsBytesSync([1, 2]);
+      await db.collection('packages').insertOne({
+        'name': 'p',
+        'uploaders': <String>[],
+        'versions': [
+          {'version': '1.0.0'},
+          {'version': '2.0.0'},
+        ],
+      });
+      Future<List> versions() async => (await db
+          .collection('packages')
+          .findOne(where.eq('name', 'p')))!['versions'] as List;
+
+      final dry = await run(['migrate', '--dry-run']);
+      expect(dry.exitCode, 0, reason: '${dry.stderr}');
+      expect(dry.stdout, contains('hash p@1.0.0'));
+      expect(dry.stdout, contains('skip p@2.0.0: archive missing'));
+      expect((await versions()).first.containsKey('sha256'), isFalse);
+
+      final real = await run(['migrate']);
+      expect(real.exitCode, 0, reason: '${real.stderr}');
+      expect(real.stdout, contains('0002_version_sha256: applied'));
+      expect((await versions()).first['sha256'],
+          sha256.convert([1, 2]).toString());
+
+      final again = await run(['migrate']);
+      expect(again.stdout, contains('0002_version_sha256: already applied'));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a bad config is reported', () async {
       var result =

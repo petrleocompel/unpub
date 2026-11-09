@@ -1,11 +1,17 @@
+import 'package:crypto/crypto.dart';
+import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
 import '../auth/account_service.dart';
 import '../auth/accounts.dart';
 import '../config/config.dart';
+import '../logging.dart';
 import '../store/mongo_store.dart';
+import '../store/package_store.dart';
 
 final migrationCollection = 'migrations';
+
+final _log = Logger('unpub.migrate');
 
 const _duplicateKeyCode = 11000;
 
@@ -37,11 +43,13 @@ class Migrator {
   final Db db;
   final AccountService accounts;
   final AuthConfig auth;
+  final PackageStore packageStore;
 
-  Migrator(this.db, this.accounts, this.auth);
+  Migrator(this.db, this.accounts, this.auth, this.packageStore);
 
   late final _steps = [
     _Step('0001_users_from_uploaders', _usersFromUploaders),
+    _Step('0002_version_sha256', _versionSha256),
   ];
 
   /// Runs the pending steps. A [dryRun] reports them and writes nothing.
@@ -107,6 +115,49 @@ class Migrator {
         }
       }
       changes.add('create placeholder user $email with role ${role.name}');
+    }
+    return changes;
+  }
+
+  /// Records the hash of each stored archive that has none yet.
+  Future<List<String>> _versionSha256(bool dryRun) async {
+    final packages = db.collection(packageCollection);
+    final documents = await packages
+        .find(where.fields(['name', 'versions.version', 'versions.sha256']))
+        .toList();
+    final changes = <String>[];
+    for (final document in documents) {
+      final name = document['name'] as String;
+      for (final item in (document['versions'] as List? ?? const [])) {
+        if (item['sha256'] != null) continue;
+        final version = item['version'] as String;
+        if (!await packageStore.exists(name, version)) {
+          _log.warning(LogEvent('skipping a version whose archive is missing',
+              {'name': name, 'version': version}));
+          changes.add('skip $name@$version: archive missing');
+          continue;
+        }
+        if (dryRun) {
+          changes.add('hash $name@$version');
+          continue;
+        }
+        final digest =
+            await sha256.bind(packageStore.download(name, version)).first;
+        final result = await packages.updateOne({
+          'name': name,
+          'versions': {
+            r'$elemMatch': {
+              'version': version,
+              'sha256': {r'$exists': false},
+            },
+          },
+        }, modify.set(r'versions.$.sha256', digest.toString()));
+        if (result.hasWriteErrors || !result.operationSucceeded) {
+          throw StateError('cannot store the hash of $name@$version: '
+              '${result.writeError?.errmsg ?? result.errmsg}');
+        }
+        changes.add('hash $name@$version');
+      }
     }
     return changes;
   }

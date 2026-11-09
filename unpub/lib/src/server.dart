@@ -14,12 +14,10 @@ import 'logging.dart';
 import 'redact.dart';
 import 'store/account_store.dart';
 import 'store/audit_store.dart';
-import 'store/aws_credentials.dart';
 import 'store/file_store.dart';
 import 'store/mongo_store.dart';
 import 'store/mongo_version.dart';
-import 'store/package_store.dart';
-import 'store/s3_store.dart';
+import 'store/package_store_factory.dart';
 
 final _log = Logger('unpub.server');
 
@@ -59,6 +57,7 @@ class UnpubServer {
       await checkMongoVersion(db);
       final accounts = AccountStore(db);
       final audit = MongoAuditStore(db);
+      final metaStore = MongoStore(db);
       await accounts.ensureIndexes();
       await audit.ensureIndexes();
       final service = AccountService(accounts, audit: audit);
@@ -66,9 +65,17 @@ class UnpubServer {
       await accounts.reconcileAdminSet(DateTime.now());
       _warnAboutStaticTokens(config.auth);
 
+      final packageStore = await createPackageStore(config.storage);
+      if (packageStore is FileStore) {
+        final created = await packageStore.createBaseDir();
+        _log.info(LogEvent(
+            created ? 'created storage directory' : 'using storage directory',
+            {'path': packageStore.baseDir}));
+      }
+
       final app = App(
-        metaStore: MongoStore(db),
-        packageStore: await _createPackageStore(config.storage),
+        metaStore: metaStore,
+        packageStore: packageStore,
         authenticator: ChainAuthenticator([
           ApiTokenAuthenticator(accounts),
           SessionAuthenticator(accounts),
@@ -107,32 +114,6 @@ class UnpubServer {
       _log.warning('auth.readTokens is deprecated, use personal tokens with '
           'the read scope');
     }
-  }
-
-  static Future<PackageStore> _createPackageStore(StorageConfig storage) async {
-    final s3 = storage.s3;
-    if (s3 == null) {
-      final path = storage.file.path;
-      final store = FileStore(path);
-      final created = await store.createBaseDir();
-      _log.info(LogEvent(
-          created ? 'created storage directory' : 'using storage directory',
-          {'path': path}));
-      return store;
-    }
-    return S3Store(
-      s3.bucket,
-      region: s3.region,
-      endpoint: s3.endpoint,
-      port: s3.port,
-      useSSL: s3.useSSL,
-      pathStyle: s3.pathStyle,
-      credentials: await AwsCredentials.resolve(
-        accessKeyId: s3.accessKey,
-        secretAccessKey: s3.secretKey,
-        sessionToken: s3.sessionToken,
-      ),
-    );
   }
 
   /// Stops accepting connections, drains in-flight requests, and closes Mongo.
