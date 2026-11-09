@@ -1,0 +1,7 @@
+**
+!unpub/
+unpub/.dart_tool/
+unpub/build/
+unpub/unpub-packages/
+unpub/unpub.yaml
+unpub/test/
