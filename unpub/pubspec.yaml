@@ -1,6 +1,6 @@
 name: unpub
 description: Self-hosted private Dart Pub server for Enterprise, with a simple web interface to search and view packages information.
-version: 3.0.0-dev.2
+version: 3.0.0-dev.3
 homepage: https://github.com/petrleocompel/unpub
 publish_to: none
 environment:

@@ -1,3 +1,20 @@
+## 3.0.0-dev.3
+
+Completes the pub API, and adds publishing policies and an upstream proxy. See "Pub API compatibility", "Retraction and discontinued", "Publishing policies" and "Upstream proxy" in the README, and run `unpub migrate` after upgrading.
+
+- Version listings have `archive_sha256`, `published` and `retracted`, and packages `isDiscontinued` and `replacedBy`. `latest` skips prereleases and retracted versions. Adds `GET /api/packages/<name>/advisories`.
+- The hash of an archive is stored on upload. `unpub migrate` step `0002_version_sha256` backfills existing versions.
+- Listings and archives have `ETag` and `Cache-Control`, and answer 304 to `If-None-Match`.
+- Adds `POST /api/packages/<name>/versions/<version>/retract` and `unretract`, and `PUT /api/packages/<name>/discontinue`, for uploaders and administrators, audited. `publish.retractionWindow` limits non-administrators.
+- Adds the `publish` settings `allowedNamePrefixes`, `maxArchiveBytes`, `requiredFiles`, `rejectOlderThanLatest`, `requireVersionBump` and `retractionWindow`. They run before `uploadValidator`.
+- Adds `upstream.mode: proxy` with `cacheTtl`, `allowlist` and `timeout`. Proxied metadata goes to the new `upstream_cache` collection, and archives under `upstream/` in the package store, verified against the upstream hash. Proxied names cannot be published.
+- Adds per-version download counts in the new `version_stats` collection, reported as `downloads` by `/webapi/package/<name>/<version>`.
+- `/webapi/packages` hides discontinued packages unless called with `?discontinued=true`. The `/webapi` views and the version badge use the new `latest`.
+- A `HEAD` request for an archive is no longer counted as a download.
+- Two concurrent publishes of one version can no longer both be added.
+- **Breaking:** the validator in `uploadValidator` now runs after the uploader check and the policies, so it no longer sees uploads those refuse.
+- **Breaking:** `MetaStore` gains `replaceVersion`, `versionDownloads`, `setVersionRetracted`, `setDiscontinued` and an `includeDiscontinued` argument on `queryPackages`, and `addVersion` returns whether it added the version. `PackageStore` gains `cacheUpstream`, `upstreamCached` and `downloadUpstream`, with defaults that cache nothing. `Migrator` takes a `PackageStore`.
+
 ## 3.0.0-dev.2
 
 Adds user accounts. See "Authentication" and "Upgrading from 2.x" in the README.

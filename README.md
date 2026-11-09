@@ -2,7 +2,7 @@
 
 Unpub is a self-hosted private Dart Pub server for teams, with a simple web interface to search and view package information. It is a single binary that stores metadata in MongoDB and package archives on disk or in S3.
 
-> **This is a modernization in progress.** User accounts, roles and personal API tokens are in place. The plan for policies, the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
+> **This is a modernization in progress.** User accounts, roles, personal API tokens, publishing policies and an upstream proxy are in place. The plan for the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Screenshot](assets/screenshot.png)
 
@@ -43,7 +43,7 @@ dependencies:
     version: ^1.0.0
 ```
 
-Packages not found locally redirect to the upstream, pub.dev by default, so setting `PUB_HOSTED_URL` to this server also works for mixed dependency trees.
+Packages not found locally redirect to the upstream, pub.dev by default, so setting `PUB_HOSTED_URL` to this server also works for mixed dependency trees. See [Upstream proxy](#upstream-proxy) to fetch and keep them here instead.
 
 Reading is public by default, and only publishing and uploader management need a token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz`, `/readyz` and the login endpoint then needs a token or session, which `dart pub get` provides once the token is added with `dart pub token add`. The embedded web UI cannot send tokens, so it does not work in that mode until the new UI arrives. Badges under `/badge/...` and every other anonymous GET answer 401 as well, so shields.io and similar scrapers cannot fetch them from a private registry.
 
@@ -55,8 +55,8 @@ Dart clients only send tokens over HTTPS, except to localhost, so deploy behind 
 
 | Role | May |
 | --- | --- |
-| `admin` | Everything: manage users, publish to any package, manage the uploaders of any package. |
-| `publisher` | Publish new packages, publish to packages where their email is in `uploaders`, and manage the uploaders of those packages. |
+| `admin` | Everything: manage users, publish to any package, manage the uploaders of any package, retract or discontinue any package. |
+| `publisher` | Publish new packages, publish to packages where their email is in `uploaders`, and manage the uploaders, retraction and discontinued state of those packages. |
 | `reader` | Read only, and look after their own account: log out, change their password, manage their own `read` tokens. This matters when `auth.readAccess` is `authenticated`. |
 
 Package `uploaders` remain a list of email addresses, matched against the authenticated user ignoring case. A package without an `uploaders` list can only be changed by an administrator.
@@ -113,7 +113,82 @@ JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look
 
 After 10 failed attempts within 15 minutes, for one email or one client address, login answers 429 with `Retry-After`. The count is kept per process, so several instances each allow their own attempts. Each process tracks up to 50 000 addresses and emails. When that is full it forgets only expired counters and those below half the limit, and if that frees nothing it answers 429 to addresses and emails it does not know yet and logs a warning. Sessions last 24 hours.
 
-Logins, token and user changes, publishes and uploader changes are recorded in the `audit` collection.
+Logins, token and user changes, publishes, uploader changes, retractions and discontinuations are recorded in the `audit` collection.
+
+## Pub API compatibility
+
+`GET /api/packages/<name>` and `GET /api/packages/<name>/versions/<version>` answer in the format current `dart pub` and `flutter pub` clients use.
+
+| Field | Where | Description |
+| --- | --- | --- |
+| `archive_url` | version | Where to download the archive. |
+| `archive_sha256` | version | Lowercase hex SHA-256 of the stored archive. Absent for a version without a recorded hash, until `unpub migrate` has backfilled it. |
+| `pubspec`, `version` | version | The pubspec, and its version. |
+| `published` | version | When it was published, ISO-8601 in UTC. |
+| `retracted` | version | `true` for a retracted version, otherwise absent. |
+| `name`, `versions` | package | The package and all its versions. |
+| `latest` | package | The highest version that is neither a prerelease nor retracted. If there is none, the highest prerelease that is not retracted. If every version is retracted, the highest version anyway. |
+| `isDiscontinued` | package | Whether the package is discontinued. |
+| `replacedBy` | package | The suggested replacement, only when set. |
+
+`GET /api/packages/<name>/advisories` answers `{"advisories": [], "advisoriesUpdated": null}` for a local package.
+
+Responses can be cached:
+
+| Response | `ETag` | `Cache-Control` in `public` mode | `Cache-Control` in `authenticated` mode |
+| --- | --- | --- | --- |
+| Listing | Weak, changes with the package | `public, max-age=60` | `private, no-store` |
+| Archive | Strong, from the SHA-256, when known | `public, max-age=31536000, immutable` | `private` |
+
+A matching `If-None-Match` answers 304. Downloads are counted only for `dart pub` and `flutter pub`, and a 304 or `HEAD` is not a download. Besides the package total and the daily `stats`, each version has its own count in the `version_stats` collection. `/webapi/package/<name>/<version>` reports them as `downloads: {"version": n, "package": n}`.
+
+## Retraction and discontinued
+
+Uploaders of a package and administrators can change these, with a credential that has the `publish` scope. API tokens work, so CI can use them. Sessions need their CSRF token. Each change is audited.
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /api/packages/<name>/versions/<version>/retract` | Retract a version. Encode `+` in the version as `%2B`. |
+| `POST /api/packages/<name>/versions/<version>/unretract` | Restore a retracted version. |
+| `PUT /api/packages/<name>/discontinue` | `{"isDiscontinued": true, "replacedBy": "<name>"}`, with `replacedBy` optional, or `{"isDiscontinued": false}`. `replacedBy` must be a valid package name and need not exist on this server. |
+
+A retracted version stays downloadable, so a project with it in its lockfile still resolves, but new resolutions avoid it and it is left out of `latest`. The only version of a package can be retracted too. A non-administrator can retract only within `publish.retractionWindow` of publishing, 7 days by default, and is answered 403 after that. The window does not limit `unretract`.
+
+A discontinued package keeps serving everything, with the flag set. `/webapi/packages` leaves discontinued packages out unless called with `?discontinued=true`. `/webapi/packages` and `/webapi/package/<name>/<version>` include the flags.
+
+## Publishing policies
+
+Set under `publish`. A violation goes back through `dart pub publish`, with a message naming the setting. The `uploadValidator` callback of an embedded `App` runs after them.
+
+| Key | Environment variable | Default | Description |
+| --- | --- | --- | --- |
+| `publish.allowedNamePrefixes` | `UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES` | any name | Package names must start with one of these. Applies to every publish, including new versions of existing packages. A YAML list, or comma separated in the environment. |
+| `publish.maxArchiveBytes` | `UNPUB_PUBLISH_MAX_ARCHIVE_BYTES` | `104857600` (100 MiB) | Largest archive accepted. A larger one is refused without being kept in memory. A reverse proxy needs a matching limit, such as `client_max_body_size` in nginx. |
+| `publish.requiredFiles` | `UNPUB_PUBLISH_REQUIRED_FILES` | none | Files the archive must hold at its root, matched ignoring case, such as `README.md`, `CHANGELOG.md` and `LICENSE`. |
+| `publish.rejectOlderThanLatest` | `UNPUB_PUBLISH_REJECT_OLDER_THAN_LATEST` | `false` | Refuse a version lower than the highest version not retracted, prereleases included. |
+| `publish.requireVersionBump` | `UNPUB_PUBLISH_REQUIRE_VERSION_BUMP` | `true` | Refuse a version that already exists. When `false`, publishing an existing version replaces it, including any retraction. Clients that recorded its hash then fail, and caches may keep the old archive for up to a year. |
+| `publish.retractionWindow` | `UNPUB_PUBLISH_RETRACTION_WINDOW` | `7d` | How long after publishing a non-administrator may retract, in `s`, `m`, `h`, `d` or `w`. `0` is unlimited. |
+
+## Upstream proxy
+
+By default a package that does not exist locally is redirected to `upstream.url`. With `upstream.mode: proxy` this server fetches it instead, and keeps a copy, so that builds keep working when the upstream is unreachable.
+
+| Key | Environment variable | Default | Description |
+| --- | --- | --- | --- |
+| `upstream.url` | `UNPUB_UPSTREAM_URL` | `https://pub.dev` | The upstream registry. Must not contain credentials in `proxy` mode. |
+| `upstream.mode` | `UNPUB_UPSTREAM_MODE` | `redirect` | `redirect` or `proxy`. |
+| `upstream.cacheTtl` | `UNPUB_UPSTREAM_CACHE_TTL` | `10m` | How long metadata is served without asking the upstream. `0` asks every time. Archives never expire. |
+| `upstream.allowlist` | `UNPUB_UPSTREAM_ALLOWLIST` | any package | The only packages proxied. Others answer 404 and can be published here. Only applies in `proxy` mode, and the server warns at startup if it is set in `redirect` mode. |
+| `upstream.timeout` | `UNPUB_UPSTREAM_TIMEOUT` | `30s` | How long the upstream may stay silent during a request. |
+
+A local package always wins over the upstream. For the others:
+
+- **Metadata** is kept in the `upstream_cache` collection and served for `cacheTtl`, then revalidated. Archive URLs are rewritten to this server. Entries expire on their own 7 days after they go stale.
+- **Archives** are stored under `upstream/<name>/<name>-<version>.tar.gz` on disk, or the same key in S3. The first download fetches the whole archive, checks it against `archive_sha256` when the upstream provides one, stores it and then answers, so the client waits for the full download once. A mismatch is discarded and answered with 502. Later downloads come from storage.
+- **Upstream failures** answer 502 with a JSON error for metadata, also when a stale copy exists, and for archives that are not stored yet. Archives already stored keep being served.
+- **Publishing** a name the upstream has is refused, whether or not it is cached yet. If the upstream cannot be asked, the publish is allowed and a warning is logged.
+- **Reading** follows `auth.readAccess`, so clients need their token for proxied packages in `authenticated` mode. Client credentials are never sent to the upstream.
+- Proxied downloads are not counted, and proxied packages do not appear in `/webapi/packages` or the web UI.
 
 ## Running from source
 
@@ -164,7 +239,8 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `storage.s3.accessKey` | `UNPUB_STORAGE_S3_ACCESS_KEY` | `AWS_ACCESS_KEY_ID` | Access key. |
 | `storage.s3.secretKey` | `UNPUB_STORAGE_S3_SECRET_KEY` | `AWS_SECRET_ACCESS_KEY` | Secret key. |
 | `storage.s3.sessionToken` | `UNPUB_STORAGE_S3_SESSION_TOKEN` | | Session token for `storage.s3.accessKey`. Keys from the environment use `AWS_SESSION_TOKEN` instead. |
-| `upstream.url` | `UNPUB_UPSTREAM_URL` | `https://pub.dev` | Where unknown packages redirect. |
+| `upstream.url` | `UNPUB_UPSTREAM_URL` | `https://pub.dev` | Where packages not found locally come from. See [Upstream proxy](#upstream-proxy) for the other `upstream.*` keys. |
+| `publish.*` | `UNPUB_PUBLISH_*` | | See [Publishing policies](#publishing-policies). |
 | `auth.admin.email` | `UNPUB_AUTH_ADMIN_EMAIL` | | First administrator, created when there are no users. Set together with the password. |
 | `auth.admin.password` | `UNPUB_AUTH_ADMIN_PASSWORD` | | Password of that administrator, at least 8 characters. Prefer the environment. |
 | `auth.readAccess` | `UNPUB_AUTH_READ_ACCESS` | `public` | `public`, or `authenticated` to require a token or session on every route except `/healthz`, `/readyz` and login. |
@@ -194,7 +270,9 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 - Run `unpub migrate` after creating your first administrator, or use `unpub admin create-user` afterwards: `auth.admin.*` is ignored once any user exists.
 - `auth.bootstrapToken` and `auth.readTokens` keep working but are deprecated. Replace them with personal tokens. Neither these nor personal tokens can manage users over HTTP, so use `unpub admin` or log in.
 - Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
-- MongoDB documents and the archive layout are unchanged. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`.
+- Archive hashes: `unpub migrate` step `0002_version_sha256` records the SHA-256 of every stored archive, so that existing versions get `archive_sha256`. Check first with `unpub migrate --dry-run`. An archive missing from storage is skipped with a warning, and that version keeps being served without a hash. Run it with the same `storage` settings as the server.
+- The `latest` field of a listing now skips retracted versions, and the `/webapi` views use the same rule. Listings have new fields, and existing clients ignore what they do not know.
+- MongoDB documents and the archive layout are unchanged apart from new optional fields. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`. Phase 3 adds `version_stats` and `upstream_cache`.
 
 ### Behind a reverse proxy
 
@@ -251,7 +329,7 @@ Future<void> main() async {
 }
 ```
 
-`MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints are added by passing an `AccountApi`. `S3Store` and `FileStore` are included.
+`PublishPolicy` applies the `publish` settings, and `UpstreamProxy` turns on proxy mode. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints are added by passing an `AccountApi`. `S3Store` and `FileStore` are included.
 
 ## Badges
 

@@ -38,8 +38,38 @@ storage:
   #   sessionToken: ...
 
 upstream:
-  # Packages not found locally redirect here.
+  # Where packages that do not exist locally come from.
   url: https://pub.dev
+  # redirect: send clients to the upstream. proxy: fetch from the upstream and
+  # keep a copy in storage. Proxied packages cannot be published here.
+  mode: redirect
+  # Proxy mode only. How long metadata is served without asking the upstream.
+  # cacheTtl: 10m
+  # Proxy mode only. When set, only these packages are proxied and others 404.
+  # allowlist:
+  #   - http
+  #   - path
+  # Proxy mode only. How long the upstream may stay silent during a request.
+  # timeout: 30s
+
+publish:
+  # Package names must start with one of these. Empty allows any name.
+  # allowedNamePrefixes:
+  #   - acme_
+  # Largest archive accepted, in bytes. 100 MiB by default.
+  # maxArchiveBytes: 104857600
+  # Files the archive must hold at its root, matched ignoring case.
+  # requiredFiles:
+  #   - README.md
+  #   - CHANGELOG.md
+  #   - LICENSE
+  # Refuse a version lower than the highest version not retracted.
+  # rejectOlderThanLatest: false
+  # Refuse a version that already exists. When false, publishing an existing
+  # version replaces it, which breaks clients that recorded its hash.
+  # requireVersionBump: true
+  # How long after publishing a non-administrator may retract. 0 is unlimited.
+  # retractionWindow: 7d
 
 auth:
   # Creates this administrator when the server starts with no users. Ignored
