@@ -173,9 +173,25 @@ Set under `publish`. A violation goes back through `dart pub publish`, with a me
 
 While one version is being published, another upload of that version is refused with "version is being published by another request", also from another server instance on the same MongoDB. The claim lives in the `upload_reservations` collection for as long as the archive is written. If a server dies while holding one, the version stays blocked until the claim expires, 15 to 16 minutes later.
 
-An archive is first staged, as `<final path>.<id>.staging` next to its final path on disk and as `staging/<name>/<name>-<version>-<id>.tar.gz` in S3, where no download can reach it. The claim is renewed once halfway through `publish.uploadTimeout` if the write is still running. Only after the metadata write that adds the version has succeeded is the staged archive moved to its final path, `<name>-<version>.tar.gz` on disk and `<name>/<name>-<version>.tar.gz` in S3, so a publish that stalled past its claim can no longer overwrite another one's archive. If the metadata write is lost, the staged archive is deleted.
+The claim is renewed once halfway through `publish.uploadTimeout` if the write is still running. A publish writes its archive first, as an immutable object, and only then the metadata, so a publish that stalled past its claim can neither overwrite another one's archive nor leave a version without one. See [Storage layout](#storage-layout).
 
-An archive already at the final path of a version nobody published is not overwritten: the publish is refused with a message that storage is corrupt. Check where it came from and remove it, then publish again.
+## Storage layout
+
+The storage directory, or the bucket under the same keys, holds:
+
+| Path | What it is |
+| --- | --- |
+| `<name>/<name>-<version>-<sha256>.tar.gz` | A published archive, an immutable object named by the digest of its bytes. |
+| `upstream/<name>/<name>-<version>-<sha256>.tar.gz` | A proxied archive, also immutable. |
+| `<name>-<version>.tar.gz`, or `<name>/<name>-<version>.tar.gz` in S3 | A published archive from before objects existed. Still served, and never written any more. |
+| `.unpub-tmp/` | Reserved for temporary files. No archive may be stored there. |
+
+- **The `sha256` of a version is its pointer.** A download serves the object named by that digest. If there is none it falls back to the legacy path, which keeps existing archives and custom layouts working without being rewritten. `unpub migrate` hashes legacy archives where they are.
+- **A publish writes the object first, then the metadata.** Adding a version is conditional on the version not existing, and replacing one with `publish.requireVersionBump: false` is a compare-and-set on its previous `sha256`, so of two concurrent publishes one wins and the other reports the failure. Nothing changes for a client until the metadata is written. If the metadata write fails, the object is deleted unless a version names it after all. A publisher that crashes in between leaves only an object nothing refers to.
+- **Temporary files** are written to `.unpub-tmp/` and renamed into place. With S3 the archive is simply put at its key, and `upstream.mode: proxy` spools to `.unpub-tmp/` in the system temp directory.
+- **Reclamation** runs at startup and once an hour, and logs its counts. It deletes files in `.unpub-tmp/` older than an hour, and nothing outside it, whatever it is called. It then deletes objects in the two layouts above that are older than an hour and named by no version and no `upstream_archives` record. An object written less than an hour ago may belong to a publish in progress and is left alone, and each candidate is checked again, including its hash, just before it goes.
+
+When using unpub as a library, `FileStore(getFilePath:)` and the `getObjectPath` of `S3Store` still say where legacy archives live, with the signature `(name, version)`. The new optional `FileStore(getObjectPath:)` and `S3Store(getDigestObjectPath:)`, with the signature `(name, version, sha256)`, say where objects live. Objects in a custom layout cannot be listed, so reclamation leaves them alone. Any of these that answers a path inside `.unpub-tmp/` is rejected when the store is created.
 
 ## Upstream proxy
 
@@ -197,9 +213,8 @@ By default a package that does not exist locally is redirected to `upstream.url`
 A local package always wins over the upstream. For the others:
 
 - **Metadata** is kept in the `upstream_cache` collection and served for `cacheTtl`, then revalidated. Archive URLs are rewritten to this server. Entries expire on their own 7 days after they go stale.
-- **Archives** are immutable objects named by the digest of their bytes, `upstream/<name>/<name>-<version>-<sha256>.tar.gz` on disk and under the same key in S3. The first download streams the whole archive to a temporary file while hashing it, next to the final path on disk and in the system temp directory for S3 (`TMPDIR`, which has to be writable and have room for the largest archive), checks it against `archive_sha256`, stores it and then answers, so the client waits for the full download once. A mismatch is discarded and answered with 502. Later downloads come from storage.
-- **Integrity:** the record in the `upstream_archives` collection is the only pointer to an object: what is served is the object it names, and its digest is the `ETag`, so bytes and hash cannot disagree, also with several instances on one storage. Without a record, or without the object it names, the archive counts as not stored and is fetched again. If the listing later names another hash, the object is forgotten and fetched again, and a failed refetch answers 502. An object no record points to any more stays in storage: different bytes for one version are rare, and removing one could break a download in progress.
-- **Temporary files** left by a crash are deleted at startup and once an hour, when more than an hour old: `*.tmp` under `upstream/` and `*.staging` next to archives on disk, `staging/` objects in S3, and with S3 also the `unpub-upstream-*.tmp` spool files in the system temp directory. Anything else is never touched, and the count is logged.
+- **Archives** are immutable objects named by the digest of their bytes, `upstream/<name>/<name>-<version>-<sha256>.tar.gz` on disk and under the same key in S3. The first download streams the whole archive to a temporary file while hashing it, in `.unpub-tmp/` in the storage directory, or in the system temp directory for S3 (`TMPDIR`, which has to be writable and have room for the largest archive), checks it against `archive_sha256`, stores it and then answers, so the client waits for the full download once. A mismatch is discarded and answered with 502. Later downloads come from storage.
+- **Integrity:** the record in the `upstream_archives` collection is the only pointer to an object: what is served is the object it names, and its digest is the `ETag`, so bytes and hash cannot disagree, also with several instances on one storage. Without a record, or without the object it names, the archive counts as not stored and is fetched again. If the listing later names another hash, the object is forgotten and fetched again, and a failed refetch answers 502. An object no record points to any more is reclaimed, see [Storage layout](#storage-layout).
 - **Archive locations** must have the scheme, host and port of `upstream.url`, or a host in `upstream.allowedArchiveHosts`. Redirects are followed by hand, at most three, with each hop held to the same rule, and a hop from https to http is refused. pub.dev serves archives from its own host, so it needs no entry.
 - **Memory:** an archive is never held in memory, whatever its size. Metadata responses are read into memory, up to 64 MiB each, and `maxConcurrentFetches` does not limit them. On a proxy reachable by the public, set an `allowlist`, because every distinct package and version requested otherwise costs an upstream fetch and storage for as long as archives are kept.
 - **Upstream failures** answer 502 with a JSON error for metadata, also when a stale copy exists, and for archives that are not stored yet. Archives already stored keep being served.
@@ -327,8 +342,11 @@ Future<void> main() async {
   final db = Db('mongodb://localhost:27017/dart_pub');
   await db.open();
 
+  final metaStore = unpub.MongoStore(db);
+  await metaStore.ensureIndexes();
+
   final app = unpub.App(
-    metaStore: unpub.MongoStore(db),
+    metaStore: metaStore,
     packageStore: unpub.FileStore('./unpub-packages'),
     authenticator: const unpub.StaticTokenAuthenticator(
       bootstrapToken: 'a-long-random-token',
@@ -347,6 +365,8 @@ Future<void> main() async {
 ```
 
 `PublishPolicy` applies the `publish` settings, and `UpstreamProxy` turns on proxy mode. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints are added by passing an `AccountApi`. `S3Store` and `FileStore` are included.
+
+`ensureIndexes` creates the unique indexes that concurrent publishes rely on, and throws if `packages` already holds a name twice. To get reclamation as `unpub serve` does it, start a `TemporaryReclaimer` with `MongoArchiveReferences` too.
 
 ## Badges
 
