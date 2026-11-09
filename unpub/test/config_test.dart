@@ -601,6 +601,18 @@ upstream:
       expect(parse(null).upstream.allowedArchiveHosts, isEmpty);
     });
 
+    test('requireSha256 is on unless turned off', () {
+      expect(parse(null).upstream.requireSha256, isTrue);
+      expect(
+          parse('upstream:\n  requireSha256: false\n').upstream.requireSha256,
+          isFalse);
+      expect(
+          parse(null, env: {'UNPUB_UPSTREAM_REQUIRE_SHA256': 'false'})
+              .upstream
+              .requireSha256,
+          isFalse);
+    });
+
     test('a cache TTL of 0 always asks the upstream', () {
       expect(
           parse('upstream:\n  cacheTtl: 0\n').upstream.cacheTtl, Duration.zero);

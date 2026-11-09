@@ -175,6 +175,7 @@ void main() {
     Duration timeout = const Duration(seconds: 5),
     PackageStore? archives,
     List<String> allowedArchiveHosts = const [],
+    bool requireSha256 = true,
   }) =>
       UpstreamProxy(
         config: UpstreamConfig(
@@ -184,6 +185,7 @@ void main() {
           allowlist: allowlist,
           timeout: timeout,
           allowedArchiveHosts: allowedArchiveHosts,
+          requireSha256: requireSha256,
         ),
         cache: MongoUpstreamCacheStore(db),
         archives: archives ?? FileStore(storage.path),
@@ -461,12 +463,102 @@ void main() {
           Directory(path.join(storage.path, 'upstream')).existsSync(), isFalse);
     });
 
-    test('an archive without an upstream hash is still served', () async {
-      upstream.sendHashes = false;
-      final response = await get(route);
-      expect(response.statusCode, 200);
-      expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
-      expect(cachedFile('1.0.0').existsSync(), isTrue);
+    group('the upstream hash', () {
+      App lenient() {
+        final relaxed = buildProxy(requireSha256: false);
+        addTearDown(relaxed.close);
+        return buildApp(using: relaxed);
+      }
+
+      test('in uppercase is verified, not skipped', () async {
+        upstream.hashOverride['$_name@1.0.0'] =
+            upstream.sha(_name, '1.0.0').toUpperCase();
+
+        final response = await get(route);
+
+        expect(response.statusCode, 200);
+        expect(response.headers['etag'], '"${upstream.sha(_name, '1.0.0')}"');
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+      });
+
+      test('in uppercase is listed in lowercase', () async {
+        upstream.hashOverride['$_name@1.0.0'] =
+            upstream.sha(_name, '1.0.0').toUpperCase();
+        final body = await getJson('/api/packages/$_name');
+        expect((body['versions'] as List).single['archive_sha256'],
+            upstream.sha(_name, '1.0.0'));
+      });
+
+      test('in uppercase that does not match is refused', () async {
+        upstream.hashOverride['$_name@1.0.0'] = 'A' * 64;
+        final response = await get(route);
+        expect(response.statusCode, 502);
+        expect(cachedFile('1.0.0').existsSync(), isFalse);
+      });
+
+      for (final malformed in [
+        'not-a-hash',
+        'a' * 63,
+        'a' * 65,
+        'g' * 64,
+        ''
+      ]) {
+        test('malformed as "$malformed" is a 502', () async {
+          upstream.hashOverride['$_name@1.0.0'] = malformed;
+
+          final response = await get(route);
+
+          expect(response.statusCode, 502);
+          expect(json.decode(await response.readAsString())['error']['message'],
+              'upstream provided an invalid archive_sha256');
+          expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 0);
+          expect(cachedFile('1.0.0').existsSync(), isFalse);
+        });
+      }
+
+      test('malformed is also a 502 with requireSha256 off', () async {
+        upstream.hashOverride['$_name@1.0.0'] = 'not-a-hash';
+        expect((await get(route, using: lenient())).statusCode, 502);
+      });
+
+      test('malformed leaves the listing usable, without the hash', () async {
+        upstream.hashOverride['$_name@1.0.0'] = 'not-a-hash';
+        final body = await getJson('/api/packages/$_name');
+        expect((body['versions'] as List).single.containsKey('archive_sha256'),
+            isFalse);
+      });
+
+      test('malformed stays a 502 from the cached listing', () async {
+        upstream.hashOverride['$_name@1.0.0'] = 'not-a-hash';
+        await getJson('/api/packages/$_name');
+        upstream.requests.clear();
+
+        expect((await get(route)).statusCode, 502);
+        expect(upstream.count('/api/packages/$_name'), 0);
+      });
+
+      test('absent is a 502 by default', () async {
+        upstream.sendHashes = false;
+
+        final response = await get(route);
+
+        expect(response.statusCode, 502);
+        expect(json.decode(await response.readAsString())['error']['message'],
+            'upstream provides no archive_sha256 for $_name 1.0.0');
+        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 0);
+        expect(cachedFile('1.0.0').existsSync(), isFalse);
+      });
+
+      test('absent is served unverified with requireSha256 off', () async {
+        upstream.sendHashes = false;
+
+        final response = await get(route, using: lenient());
+
+        expect(response.statusCode, 200);
+        expect(response.headers.containsKey('etag'), isFalse);
+        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+        expect(cachedFile('1.0.0').existsSync(), isTrue);
+      });
     });
 
     test('has a strong validator and honours it', () async {

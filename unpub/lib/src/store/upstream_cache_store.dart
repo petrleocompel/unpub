@@ -18,6 +18,9 @@ class UpstreamCacheEntry {
   /// JSON map of version to upstream archive URL, for a listing.
   final String? archiveUrls;
 
+  /// Versions whose `archive_sha256` was not a SHA-256, for a listing.
+  final List<String> invalidHashes;
+
   /// The upstream's validator, for revalidating when the entry has gone stale.
   final String? etag;
   final DateTime fetchedAt;
@@ -26,6 +29,7 @@ class UpstreamCacheEntry {
     required this.key,
     required this.body,
     this.archiveUrls,
+    this.invalidHashes = const [],
     this.etag,
     required this.fetchedAt,
   });
@@ -73,6 +77,8 @@ class MongoUpstreamCacheStore implements UpstreamCacheStore {
       key: key,
       body: document['body'] as String,
       archiveUrls: document['archiveUrls'] as String?,
+      invalidHashes:
+          (document['invalidHashes'] as List? ?? const []).cast<String>(),
       etag: document['etag'] as String?,
       fetchedAt: document['fetchedAt'] as DateTime,
     );
@@ -88,6 +94,9 @@ class MongoUpstreamCacheStore implements UpstreamCacheStore {
     update = entry.archiveUrls == null
         ? update.unset('archiveUrls')
         : update.set('archiveUrls', entry.archiveUrls);
+    update = entry.invalidHashes.isEmpty
+        ? update.unset('invalidHashes')
+        : update.set('invalidHashes', entry.invalidHashes);
     update = entry.etag == null
         ? update.unset('etag')
         : update.set('etag', entry.etag);

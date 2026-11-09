@@ -46,6 +46,7 @@ const _schema = <String, _ValueKind>{
   'upstream.allowlist': _ValueKind.stringList,
   'upstream.timeout': _ValueKind.string,
   'upstream.allowedArchiveHosts': _ValueKind.stringList,
+  'upstream.requireSha256': _ValueKind.boolean,
   'publish.allowedNamePrefixes': _ValueKind.stringList,
   'publish.maxArchiveBytes': _ValueKind.integer,
   'publish.requiredFiles': _ValueKind.stringList,
@@ -244,6 +245,10 @@ class UpstreamConfig {
   /// Hosts besides that of [url] that archives may be fetched from.
   final List<String> allowedArchiveHosts;
 
+  /// Refuse an archive the upstream gives no hash for. When false, it is
+  /// served and cached unverified.
+  final bool requireSha256;
+
   const UpstreamConfig({
     required this.url,
     this.mode = UpstreamMode.redirect,
@@ -251,6 +256,7 @@ class UpstreamConfig {
     this.allowlist = const [],
     this.timeout = defaultTimeout,
     this.allowedArchiveHosts = const [],
+    this.requireSha256 = true,
   });
 }
 
@@ -651,6 +657,7 @@ class _ConfigReader {
       timeout: _duration('upstream.timeout', allowZero: false) ??
           UpstreamConfig.defaultTimeout,
       allowedArchiveHosts: [for (final h in archiveHosts) h.toLowerCase()],
+      requireSha256: _boolean('upstream.requireSha256') ?? true,
     );
   }
 

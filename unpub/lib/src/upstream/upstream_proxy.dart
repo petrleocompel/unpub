@@ -31,7 +31,7 @@ const _maxRedirects = 3;
 const _pubAccept = 'application/vnd.pub.v2+json';
 final _userAgent = 'unpub/$packageVersion '
     '(+https://github.com/petrleocompel/unpub)';
-final _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
+final _sha256Pattern = RegExp(r'^[0-9a-fA-F]{64}$');
 
 /// The upstream could not give a usable answer.
 class UpstreamException implements Exception {
@@ -54,7 +54,12 @@ class UpstreamListing {
   /// Changes whenever the listing does.
   final String digest;
 
-  const UpstreamListing(this.json, this.archiveUrls, this.digest);
+  /// Versions whose hash the upstream sent in a form that is not a SHA-256.
+  /// Their entries in [json] carry no hash, and they cannot be fetched.
+  final Set<String> invalidHashes;
+
+  const UpstreamListing(this.json, this.archiveUrls, this.digest,
+      [this.invalidHashes = const {}]);
 
   /// The entry for [version] in [json], or null.
   Map<String, dynamic>? version(String version) {
@@ -104,6 +109,7 @@ class UpstreamProxy {
   final UpstreamCacheStore cache;
   final PackageStore archives;
   final Set<String> allowedArchiveHosts;
+  final bool requireSha256;
   final http.Client _client;
   final DateTime Function() clock;
 
@@ -120,6 +126,7 @@ class UpstreamProxy {
         allowlist = config.allowlist.toSet(),
         timeout = config.timeout,
         allowedArchiveHosts = config.allowedArchiveHosts.toSet(),
+        requireSha256 = config.requireSha256,
         _client = client ?? http.Client();
 
   void close() => _client.close();
@@ -181,23 +188,25 @@ class UpstreamProxy {
       return _decodeCached(cached!);
     }
 
-    final (body, urls) = _rewriteListing(name, response.body!);
+    final (body, urls, invalidHashes) = _rewriteListing(name, response.body!);
     final fetchedAt = clock();
     await _store(UpstreamCacheEntry(
       key: name,
       body: body,
       archiveUrls: json.encode(urls),
+      invalidHashes: invalidHashes.toList(),
       etag: response.etag,
       fetchedAt: fetchedAt,
     ));
-    return UpstreamListing(
-        json.decode(body) as Map<String, dynamic>, urls, _digest(body));
+    return UpstreamListing(json.decode(body) as Map<String, dynamic>, urls,
+        _digest(body), invalidHashes);
   }
 
   UpstreamListing _decodeCached(UpstreamCacheEntry entry) => UpstreamListing(
         json.decode(entry.body) as Map<String, dynamic>,
         (json.decode(entry.archiveUrls ?? '{}') as Map).cast<String, String>(),
         _digest(entry.body),
+        entry.invalidHashes.toSet(),
       );
 
   static String _digest(String body) =>
@@ -207,7 +216,8 @@ class UpstreamProxy {
   ///
   /// The cached form uses paths rather than absolute URLs. An absolute URL
   /// would hold the `Host` of whichever request came first, for every client.
-  (String, Map<String, String>) _rewriteListing(String name, Uint8List body) {
+  (String, Map<String, String>, Set<String>) _rewriteListing(
+      String name, Uint8List body) {
     final Object? decoded;
     try {
       decoded = json.decode(utf8.decode(body));
@@ -221,6 +231,7 @@ class UpstreamProxy {
     }
 
     final urls = <String, String>{};
+    final invalidHashes = <String>{};
     Map<String, dynamic>? rewrite(Object? item) {
       if (item is! Map) return null;
       final version = item['version'];
@@ -237,12 +248,13 @@ class UpstreamProxy {
       }
       urls[version] = archiveUrl;
       final hash = item['archive_sha256'];
+      final isValidHash = hash is String && _sha256Pattern.hasMatch(hash);
+      if (hash != null && !isValidHash) invalidHashes.add(version);
       return {
         'version': version,
         'pubspec': item['pubspec'],
         'archive_url': archivePath(name, version),
-        if (hash is String && _sha256Pattern.hasMatch(hash))
-          'archive_sha256': hash,
+        if (isValidHash) 'archive_sha256': hash.toLowerCase(),
         if (item['published'] != null) 'published': item['published'],
         if (item['retracted'] == true) 'retracted': true,
       };
@@ -263,7 +275,7 @@ class UpstreamProxy {
       if (decoded['advisoriesUpdated'] != null)
         'advisoriesUpdated': decoded['advisoriesUpdated'],
     });
-    return (result, urls);
+    return (result, urls, invalidHashes);
   }
 
   /// Where this server serves the archive of [name] [version].
@@ -396,13 +408,27 @@ class UpstreamProxy {
     final archiveUrl = metadata?.archiveUrls[version];
     if (metadata == null || archiveUrl == null) return null;
 
+    if (metadata.invalidHashes.contains(version)) {
+      _log.warning(LogEvent('upstream sent a malformed archive hash',
+          {'name': name, 'version': version}));
+      throw const UpstreamException(
+          'upstream provided an invalid archive_sha256');
+    }
+    final expected = metadata.sha256Of(version);
+    if (expected == null && requireSha256) {
+      throw UpstreamException(
+          'upstream provides no archive_sha256 for $name $version');
+    }
+
     final response = await _get(Uri.parse(archiveUrl), _maxArchiveBytes);
     if (response == null) return null;
     final bytes = response.body!;
 
-    final expected = metadata.sha256Of(version);
     final actual = sha256.convert(bytes).toString();
-    if (expected != null && actual != expected) {
+    if (expected == null) {
+      _log.warning(LogEvent('serving an upstream archive without a hash',
+          {'name': name, 'version': version}));
+    } else if (actual != expected) {
       _log.warning(LogEvent('upstream archive failed verification',
           {'name': name, 'version': version}));
       throw const UpstreamException(
@@ -419,7 +445,7 @@ class UpstreamProxy {
           error,
           stackTrace);
     }
-    return (bytes, expected ?? actual);
+    return (bytes, expected);
   }
 
   Future<_Response?> _getJson(String path, {String? etag}) =>
