@@ -914,6 +914,23 @@ void main() {
       test('is a 404 when neither exists', () async {
         expect((await download(buildApp())).statusCode, HttpStatus.notFound);
       });
+
+      test('is a 404 when only a legacy file with other bytes exists',
+          () async {
+        // A replacement from before layouts were recorded whose digest object
+        // is gone, while the archive it replaced is still at the legacy path.
+        writeLegacy([9, 9]);
+        final logged = <String>[];
+        final subscription =
+            Logger.root.onRecord.listen((record) => logged.add(record.message));
+        addTearDown(subscription.cancel);
+
+        final response = await download(buildApp());
+
+        expect(response.statusCode, HttpStatus.notFound);
+        expect(await response.readAsString(), isNot(contains('legacy')));
+        expect(logged.where((line) => line.contains(digest)), hasLength(1));
+      });
     });
 
     test('a digest layout version falls back to nothing', () async {

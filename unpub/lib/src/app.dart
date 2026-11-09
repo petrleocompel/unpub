@@ -496,6 +496,18 @@ class App {
             {'name': name, 'version': version}));
         return _notFound();
       }
+      if (packageVersion.archiveLayout == null &&
+          hash != null &&
+          PackageStore.isDigest(hash) &&
+          !await _legacyArchiveMatches(name, version, hash)) {
+        // A version from before layouts were recorded whose digest object is
+        // gone: the legacy file may belong to an earlier archive of the same
+        // version, and must not go out under this digest.
+        _log.severe(LogEvent(
+            'legacy archive does not match the recorded digest',
+            {'name': name, 'version': version, 'digest': hash}));
+        return _notFound();
+      }
       object = null;
     }
 
@@ -522,6 +534,23 @@ class App {
           ...headers,
         },
       );
+    }
+  }
+
+  /// Whether the file at the legacy path of this version hashes to [digest].
+  Future<bool> _legacyArchiveMatches(
+      String name, String version, String digest) async {
+    try {
+      final actual =
+          await sha256.bind(packageStore.download(name, version)).first;
+      return actual.toString() == digest;
+    } catch (error, stackTrace) {
+      _log.warning(
+          LogEvent(
+              'cannot hash legacy archive', {'name': name, 'version': version}),
+          error,
+          stackTrace);
+      return false;
     }
   }
 
