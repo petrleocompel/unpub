@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:path/path.dart' as path;
+import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
 
@@ -195,6 +196,57 @@ void main() {
           sha256.convert([1, 2, 3]).toString());
       expect((await readVersion('a', 1))['sha256'],
           sha256.convert([4, 5, 6]).toString());
+    });
+
+    test('marks a hashed archive as legacy, and it downloads with its hash',
+        () async {
+      final bytes = [1, 2, 3];
+      await addVersions('a', [
+        {
+          'version': '1.0.0',
+          'pubspec': {'name': 'a', 'version': '1.0.0'},
+          'createdAt': DateTime.now(),
+        },
+      ]);
+      archive('a', '1.0.0').writeAsBytesSync(bytes);
+      await db.collection(packageCollection).updateOne(
+          where.eq('name', 'a'),
+          modify
+              .set('private', true)
+              .set('download', 0)
+              .set('createdAt', DateTime.now())
+              .set('updatedAt', DateTime.now()));
+
+      await migrator().run();
+
+      final digest = sha256.convert(bytes).toString();
+      expect(
+          await readVersion('a', 0),
+          allOf(containsPair('sha256', digest),
+              containsPair('archiveLayout', 'legacy')));
+      final app = App(
+        metaStore: MongoStore(db),
+        packageStore: FileStore(archives.path),
+        authenticator: const FakeAuthenticator(null, 'dev@b.c'),
+      );
+      final response = await app.handler(shelf.Request('GET',
+          Uri.parse('http://localhost/packages/a/versions/1.0.0.tar.gz')));
+      expect(response.statusCode, 200);
+      expect(await response.read().expand((chunk) => chunk).toList(), bytes);
+      expect(response.headers['etag'], '"$digest"');
+    });
+
+    test('--rerun 0002 marks what it hashes as legacy', () async {
+      await addVersions('a', [
+        {'version': '1.0.0'},
+      ]);
+      await migrator().run();
+      expect((await readVersion('a', 0)).containsKey('archiveLayout'), isFalse);
+
+      archive('a', '1.0.0').writeAsBytesSync([1]);
+      await migrator().run(rerun: '0002');
+
+      expect((await readVersion('a', 0))['archiveLayout'], 'legacy');
     });
 
     test('keeps a hash that is already stored', () async {

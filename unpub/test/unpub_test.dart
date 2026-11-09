@@ -86,6 +86,7 @@ void main() {
       expect(item['createdAt'], isA<DateTime>());
       item.remove('createdAt');
       expect(item.remove('sha256'), hasLength(64));
+      expect(item.remove('archiveLayout'), 'digest');
       expect(
         DeepCollectionEquality().equals(item, {
           'version': version,
@@ -138,6 +139,7 @@ void main() {
       expect(item['createdAt'], isA<DateTime>());
       item.remove('createdAt');
       expect(item.remove('sha256'), hasLength(64));
+      expect(item.remove('archiveLayout'), 'digest');
       expect(
         DeepCollectionEquality().equals(item, {
           'version': version,

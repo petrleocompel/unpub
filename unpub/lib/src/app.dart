@@ -478,16 +478,25 @@ class App {
       return _notFound();
     }
     final hash = packageVersion.sha256;
-    final object = hash != null &&
-            PackageStore.isDigest(hash) &&
-            await packageStore.objectExists(name, version, hash)
-        ? hash
-        : null;
-    // Archives published before objects existed stay at their mutable path.
-    if (object == null && !await packageStore.exists(name, version)) {
-      _log.warning(LogEvent(
-          'archive missing from storage', {'name': name, 'version': version}));
-      return _notFound();
+    final String? object;
+    if (await _isStoredAsObject(name, packageVersion)) {
+      // Never the legacy path: bytes from there would go out under the digest
+      // of another archive.
+      if (hash == null ||
+          !PackageStore.isDigest(hash) ||
+          !await packageStore.objectExists(name, version, hash)) {
+        _log.severe(LogEvent('archive object missing from storage',
+            {'name': name, 'version': version, 'digest': hash ?? 'none'}));
+        return _notFound();
+      }
+      object = hash;
+    } else {
+      if (!await packageStore.exists(name, version)) {
+        _log.warning(LogEvent('archive missing from storage',
+            {'name': name, 'version': version}));
+        return _notFound();
+      }
+      object = null;
     }
 
     final headers = _archiveHeaders(hash);
@@ -514,6 +523,18 @@ class App {
         },
       );
     }
+  }
+
+  /// Whether [item] is an object named by its digest, rather than a file at
+  /// the mutable path. A version from before layouts were recorded has a digest
+  /// object if one exists, or if there is no legacy file either.
+  Future<bool> _isStoredAsObject(String name, UnpubVersion item) async {
+    if (item.archiveLayout == ArchiveLayout.digest) return true;
+    if (item.archiveLayout == ArchiveLayout.legacy) return false;
+    final hash = item.sha256;
+    if (hash == null || !PackageStore.isDigest(hash)) return false;
+    return await packageStore.objectExists(name, item.version, hash) ||
+        !await packageStore.exists(name, item.version);
   }
 
   Future<shelf.Response> _proxiedDownload(shelf.Request req,
@@ -676,6 +697,7 @@ class App {
           changelog,
           DateTime.now(),
           sha256: archiveHash,
+          archiveLayout: ArchiveLayout.digest,
         );
         if (previous != null) {
           if (!await metaStore.replaceVersion(name, unpubVersion,

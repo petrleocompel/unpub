@@ -6,6 +6,7 @@ import '../auth/account_service.dart';
 import '../auth/accounts.dart';
 import '../config/config.dart';
 import '../logging.dart';
+import '../models.dart';
 import '../store/mongo_store.dart';
 import '../store/package_store.dart';
 
@@ -180,15 +181,19 @@ class Migrator {
         }
         final digest =
             await sha256.bind(packageStore.download(name, version)).first;
-        final result = await packages.updateOne({
-          'name': name,
-          'versions': {
-            r'$elemMatch': {
-              'version': version,
-              'sha256': {r'$exists': false},
+        final result = await packages.updateOne(
+            {
+              'name': name,
+              'versions': {
+                r'$elemMatch': {
+                  'version': version,
+                  'sha256': {r'$exists': false},
+                },
+              },
             },
-          },
-        }, modify.set(r'versions.$.sha256', digest.toString()));
+            modify
+                .set(r'versions.$.sha256', digest.toString())
+                .set(r'versions.$.archiveLayout', ArchiveLayout.legacy));
         if (result.hasWriteErrors || !result.operationSucceeded) {
           throw StateError('cannot store the hash of $name@$version: '
               '${result.writeError?.errmsg ?? result.errmsg}');

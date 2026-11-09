@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:async/async.dart';
+import 'package:logging/logging.dart';
 import 'package:minio/minio.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:shelf/shelf.dart' as shelf;
@@ -789,6 +790,138 @@ void main() {
         ]);
         expect(results.where((won) => won), hasLength(1));
       });
+    });
+  });
+
+  group('the archive layout', () {
+    final archiveOf = crypto.sha256.convert;
+
+    Future<shelf.Response> download(App app) async => app.handler(shelf.Request(
+        'GET',
+        Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz')));
+
+    Future<void> storeVersion(Map<String, Object> fields) =>
+        db.collection(packageCollection).insertOne({
+          'name': _name,
+          'private': true,
+          'uploaders': ['dev@b.c'],
+          'download': 0,
+          'createdAt': DateTime.now(),
+          'updatedAt': DateTime.now(),
+          'versions': [
+            {
+              'version': '1.0.0',
+              'pubspec': {'name': _name, 'version': '1.0.0'},
+              'createdAt': DateTime.now(),
+              ...fields,
+            },
+          ],
+        });
+
+    void writeLegacy(List<int> bytes) => legacyFile()
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(bytes);
+
+    void writeObject(List<int> bytes, String digest) => objectFile(digest)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(bytes);
+
+    test('new uploads and replacements record the digest layout', () async {
+      final app =
+          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      expect(await upload(app, 'first'), isNull);
+      expect((await storedVersion())['archiveLayout'], 'digest');
+      expect(await upload(app, 'second'), isNull);
+      expect((await storedVersion())['archiveLayout'], 'digest');
+    });
+
+    test('a missing digest object is a 404, never the legacy bytes', () async {
+      final store = FileStore(storage.path);
+      final app = buildApp(
+          packageStore: store,
+          publish: const PublishConfig(requireVersionBump: false));
+      expect(await upload(app, 'legacy'), isNull);
+      final old = (await storedVersion())['sha256'] as String;
+      writeLegacy(objectFile(old).readAsBytesSync());
+
+      expect(await upload(app, 'replacement'), isNull);
+      final current = (await storedVersion())['sha256'] as String;
+      objectFile(current).deleteSync();
+
+      final logged = <String>[];
+      final subscription =
+          Logger.root.onRecord.listen((record) => logged.add(record.message));
+      addTearDown(subscription.cancel);
+
+      final response = await download(app);
+
+      expect(response.statusCode, HttpStatus.notFound);
+      expect(await response.readAsString(), isNot(contains('legacy')));
+      expect(logged.where((line) => line.contains(current)), hasLength(1));
+    });
+
+    test('an explicit legacy version is served from the legacy path', () async {
+      final bytes = [1, 2, 3];
+      final digest = archiveOf(bytes).toString();
+      writeLegacy(bytes);
+      writeObject([9, 9], digest);
+      await storeVersion({'sha256': digest, 'archiveLayout': 'legacy'});
+
+      final response = await download(buildApp());
+
+      expect(response.statusCode, HttpStatus.ok);
+      expect(await collectBytes(response.read().map((c) => c)), bytes);
+      expect(response.headers['etag'], '"$digest"');
+    });
+
+    test('a version with no layout and no hash is served as legacy', () async {
+      final bytes = [1, 2, 3];
+      writeLegacy(bytes);
+      await storeVersion({});
+
+      final response = await download(buildApp());
+
+      expect(response.statusCode, HttpStatus.ok);
+      expect(await collectBytes(response.read().map((c) => c)), bytes);
+      expect(response.headers.containsKey('etag'), isFalse);
+    });
+
+    group('with a hash but no layout', () {
+      final bytes = [1, 2, 3];
+      final digest = archiveOf(bytes).toString();
+
+      setUp(() => storeVersion({'sha256': digest}));
+
+      test('is served as an object when the object exists', () async {
+        writeObject(bytes, digest);
+        writeLegacy([9, 9]);
+
+        final response = await download(buildApp());
+
+        expect(await collectBytes(response.read().map((c) => c)), bytes);
+        expect(response.headers['etag'], '"$digest"');
+      });
+
+      test('is served as legacy when only the legacy file exists', () async {
+        writeLegacy(bytes);
+
+        final response = await download(buildApp());
+
+        expect(await collectBytes(response.read().map((c) => c)), bytes);
+        expect(response.headers['etag'], '"$digest"');
+      });
+
+      test('is a 404 when neither exists', () async {
+        expect((await download(buildApp())).statusCode, HttpStatus.notFound);
+      });
+    });
+
+    test('a digest layout version falls back to nothing', () async {
+      final digest = archiveOf([1]).toString();
+      writeLegacy([1]);
+      await storeVersion({'sha256': digest, 'archiveLayout': 'digest'});
+
+      expect((await download(buildApp())).statusCode, HttpStatus.notFound);
     });
   });
 

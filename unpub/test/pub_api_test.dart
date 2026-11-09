@@ -455,7 +455,10 @@ void main() {
     test('an archive without a stored hash has no validator', () async {
       await publish('1.0.0');
       await db.collection(packageCollection).updateOne(
-          where.eq('name', name), modify.unset(r'versions.0.sha256'));
+          where.eq('name', name),
+          modify
+              .unset(r'versions.0.sha256')
+              .unset(r'versions.0.archiveLayout'));
       // A version from before hashes were recorded is at the legacy path.
       File(path.join(storage.path, '$name-1.0.0.tar.gz'))
           .writeAsStringSync('legacy');

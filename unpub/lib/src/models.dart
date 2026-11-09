@@ -7,6 +7,16 @@ DateTime identity(DateTime x) => x;
 
 DateTime? optionalIdentity(DateTime? x) => x;
 
+/// Where the archive of a version is stored, as `archiveLayout` on the version.
+abstract final class ArchiveLayout {
+  /// At the mutable `<name>-<version>.tar.gz` path, from before archives were
+  /// named by their digest.
+  static const legacy = 'legacy';
+
+  /// An immutable object named by the `sha256` of the version.
+  static const digest = 'digest';
+}
+
 @JsonSerializable()
 class UnpubVersion {
   final String version;
@@ -22,6 +32,10 @@ class UnpubVersion {
   /// Lowercase hex SHA-256 of the stored archive. Null for a version published
   /// before hashes were recorded and not yet backfilled by `unpub migrate`.
   final String? sha256;
+
+  /// One of [ArchiveLayout]. Null for a version stored before layouts were
+  /// recorded, whose layout then depends on what is in storage.
+  final String? archiveLayout;
 
   @JsonKey(defaultValue: false)
   final bool isRetracted;
@@ -41,6 +55,7 @@ class UnpubVersion {
     this.changelog,
     this.createdAt, {
     this.sha256,
+    this.archiveLayout,
     this.isRetracted = false,
     this.retractedAt,
     this.retractedBy,
