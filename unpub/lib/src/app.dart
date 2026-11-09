@@ -476,13 +476,19 @@ class App {
     if (packageVersion == null) {
       return _notFound();
     }
-    if (!await packageStore.exists(name, version)) {
+    final hash = packageVersion.sha256;
+    final object = hash != null &&
+            PackageStore.isDigest(hash) &&
+            await packageStore.objectExists(name, version, hash)
+        ? hash
+        : null;
+    // Archives published before objects existed stay at their mutable path.
+    if (object == null && !await packageStore.exists(name, version)) {
       _log.warning(LogEvent(
           'archive missing from storage', {'name': name, 'version': version}));
       return _notFound();
     }
 
-    final hash = packageVersion.sha256;
     final headers = _archiveHeaders(hash);
     if (_clientHasArchive(req, hash)) {
       return shelf.Response.notModified(headers: headers);
@@ -493,11 +499,14 @@ class App {
     }
 
     if (packageStore.supportsDownloadUrl) {
-      return shelf.Response.found(
-          await packageStore.downloadUrl(name, version));
+      return shelf.Response.found(object == null
+          ? await packageStore.downloadUrl(name, version)
+          : await packageStore.objectDownloadUrl(name, version, object));
     } else {
       return shelf.Response.ok(
-        packageStore.download(name, version),
+        object == null
+            ? packageStore.download(name, version)
+            : packageStore.downloadObject(name, version, object),
         headers: {
           HttpHeaders.contentTypeHeader: ContentType.binary.mimeType,
           ...headers,
@@ -556,7 +565,7 @@ class App {
 
     String? uploadKey;
     (String, String, String)? reservation;
-    (String, String, String)? staged;
+    (String, String, String)? unpublished;
     try {
       var tarballBytes = await _readUploadedArchive(req);
       var tarBytes = publishPolicy.inflate(tarballBytes);
@@ -632,8 +641,8 @@ class App {
       _checkMayPublish(package, principal, name);
       if (package != null) publishPolicy.checkVersion(package, version);
 
-      final isReplacement =
-          package?.versions.any((item) => item.version == version) ?? false;
+      final previous =
+          package?.versions.firstWhereOrNull((item) => item.version == version);
       final archiveHash = sha256.convert(tarballBytes).toString();
 
       String? readme;
@@ -645,11 +654,11 @@ class App {
         changelog = utf8.decode(changelogFile.content);
       }
 
-      // Nothing can be downloaded from here. A publish that stalled past its
-      // reservation can still get this far, so the final path has to wait for
-      // the metadata write that only one publish can win.
-      staged = (name, version, claim);
-      await _stageArchive(name, version, claim, tarballBytes);
+      // Nothing can reach this object until the metadata names its digest, so
+      // a publish that stalled past its reservation cannot change an archive.
+      // A crash from here on leaves only an object that nothing refers to.
+      unpublished = (name, version, archiveHash);
+      await _storeArchive(name, version, claim, archiveHash, tarballBytes);
 
       // Write package meta to database
       var unpubVersion = UnpubVersion(
@@ -662,18 +671,20 @@ class App {
         DateTime.now(),
         sha256: archiveHash,
       );
-      if (isReplacement) {
-        await metaStore.replaceVersion(name, unpubVersion);
+      if (previous != null) {
+        if (!await metaStore.replaceVersion(name, unpubVersion,
+            expectedSha256: previous.sha256)) {
+          throw PublishPolicy.concurrentPublish(name, version);
+        }
       } else {
-        await _checkNotStoredYet(name, version);
         try {
           await metaStore.addVersion(name, unpubVersion);
         } on VersionExistsException {
           throw PublishPolicy.duplicateVersion(name, version);
         }
       }
-      await _commitStaged(name, version, claim, replace: isReplacement);
-      staged = null;
+      unpublished = null;
+      await _restoreIfGone(name, version, archiveHash, tarballBytes);
       await _audit(req, principal, 'package.published', '$name@$version', {
         'uploader': uploader,
       });
@@ -690,7 +701,7 @@ class App {
           '?error=${Uri.encodeQueryComponent('$err')}'
           '${err is _UploadRetryLater ? '&retryable=true' : ''}'));
     } finally {
-      if (staged != null) await _discardStaged(staged);
+      if (unpublished != null) await _discardUnpublished(unpublished);
       if (reservation != null) await _releaseReservation(reservation);
       if (uploadKey != null) _uploadsInProgress.remove(uploadKey);
     }
@@ -699,8 +710,8 @@ class App {
   /// Stores [content] for publishing, within `publish.uploadTimeout` so that
   /// a stalled write fails before its reservation can expire. The reservation
   /// is renewed once, halfway through.
-  Future<void> _stageArchive(
-      String name, String version, String claim, List<int> content) async {
+  Future<void> _storeArchive(String name, String version, String claim,
+      String digest, List<int> content) async {
     final limit = publishPolicy.config.uploadTimeout;
     final renewal = Timer(limit ~/ 2, () {
       metaStore.renewUpload(name, version, claim).then((held) {
@@ -716,13 +727,13 @@ class App {
             stackTrace);
       });
     });
-    final write = packageStore.stageArchive(name, version, claim, content);
+    final write = packageStore.storeObject(name, version, digest, content);
     try {
       await write.timeout(limit);
     } on TimeoutException {
-      // A write that is still running can create its file after the caller
+      // A write that is still running can create its object after the caller
       // has cleaned up, so it gets cleaned up again when it ends.
-      unawaited(write.then((_) => _discardStaged((name, version, claim)),
+      unawaited(write.then((_) => _discardUnpublished((name, version, digest)),
           onError: (_) {}));
       throw const _UploadRetryLater(
           'storing the archive exceeded publish.uploadTimeout, try again');
@@ -731,43 +742,43 @@ class App {
     }
   }
 
-  /// Refuses a new version whose final path already holds an archive, before
-  /// the metadata changes. If the version is published, this upload simply
-  /// lost the race for it. If it is not, the archive came from somewhere else.
-  Future<void> _checkNotStoredYet(String name, String version) async {
-    if (!await packageStore.hasCommittedArchive(name, version)) return;
-    final current = await metaStore.queryPackage(name);
-    if (current?.versions.any((item) => item.version == version) ?? false) {
-      throw PublishPolicy.duplicateVersion(name, version);
-    }
-    _log.severe(LogEvent(
-        'an archive exists for a version that is not published',
-        {'name': name, 'version': version}));
-    throw ArchiveExistsException(name, version);
-  }
-
-  Future<void> _commitStaged(String name, String version, String claim,
-      {required bool replace}) async {
+  /// Deletes an object this upload wrote and did not get to publish, unless
+  /// the version names it anyway: an identical upload may have published it, or
+  /// the metadata write may have reached the database and only its answer got
+  /// lost. An object that cannot be deleted is reclaimed later.
+  Future<void> _discardUnpublished((String, String, String) object) async {
+    final (name, version, digest) = object;
     try {
-      await packageStore.commitStaged(name, version, claim, replace: replace);
+      final package = await metaStore.queryPackage(name);
+      final published = package?.versions.any(
+              (item) => item.version == version && item.sha256 == digest) ??
+          false;
+      if (!published) {
+        await packageStore.deleteObject(name, version, digest);
+      }
     } catch (error, stackTrace) {
-      _log.severe(
-          LogEvent('a published version has no archive in storage',
+      _log.warning(
+          LogEvent('failed to delete an unpublished archive',
               {'name': name, 'version': version}),
           error,
           stackTrace);
-      rethrow;
     }
   }
 
-  /// A staged archive that cannot be deleted is reclaimed later.
-  Future<void> _discardStaged((String, String, String) staged) async {
-    final (name, version, claim) = staged;
+  /// Stores the object again if it disappeared before the metadata was
+  /// written, when an identical upload lost or the object looked like an
+  /// orphan. A failure is logged and does not fail the publish, which has
+  /// already happened.
+  Future<void> _restoreIfGone(
+      String name, String version, String digest, List<int> content) async {
     try {
-      await packageStore.discardStaged(name, version, claim);
+      if (await packageStore.objectExists(name, version, digest)) return;
+      _log.warning(LogEvent('restoring an archive removed during its publish',
+          {'name': name, 'version': version}));
+      await packageStore.storeObject(name, version, digest, content);
     } catch (error, stackTrace) {
-      _log.warning(
-          LogEvent('failed to discard a staged archive',
+      _log.severe(
+          LogEvent('a published version has no archive in storage',
               {'name': name, 'version': version}),
           error,
           stackTrace);

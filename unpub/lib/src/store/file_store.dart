@@ -6,9 +6,28 @@ import 'package_store.dart';
 
 class FileStore extends PackageStore {
   String baseDir;
+
+  /// Where the archive of a version lives in the mutable layout from before
+  /// archives were named by their digest, relative to [baseDir]. Archives
+  /// already there keep being served from it, and nothing new is written.
   String Function(String name, String version)? getFilePath;
 
-  FileStore(this.baseDir, {this.getFilePath});
+  /// Where the immutable object with a digest lives, relative to [baseDir],
+  /// instead of `<name>/<name>-<version>-<sha256>.tar.gz`.
+  String Function(String name, String version, String sha256)? getObjectPath;
+
+  /// Throws an [ArgumentError] if [getFilePath] or [getObjectPath] answers a
+  /// path inside [temporaryNamespace].
+  FileStore(this.baseDir, {this.getFilePath, this.getObjectPath}) {
+    final file = getFilePath;
+    if (file != null) {
+      PackageStore.checkLayout(() => file('a_package', '1.0.0'));
+    }
+    final object = getObjectPath;
+    if (object != null) {
+      PackageStore.checkLayout(() => object('a_package', '1.0.0', '0' * 64));
+    }
+  }
 
   /// The archive of [name] [version], which is always inside [baseDir].
   ///
@@ -16,9 +35,16 @@ class FileStore extends PackageStore {
   File _getTarballFile(String name, String version) =>
       _inBaseDir(getFilePath?.call(name, version) ?? '$name-$version.tar.gz');
 
+  /// The immutable object of a published archive.
+  File _getObjectFile(String name, String version, String digest) {
+    PackageStore.checkDigest(digest);
+    return _inBaseDir(getObjectPath?.call(name, version, digest) ??
+        path.join(name, '$name-$version-$digest.tar.gz'));
+  }
+
   /// A proxied archive, under `upstream/`, named by the digest of its bytes.
   /// A locally published archive never lands there, whatever the name, because
-  /// it has no directory of its own.
+  /// its object has one directory fewer.
   File _getUpstreamFile(String name, String version, String digest) {
     PackageStore.checkDigest(digest);
     return _inBaseDir(
@@ -31,7 +57,18 @@ class FileStore extends PackageStore {
     if (!path.isWithin(base, filePath)) {
       throw ArgumentError('archive path escapes the storage directory');
     }
+    PackageStore.checkNotReserved(path.relative(filePath, from: base));
     return File(filePath);
+  }
+
+  Directory get _temporaryDirectory =>
+      Directory(path.join(baseDir, temporaryNamespace));
+
+  /// A new temporary file. It is on the same disk as every object, so that
+  /// moving it there is atomic and a partial file is never served.
+  Future<File> _newTemporaryFile() async {
+    final directory = await _temporaryDirectory.create(recursive: true);
+    return File(path.join(directory.path, PackageStore.newTemporaryName()));
   }
 
   @override
@@ -45,62 +82,65 @@ class FileStore extends PackageStore {
   Future<bool> exists(String name, String version) =>
       _getTarballFile(name, version).exists();
 
-  File _getStagedFile(String name, String version, String id) {
-    PackageStore.checkStagingId(id);
-    return File('${_getTarballFile(name, version).path}.$id.staging');
-  }
-
-  @override
-  Future<void> stageArchive(
-      String name, String version, String id, List<int> content) async {
-    final file = _getStagedFile(name, version, id);
-    await file.parent.create(recursive: true);
-    final output = await file.open(mode: FileMode.writeOnly);
-    try {
-      await output.writeFrom(content);
-      await output.flush();
-    } finally {
-      await output.close();
-    }
-  }
-
-  @override
-  Future<void> commitStaged(String name, String version, String id,
-      {bool replace = false}) async {
-    final target = _getTarballFile(name, version);
-    if (!replace && await target.exists()) {
-      throw ArchiveExistsException(name, version);
-    }
-    await _getStagedFile(name, version, id).rename(target.path);
-  }
-
-  @override
-  Future<void> discardStaged(String name, String version, String id) async {
-    try {
-      await _getStagedFile(name, version, id).delete();
-    } on PathNotFoundException {
-      // Never written, or already committed.
-    }
-  }
-
-  @override
-  Future<bool> hasCommittedArchive(String name, String version) =>
-      exists(name, version);
-
   @override
   Stream<List<int>> download(String name, String version) {
     return _getTarballFile(name, version).openRead();
   }
 
-  /// Next to the final path, so that [commitUpstream] is a rename and a
-  /// partial file is never served.
+  /// Identical digests mean identical bytes, so an object that is already there
+  /// stays, with a new modification time that keeps reclamation away from it
+  /// until the metadata has been written.
   @override
-  Future<File> upstreamTemporaryFile(String name, String version) async {
-    final file = _inBaseDir(path.join('upstream', name, '$name-$version'));
-    await file.parent.create(recursive: true);
-    final stamp = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-    return File('${file.path}.tar.gz.$stamp.tmp');
+  Future<void> storeObject(
+      String name, String version, String digest, List<int> content) async {
+    final target = _getObjectFile(name, version, digest);
+    try {
+      await target.setLastModified(DateTime.now());
+      return;
+    } on FileSystemException {
+      // Not stored yet.
+    }
+    final temporary = await _newTemporaryFile();
+    try {
+      final output = await temporary.open(mode: FileMode.writeOnly);
+      try {
+        await output.writeFrom(content);
+        await output.flush();
+      } finally {
+        await output.close();
+      }
+      await target.parent.create(recursive: true);
+      await temporary.rename(target.path);
+    } catch (_) {
+      await _deleteIfPresent(temporary);
+      rethrow;
+    }
   }
+
+  @override
+  Future<bool> objectExists(String name, String version, String digest) =>
+      _getObjectFile(name, version, digest).exists();
+
+  @override
+  Stream<List<int>> downloadObject(
+          String name, String version, String digest) =>
+      _getObjectFile(name, version, digest).openRead();
+
+  @override
+  Future<void> deleteObject(String name, String version, String digest) =>
+      _deleteIfPresent(_getObjectFile(name, version, digest));
+
+  static Future<void> _deleteIfPresent(File file) async {
+    try {
+      await file.delete();
+    } on PathNotFoundException {
+      // Never written, or another instance got there first.
+    }
+  }
+
+  @override
+  Future<File> upstreamTemporaryFile(String name, String version) =>
+      _newTemporaryFile();
 
   /// Identical digests mean identical bytes, so an archive that is already
   /// there stays and [temporary] is dropped.
@@ -113,6 +153,7 @@ class FileStore extends PackageStore {
       return true;
     }
     await _flushToDisk(temporary);
+    await target.parent.create(recursive: true);
     await temporary.rename(target.path);
     return true;
   }
@@ -136,43 +177,14 @@ class FileStore extends PackageStore {
       _getUpstreamFile(name, version, digest).openRead();
 
   @override
-  Future<void> deleteUpstream(
-      String name, String version, String digest) async {
-    try {
-      await _getUpstreamFile(name, version, digest).delete();
-    } on PathNotFoundException {
-      // Never kept, or another instance got there first.
-    }
-  }
-
-  /// A spool file under `upstream/`, or a staged publish next to its archive.
-  static final _temporaryPattern =
-      RegExp(r'\.tar\.gz\.(\d+-\d+\.tmp|[0-9A-Za-z]+\.staging)$');
+  Future<void> deleteUpstream(String name, String version, String digest) =>
+      _deleteIfPresent(_getUpstreamFile(name, version, digest));
 
   @override
   Future<int> reclaimTemporary(
-      {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
-    final directory = Directory(baseDir);
-    if (!await directory.exists()) return 0;
-    final cutoff = (now ?? DateTime.now()).subtract(maxAge);
-    var count = 0;
-    await for (final entity
-        in directory.list(recursive: true, followLinks: false)) {
-      if (entity is! File ||
-          !_temporaryPattern.hasMatch(path.basename(entity.path))) {
-        continue;
-      }
-      try {
-        if ((await entity.stat()).modified.isBefore(cutoff)) {
-          await entity.delete();
-          count++;
-        }
-      } on FileSystemException {
-        // Committed, or another instance got there first.
-      }
-    }
-    return count;
-  }
+          {DateTime? now, Duration maxAge = temporaryFileMaxAge}) =>
+      PackageStore.reclaimDirectory(
+          _temporaryDirectory, (now ?? DateTime.now()).subtract(maxAge));
 
   /// Creates [baseDir] if it is missing, and returns whether it did.
   ///

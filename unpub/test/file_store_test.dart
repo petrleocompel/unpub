@@ -134,92 +134,153 @@ void main() {
     });
   });
 
-  group('staging a publish', () {
-    File finalFile(Directory baseDir) =>
+  group('published objects', () {
+    const data = [1, 2, 3];
+    final digest = digestOf(data);
+    File objectFile(Directory baseDir) =>
+        File(path.join(baseDir.path, 'foo', 'foo-1.0.0-$digest.tar.gz'));
+    File legacyFile(Directory baseDir) =>
         File(path.join(baseDir.path, 'foo-1.0.0.tar.gz'));
-    File stagedFile(Directory baseDir, [String id = 'r1']) =>
-        File(path.join(baseDir.path, 'foo-1.0.0.tar.gz.$id.staging'));
+    List<FileSystemEntity> temporaries(Directory baseDir) {
+      var directory = Directory(path.join(baseDir.path, '.unpub-tmp'));
+      return directory.existsSync() ? directory.listSync() : const [];
+    }
 
-    test('stages next to the final path without publishing', () async {
-      var baseDir = setupFixture('stage-next');
+    test('are named by their digest, and not at the legacy path', () async {
+      var baseDir = setupFixture('object-layout');
       var store = unpub.FileStore(baseDir.path);
-      await store.stageArchive('foo', '1.0.0', 'r1', [1, 2]);
-      expect(stagedFile(baseDir).readAsBytesSync(), [1, 2]);
-      expect(finalFile(baseDir).existsSync(), isFalse);
+      await store.storeObject('foo', '1.0.0', digest, data);
+      expect(objectFile(baseDir).readAsBytesSync(), data);
+      expect(legacyFile(baseDir).existsSync(), isFalse);
+      expect(temporaries(baseDir), isEmpty);
+    });
+
+    test('read back and report what is stored', () async {
+      var store = unpub.FileStore(setupFixture('object-read').path);
+      expect(await store.objectExists('foo', '1.0.0', digest), isFalse);
+      await store.storeObject('foo', '1.0.0', digest, data);
+      expect(await store.objectExists('foo', '1.0.0', digest), isTrue);
+      expect(await collectBytes(store.downloadObject('foo', '1.0.0', digest)),
+          data);
+    });
+
+    test('of one version with different bytes live side by side', () async {
+      var store = unpub.FileStore(setupFixture('object-two').path);
+      await store.storeObject('foo', '1.0.0', digest, data);
+      await store.storeObject('foo', '1.0.0', digestOf([4]), [4]);
+      expect(await collectBytes(store.downloadObject('foo', '1.0.0', digest)),
+          data);
+      expect(
+          await collectBytes(
+              store.downloadObject('foo', '1.0.0', digestOf([4]))),
+          [4]);
+    });
+
+    test('storing a digest again keeps the file, and makes it count as new',
+        () async {
+      var baseDir = setupFixture('object-repeat');
+      var store = unpub.FileStore(baseDir.path);
+      await store.storeObject('foo', '1.0.0', digest, data);
+      var file = objectFile(baseDir);
+      file.setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
+
+      await store.storeObject('foo', '1.0.0', digest, data);
+
+      expect(file.readAsBytesSync(), data);
+      expect(file.lastModifiedSync().difference(DateTime.now()).inMinutes.abs(),
+          lessThan(1));
+      expect(temporaries(baseDir), isEmpty);
+    });
+
+    test('a failed write leaves no temporary file', () async {
+      var baseDir = setupFixture('object-failure');
+      File(path.join(baseDir.path, 'foo')).writeAsStringSync('in the way');
+      var store = unpub.FileStore(baseDir.path);
+      await expectLater(store.storeObject('foo', '1.0.0', digest, data),
+          throwsA(isA<FileSystemException>()));
+      expect(temporaries(baseDir), isEmpty);
+    });
+
+    test('deleting is safe to repeat', () async {
+      var baseDir = setupFixture('object-delete');
+      var store = unpub.FileStore(baseDir.path);
+      await store.deleteObject('foo', '1.0.0', digest);
+      await store.storeObject('foo', '1.0.0', digest, data);
+      await store.deleteObject('foo', '1.0.0', digest);
+      await store.deleteObject('foo', '1.0.0', digest);
+      expect(objectFile(baseDir).existsSync(), isFalse);
+    });
+
+    test('use getObjectPath, and getFilePath only for the legacy path',
+        () async {
+      var baseDir = setupFixture('object-custom');
+      var store = unpub.FileStore(baseDir.path,
+          getFilePath: newFilePathFunc(),
+          getObjectPath: (name, version, sha) => 'objects/$sha.bin');
+      await store.storeObject('foo', '1.0.0', digest, data);
+      expect(
+          File(path.join(baseDir.path, 'objects', '$digest.bin')).existsSync(),
+          isTrue);
       expect(await store.exists('foo', '1.0.0'), isFalse);
-    });
-
-    test('commit moves it to the legacy path and leaves nothing', () async {
-      var baseDir = setupFixture('stage-commit');
-      var store = unpub.FileStore(baseDir.path);
-      await store.stageArchive('foo', '1.0.0', 'r1', [1, 2]);
-      await store.commitStaged('foo', '1.0.0', 'r1');
-      expect(finalFile(baseDir).readAsBytesSync(), [1, 2]);
-      expect(baseDir.listSync(), hasLength(1));
-    });
-
-    test('commit never overwrites unless replacing', () async {
-      var baseDir = setupFixture('stage-conflict');
-      var store = unpub.FileStore(baseDir.path);
       await store.upload('foo', '1.0.0', [9]);
-      await store.stageArchive('foo', '1.0.0', 'r1', [1, 2]);
-      expect(await store.hasCommittedArchive('foo', '1.0.0'), isTrue);
-
-      await expectLater(store.commitStaged('foo', '1.0.0', 'r1'),
-          throwsA(isA<unpub.ArchiveExistsException>()));
-      expect(finalFile(baseDir).readAsBytesSync(), [9]);
-
-      await store.commitStaged('foo', '1.0.0', 'r1', replace: true);
-      expect(finalFile(baseDir).readAsBytesSync(), [1, 2]);
+      expect(await collectBytes(store.download('foo', '1.0.0')), [9]);
+      expect(await collectBytes(store.downloadObject('foo', '1.0.0', digest)),
+          data);
     });
 
-    test('discarding is safe to repeat', () async {
-      var baseDir = setupFixture('stage-discard');
-      var store = unpub.FileStore(baseDir.path);
-      await store.discardStaged('foo', '1.0.0', 'r1');
-      await store.stageArchive('foo', '1.0.0', 'r1', [1]);
-      await store.discardStaged('foo', '1.0.0', 'r1');
-      await store.discardStaged('foo', '1.0.0', 'r1');
-      expect(baseDir.listSync(), isEmpty);
-    });
+    for (var bad in ['abc', 'A' * 64, '../${'a' * 61}']) {
+      test('refuse "$bad" as a digest', () async {
+        var store = unpub.FileStore(setupFixture('object-digest').path);
+        await expectLater(
+            store.storeObject('foo', '1.0.0', bad, data), throwsArgumentError);
+      });
+    }
 
-    test('two attempts at one version stage separately', () async {
-      var baseDir = setupFixture('stage-two');
-      var store = unpub.FileStore(baseDir.path);
-      await store.stageArchive('foo', '1.0.0', 'r1', [1]);
-      await store.stageArchive('foo', '1.0.0', 'r2', [2]);
-      expect(stagedFile(baseDir, 'r1').readAsBytesSync(), [1]);
-      expect(stagedFile(baseDir, 'r2').readAsBytesSync(), [2]);
+    test('a store with only upload writes to the legacy path', () async {
+      var store = _UploadOnlyStore();
+      await store.storeObject('foo', '1.0.0', digest, data);
+      expect(store.uploaded, ['foo@1.0.0']);
+      await store.deleteObject('foo', '1.0.0', digest);
+      expect(store.uploaded, ['foo@1.0.0']);
     });
+  });
 
-    test('works with a custom layout', () async {
-      var baseDir = setupFixture('stage-custom');
-      var store = unpub.FileStore(baseDir.path, getFilePath: newFilePathFunc());
-      await store.stageArchive('test_package', '1.0.0', 'r1', [1]);
-      await store.commitStaged('test_package', '1.0.0', 'r1');
-      expect(await collectBytes(store.download('test_package', '1.0.0')), [1]);
-    });
+  group('the reserved temporary namespace', () {
+    for (var reserved in [
+      '.unpub-tmp/x.tar.gz',
+      './.unpub-tmp/x.tar.gz',
+      'a/../.unpub-tmp/x.tar.gz',
+      '.UNPUB-TMP/x.tar.gz',
+    ]) {
+      test('a getFilePath in "$reserved" fails at startup', () {
+        expect(() => unpub.FileStore('x', getFilePath: (_, __) => reserved),
+            throwsArgumentError);
+      });
 
-    for (var unsafe in ['', '../x', 'a/b', 'a.b']) {
-      test('refuses "$unsafe" as a staging id', () async {
-        var store = unpub.FileStore(setupFixture('stage-id').path);
-        await expectLater(store.stageArchive('foo', '1.0.0', unsafe, [1]),
+      test('a getObjectPath in "$reserved" fails at startup', () {
+        expect(
+            () => unpub.FileStore('x', getObjectPath: (_, __, ___) => reserved),
             throwsArgumentError);
       });
     }
 
-    test('a store with only upload publishes at commit', () async {
-      var store = _UploadOnlyStore();
-      await store.stageArchive('foo', '1.0.0', 'r1', [1]);
-      expect(store.uploaded, isEmpty);
-      await store.commitStaged('foo', '1.0.0', 'r1');
-      expect(store.uploaded, ['foo@1.0.0']);
-      expect(await store.hasCommittedArchive('foo', '1.0.0'), isFalse);
+    test('a path that only reaches it for some names fails on use', () async {
+      var store = unpub.FileStore(setupFixture('namespace-late').path,
+          getFilePath: (name, version) =>
+              name == 'tricky' ? '.unpub-tmp/$name.tar.gz' : '$name.tar.gz');
+      await expectLater(store.upload('tricky', '1.0.0', testPackageData),
+          throwsArgumentError);
+      await store.upload('fine', '1.0.0', testPackageData);
+    });
 
-      await store.stageArchive('foo', '2.0.0', 'r2', [1]);
-      await store.discardStaged('foo', '2.0.0', 'r2');
-      await expectLater(
-          store.commitStaged('foo', '2.0.0', 'r2'), throwsStateError);
+    test('a function that cannot handle the sample fails on use only',
+        () async {
+      var store = unpub.FileStore(setupFixture('namespace-sample').path,
+          getFilePath: (name, version) {
+        if (name != 'expected') throw StateError('unknown package');
+        return 'expected.tar.gz';
+      });
+      await store.upload('expected', '1.0.0', testPackageData);
     });
   });
 
@@ -232,40 +293,37 @@ void main() {
       store = unpub.FileStore(baseDir.path);
     });
 
-    test('deletes old files of both kinds, and counts them', () async {
-      var spool =
-          _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.123-456.tmp');
-      var staged = _temporaryFile(baseDir, 'foo-1.0.0.tar.gz.abc123.staging');
-      var nested = _temporaryFile(baseDir,
-          'packages/f/fo/foo/versions/foo-1.0.0.tar.gz.abc123.staging');
+    test('deletes old files in the namespace, whatever they are called',
+        () async {
+      var spool = _temporaryFile(baseDir, '.unpub-tmp/1-2-3.tmp');
+      var zip = _temporaryFile(baseDir, '.unpub-tmp/foo-1.0.0.zip');
+      var nested = _temporaryFile(baseDir, '.unpub-tmp/sub/part');
 
       expect(await store.reclaimTemporary(), 3);
 
       expect(spool.existsSync(), isFalse);
-      expect(staged.existsSync(), isFalse);
+      expect(zip.existsSync(), isFalse);
       expect(nested.existsSync(), isFalse);
     });
 
     test('leaves a fresh temporary file alone', () async {
-      var spool = _temporaryFile(
-          baseDir, 'upstream/foo/foo-1.0.0.tar.gz.123-456.tmp',
-          old: false);
-      var staged = _temporaryFile(baseDir, 'foo-1.0.0.tar.gz.abc123.staging',
-          old: false);
+      var spool = _temporaryFile(baseDir, '.unpub-tmp/1-2-3.tmp', old: false);
 
       expect(await store.reclaimTemporary(), 0);
 
       expect(spool.existsSync(), isTrue);
-      expect(staged.existsSync(), isTrue);
     });
 
     for (var name in [
       'foo-1.0.0.tar.gz',
+      'packages/f/fo/foo/versions/foo-1.0.0.tar.gz.abc123.staging',
+      'foo-1.0.0.tar.gz.abc123.staging',
       'upstream/foo/foo-1.0.0-${'a' * 64}.tar.gz',
+      'upstream/foo/foo-1.0.0.tar.gz.123-456.tmp',
+      'foo/foo-1.0.0-${'a' * 64}.tar.gz',
+      'custom/foo-1.0.0.zip',
       'notes.tmp',
       'other.staging',
-      'foo-1.0.0.tar.gz.bad.tmp',
-      'foo-1.0.0.tar.gz.a.b.staging',
       '.unpub-health-1-2',
     ]) {
       test('never deletes $name, however old', () async {
@@ -282,22 +340,23 @@ void main() {
           0);
     });
 
-    test('the default clears only old spool files in the system temp',
-        () async {
+    test('the default clears only its namespace in the system temp', () async {
       var store = _UploadOnlyStore();
-      var old = File(path.join(Directory.systemTemp.path,
-          'unpub-upstream-${pid + 1}-7-${DateTime.now().microsecondsSinceEpoch}.tmp'))
+      var namespace =
+          Directory(path.join(Directory.systemTemp.path, '.unpub-tmp'))
+            ..createSync();
+      var stamp = DateTime.now().microsecondsSinceEpoch;
+      var old = File(path.join(namespace.path, 'old-$stamp.tmp'))
         ..writeAsStringSync('x')
         ..setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
-      var fresh = File(path.join(Directory.systemTemp.path,
-          'unpub-upstream-${pid + 2}-7-${DateTime.now().microsecondsSinceEpoch}.tmp'))
+      var fresh = File(path.join(namespace.path, 'fresh-$stamp.tmp'))
         ..writeAsStringSync('x');
-      var unrelated = File(path.join(Directory.systemTemp.path,
-          'unrelated-${DateTime.now().microsecondsSinceEpoch}.tmp'))
+      var outside = File(path.join(
+          Directory.systemTemp.path, 'unpub-upstream-${pid + 1}-7-$stamp.tmp'))
         ..writeAsStringSync('x')
         ..setLastModifiedSync(DateTime.now().subtract(_hourAndABit));
       addTearDown(() {
-        for (var file in [old, fresh, unrelated]) {
+        for (var file in [old, fresh, outside]) {
           if (file.existsSync()) file.deleteSync();
         }
       });
@@ -306,7 +365,7 @@ void main() {
 
       expect(old.existsSync(), isFalse);
       expect(fresh.existsSync(), isTrue);
-      expect(unrelated.existsSync(), isTrue);
+      expect(outside.existsSync(), isTrue);
     });
 
     group('on a schedule', () {
@@ -320,8 +379,7 @@ void main() {
           await subscription.cancel();
         });
 
-        var first =
-            _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.1-1.tmp');
+        var first = _temporaryFile(baseDir, '.unpub-tmp/1.tmp');
         var reclaimer = unpub.TemporaryReclaimer(store,
             interval: const Duration(milliseconds: 50))
           ..start();
@@ -329,8 +387,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
         expect(first.existsSync(), isFalse);
 
-        var second =
-            _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.2-2.tmp');
+        var second = _temporaryFile(baseDir, '.unpub-tmp/2.tmp');
         for (var i = 0; i < 100 && second.existsSync(); i++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
@@ -340,8 +397,7 @@ void main() {
         expect(records, hasLength(2));
 
         reclaimer.stop();
-        var third =
-            _temporaryFile(baseDir, 'upstream/foo/foo-1.0.0.tar.gz.3-3.tmp');
+        var third = _temporaryFile(baseDir, '.unpub-tmp/3.tmp');
         await Future<void>.delayed(const Duration(milliseconds: 150));
         expect(third.existsSync(), isTrue);
       });
@@ -446,12 +502,12 @@ void main() {
           hasLength(1));
     });
 
-    test('the temporary file is next to the final path', () async {
+    test('the temporary file is in the reserved namespace', () async {
       var baseDir = setupFixture('upstream-temporary');
       var store = unpub.FileStore(baseDir.path);
       var temporary = await store.upstreamTemporaryFile('foo', '1.0.0');
-      expect(path.dirname(temporary.path),
-          path.join(path.absolute(baseDir.path), 'upstream', 'foo'));
+      expect(path.dirname(path.absolute(temporary.path)),
+          path.join(path.absolute(baseDir.path), '.unpub-tmp'));
       expect(await store.upstreamCached('foo', '1.0.0', digest), isFalse);
     });
 

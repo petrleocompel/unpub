@@ -30,7 +30,9 @@ class FakeMetaStore extends MetaStore {
   }
 
   @override
-  Future<void> replaceVersion(String name, UnpubVersion version) async {}
+  Future<bool> replaceVersion(String name, UnpubVersion version,
+          {required String? expectedSha256}) async =>
+      true;
 
   @override
   Future<int> versionDownloads(String name, String version) async => 0;
@@ -333,7 +335,8 @@ void main() {
           await app.handler(uploadRequest('name: fine\nversion: 1.0.0+1\n'));
       expect(response.headers['location'], isNot(contains('error')));
       expect(metaStore.added, ['fine@1.0.0+1']);
-      expect(storedFiles(), [path.join(baseDir, 'fine-1.0.0+1.tar.gz')]);
+      expect(storedFiles().single,
+          matches(RegExp(r'/fine/fine-1\.0\.0\+1-[0-9a-f]{64}\.tar\.gz$')));
     });
 
     test('the rejection reason survives the redirect intact', () async {

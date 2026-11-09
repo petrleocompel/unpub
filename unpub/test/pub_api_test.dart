@@ -237,8 +237,10 @@ void main() {
 
     test('archive_sha256 is the hash of the stored file', () async {
       await publish('1.0.0');
+      final sha = (await storedVersion('1.0.0'))['sha256'] as String;
       final bytes =
-          File(path.join(storage.path, '$name-1.0.0.tar.gz')).readAsBytesSync();
+          File(path.join(storage.path, name, '$name-1.0.0-$sha.tar.gz'))
+              .readAsBytesSync();
       final reply = await send('GET', '/api/packages/$name');
       expect(reply.body['latest']['archive_sha256'],
           crypto.sha256.convert(bytes).toString());
@@ -454,6 +456,9 @@ void main() {
       await publish('1.0.0');
       await db.collection(packageCollection).updateOne(
           where.eq('name', name), modify.unset(r'versions.0.sha256'));
+      // A version from before hashes were recorded is at the legacy path.
+      File(path.join(storage.path, '$name-1.0.0.tar.gz'))
+          .writeAsStringSync('legacy');
       final reply = await send('GET', tarball);
       expect(reply.status, 200);
       expect(reply.headers.containsKey('etag'), isFalse);

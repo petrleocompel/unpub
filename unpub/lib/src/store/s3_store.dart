@@ -4,23 +4,29 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:logging/logging.dart';
 import 'package:minio/minio.dart';
 
-import '../logging.dart';
 import 'aws_credentials.dart';
 import 'package_store.dart';
-
-final _log = Logger('unpub.s3');
 
 /// Use an AWS S3 bucket, or an S3 compatible service, as a package store.
 class S3Store extends PackageStore {
   final String bucketName;
+
+  /// Where the archive of a version lives in the mutable layout from before
+  /// archives were named by their digest. Archives already there keep being
+  /// served from it, and nothing new is written.
   final String Function(String name, String version)? getObjectPath;
+
+  /// The key of the immutable object with a digest, instead of
+  /// `<name>/<name>-<version>-<sha256>.tar.gz`.
+  final String Function(String name, String version, String sha256)?
+      getDigestObjectPath;
   final String? region;
   final Minio _minio;
 
-  S3Store._(this.bucketName, this.region, this.getObjectPath, this._minio);
+  S3Store._(this.bucketName, this.region, this.getObjectPath,
+      this.getDigestObjectPath, this._minio);
 
   /// Creates a store for [bucketName].
   ///
@@ -37,8 +43,17 @@ class S3Store extends PackageStore {
     AwsCredentials? credentials,
     Minio? minio,
     String Function(String name, String version)? getObjectPath,
+    String Function(String name, String version, String sha256)?
+        getDigestObjectPath,
     Map<String, String>? environment,
   }) {
+    if (getObjectPath != null) {
+      PackageStore.checkLayout(() => getObjectPath('a_package', '1.0.0'));
+    }
+    if (getDigestObjectPath != null) {
+      PackageStore.checkLayout(
+          () => getDigestObjectPath('a_package', '1.0.0', '0' * 64));
+    }
     final env = environment ?? Platform.environment;
     final resolvedRegion =
         region ?? minio?.region ?? _nonEmpty(env['AWS_DEFAULT_REGION']);
@@ -53,6 +68,7 @@ class S3Store extends PackageStore {
       bucketName,
       resolvedRegion,
       getObjectPath,
+      getDigestObjectPath,
       minio ??
           Minio(
             endPoint: endpoint ?? env['AWS_S3_ENDPOINT'] ?? 's3.amazonaws.com',
@@ -81,11 +97,23 @@ class S3Store extends PackageStore {
   /// Throws an [ArgumentError] for values that could address another object.
   String _getObjectKey(String name, String version) {
     _checkComponents(name, version);
-    final key =
-        getObjectPath?.call(name, version) ?? '$name/$name-$version.tar.gz';
+    return _checkedKey(
+        getObjectPath?.call(name, version) ?? '$name/$name-$version.tar.gz');
+  }
+
+  /// The key of the immutable object of a published archive.
+  String _getDigestKey(String name, String version, String digest) {
+    _checkComponents(name, version);
+    PackageStore.checkDigest(digest);
+    return _checkedKey(getDigestObjectPath?.call(name, version, digest) ??
+        '$name/$name-$version-$digest.tar.gz');
+  }
+
+  static String _checkedKey(String key) {
     if (key.startsWith('/') || _unsafeKey.hasMatch(key)) {
       throw ArgumentError('unsafe object key');
     }
+    PackageStore.checkNotReserved(key);
     return key;
   }
 
@@ -96,15 +124,6 @@ class S3Store extends PackageStore {
     _checkComponents(name, version);
     PackageStore.checkDigest(digest);
     return 'upstream/$name/$name-$version-$digest.tar.gz';
-  }
-
-  /// Where an archive waits until its metadata is written. It has three path
-  /// segments, so it is never the default key of a published archive, and a
-  /// package called `staging` does not reach it.
-  String _getStagingKey(String name, String version, String id) {
-    _checkComponents(name, version);
-    PackageStore.checkStagingId(id);
-    return 'staging/$name/$name-$version-$id.tar.gz';
   }
 
   static void _checkComponents(String name, String version) {
@@ -123,49 +142,33 @@ class S3Store extends PackageStore {
     );
   }
 
+  /// A PUT replaces the object with the same bytes, which also makes it count
+  /// as new for reclamation.
   @override
-  Future<void> stageArchive(
-      String name, String version, String id, List<int> content) async {
+  Future<void> storeObject(
+      String name, String version, String digest, List<int> content) async {
     await _minio.putObject(
       bucketName,
-      _getStagingKey(name, version, id),
+      _getDigestKey(name, version, digest),
       Stream.value(Uint8List.fromList(content)),
       size: content.length,
     );
   }
 
-  /// A failure to delete the staged object only leaves it for reclamation.
   @override
-  Future<void> commitStaged(String name, String version, String id,
-      {bool replace = false}) async {
-    final target = _getObjectKey(name, version);
-    final staged = _getStagingKey(name, version, id);
-    if (!replace && await _objectExists(target)) {
-      throw ArchiveExistsException(name, version);
-    }
-    // The copy source goes into a header as it is, where a `+` in a version
-    // would be read as a space.
-    final source = staged.split('/').map(Uri.encodeComponent).join('/');
-    await _minio.copyObject(bucketName, target, '/$bucketName/$source');
-    try {
-      await _minio.removeObject(bucketName, staged);
-    } catch (error, stackTrace) {
-      _log.warning(
-          LogEvent('failed to delete a staged archive',
-              {'name': name, 'version': version}),
-          error,
-          stackTrace);
-    }
+  Future<bool> objectExists(String name, String version, String digest) =>
+      _objectExists(_getDigestKey(name, version, digest));
+
+  @override
+  Stream<List<int>> downloadObject(
+      String name, String version, String digest) async* {
+    yield* await _minio.getObject(
+        bucketName, _getDigestKey(name, version, digest));
   }
 
   @override
-  Future<void> discardStaged(String name, String version, String id) async {
-    await _minio.removeObject(bucketName, _getStagingKey(name, version, id));
-  }
-
-  @override
-  Future<bool> hasCommittedArchive(String name, String version) =>
-      exists(name, version);
+  Future<void> deleteObject(String name, String version, String digest) =>
+      _minio.removeObject(bucketName, _getDigestKey(name, version, digest));
 
   @override
   Future<bool> exists(String name, String version) =>
@@ -220,25 +223,22 @@ class S3Store extends PackageStore {
   Future<void> deleteUpstream(String name, String version, String digest) =>
       _minio.removeObject(bucketName, _getUpstreamKey(name, version, digest));
 
-  /// `staging/<name>/<name>-<version>-<id>.tar.gz`, and nothing else.
-  static final _stagingKeyPattern =
-      RegExp(r'^staging/([^/]+)/\1-.+-[0-9A-Za-z]+\.tar\.gz$');
-
-  /// Also clears the local spool files that the upstream proxy writes to,
-  /// since those are the temporary files of this store too.
+  /// Also clears [temporaryNamespace] in the system temp directory, where the
+  /// upstream proxy spools for this store, since those are its temporary files
+  /// too.
   @override
   Future<int> reclaimTemporary(
       {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
     var count = await super.reclaimTemporary(now: now, maxAge: maxAge);
     final cutoff = (now ?? DateTime.now()).subtract(maxAge);
     final listed = await _minio.listAllObjects(bucketName,
-        prefix: 'staging/', recursive: true);
+        prefix: '$temporaryNamespace/', recursive: true);
     for (final object in listed.objects) {
       final key = object.key;
       final modified = object.lastModified;
       if (key == null ||
           modified == null ||
-          !_stagingKeyPattern.hasMatch(key) ||
+          !key.startsWith('$temporaryNamespace/') ||
           !modified.isBefore(cutoff)) {
         continue;
       }

@@ -21,8 +21,13 @@ abstract class MetaStore {
   Future<void> addVersion(String name, UnpubVersion version);
 
   /// Replaces the stored version with the same number as [version], which is
-  /// what publishing over an existing version does.
-  Future<void> replaceVersion(String name, UnpubVersion version);
+  /// what publishing over an existing version does, if its hash is still
+  /// [expectedSha256], null meaning that it has none.
+  ///
+  /// Returns false, changing nothing, if it no longer is, so that of two
+  /// concurrent replacements only one can win.
+  Future<bool> replaceVersion(String name, UnpubVersion version,
+      {required String? expectedSha256});
 
   /// Claims the right to store the archive of [name] [version], so that a
   /// concurrent publish, also from another server, cannot overwrite it.

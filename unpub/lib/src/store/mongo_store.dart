@@ -163,13 +163,24 @@ class MongoStore extends MetaStore {
   }
 
   @override
-  Future<void> replaceVersion(String name, UnpubVersion version) async {
+  Future<bool> replaceVersion(String name, UnpubVersion version,
+      {required String? expectedSha256}) async {
     final result = await db.collection(packageCollection).updateOne(
-        where.eq('name', name).eq('versions.version', version.version),
+        {
+          'name': name,
+          'versions': {
+            r'$elemMatch': {
+              'version': version.version,
+              // A null also matches a version that has no hash at all.
+              'sha256': expectedSha256,
+            },
+          },
+        },
         modify
             .set(r'versions.$', version.toJson())
             .set('updatedAt', version.createdAt));
     _checkWrite(result, 'replace version');
+    return result.nMatched == 1;
   }
 
   static void _checkWrite(WriteResult result, String action) {

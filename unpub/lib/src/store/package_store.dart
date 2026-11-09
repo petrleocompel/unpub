@@ -9,27 +9,14 @@ int _temporaryFiles = 0;
 /// enough that a fetch or publish that is still running has touched it since.
 const temporaryFileMaxAge = Duration(hours: 1);
 
-final _spoolFilePattern = RegExp(r'^unpub-upstream-\d+-\d+-\d+\.tmp$');
+/// The directory, or S3 key prefix, that holds every temporary file a store
+/// writes. Nothing else may be stored there, and reclamation never deletes
+/// anything outside it.
+const temporaryNamespace = '.unpub-tmp';
+
 final _digestPattern = RegExp(r'^[0-9a-f]{64}$');
-final _stagingIdPattern = RegExp(r'^[0-9A-Za-z]+$');
-
-/// Storage holds an archive for a version no published version accounts for,
-/// so publishing it would overwrite bytes that nobody can vouch for.
-class ArchiveExistsException implements Exception {
-  final String name;
-  final String version;
-
-  const ArchiveExistsException(this.name, this.version);
-
-  @override
-  String toString() => 'storage is corrupt: an archive of $name@$version is '
-      'already stored and no published version accounts for it, so it was not '
-      'overwritten. An administrator has to check it and remove it first.';
-}
 
 abstract class PackageStore {
-  final _staged = <String, List<int>>{};
-
   bool supportsDownloadUrl = false;
 
   FutureOr<String> downloadUrl(String name, String version) {
@@ -40,35 +27,41 @@ abstract class PackageStore {
     throw 'download not implemented';
   }
 
+  /// Stores [content] at the mutable path of [name] [version], the layout
+  /// archives had before they were named by their digest.
   Future<void> upload(String name, String version, List<int> content);
 
-  /// Puts [content] where no download can reach it, for [commitStaged] or
-  /// [discardStaged]. [id] tells apart attempts at publishing one version.
+  /// Stores [content], whose SHA-256 is [digest], as an immutable object.
   ///
-  /// A store that keeps these defaults holds the archive in memory and only
-  /// gets to see it in [upload], at commit.
-  Future<void> stageArchive(
-      String name, String version, String id, List<int> content) async {
-    _staged['$name@$version#$id'] = content;
-  }
+  /// Nothing refers to the object until a version names its digest, so this
+  /// cannot change what is being downloaded. Storing a digest that is already
+  /// there leaves the same bytes, and must make the object count as new again
+  /// so that reclamation leaves it alone until the metadata has been written.
+  ///
+  /// A store that keeps this default has no immutable objects: it writes to
+  /// the mutable path through [upload], so a publish that loses the metadata
+  /// write can overwrite the bytes of the one that won.
+  Future<void> storeObject(
+          String name, String version, String digest, List<int> content) =>
+      upload(name, version, content);
 
-  /// Makes a staged archive the published one. Unless [replace] is set, throws
-  /// an [ArchiveExistsException] rather than overwrite an archive.
-  Future<void> commitStaged(String name, String version, String id,
-      {bool replace = false}) async {
-    final content = _staged.remove('$name@$version#$id');
-    if (content == null) throw StateError('nothing staged for $name@$version');
-    await upload(name, version, content);
-  }
+  /// Whether the object with this [digest] is stored.
+  Future<bool> objectExists(String name, String version, String digest) =>
+      exists(name, version);
 
-  /// Forgets a staged archive, if there is one.
-  Future<void> discardStaged(String name, String version, String id) async {
-    _staged.remove('$name@$version#$id');
-  }
+  /// The object with this [digest]. Only valid if [objectExists].
+  Stream<List<int>> downloadObject(
+          String name, String version, String digest) =>
+      download(name, version);
 
-  /// Whether [commitStaged] would find the archive of [name] [version] there
-  /// already. Unlike [exists], a store that cannot tell answers false.
-  Future<bool> hasCommittedArchive(String name, String version) async => false;
+  /// Where the object with this [digest] can be fetched from, for a store with
+  /// [supportsDownloadUrl].
+  FutureOr<String> objectDownloadUrl(
+          String name, String version, String digest) =>
+      downloadUrl(name, version);
+
+  /// Deletes the object with this [digest], if it is stored.
+  Future<void> deleteObject(String name, String version, String digest) async {}
 
   /// Whether the archive of [name] [version] is stored.
   ///
@@ -78,10 +71,12 @@ abstract class PackageStore {
 
   /// A new file to write an upstream archive to while it is fetched, in a
   /// place where [commitUpstream] can take it from.
-  Future<File> upstreamTemporaryFile(String name, String version) async =>
-      File('${Directory.systemTemp.path}/'
-          'unpub-upstream-$pid-${_temporaryFiles++}-'
-          '${DateTime.now().microsecondsSinceEpoch}.tmp');
+  Future<File> upstreamTemporaryFile(String name, String version) async {
+    final directory = await Directory(
+            path.join(Directory.systemTemp.path, temporaryNamespace))
+        .create(recursive: true);
+    return File(path.join(directory.path, newTemporaryName()));
+  }
 
   /// Keeps [temporary], an upstream archive of [size] bytes whose SHA-256 is
   /// [digest], apart from locally published ones, and returns whether it was
@@ -120,25 +115,48 @@ abstract class PackageStore {
     }
   }
 
-  /// Throws an [ArgumentError] for an id that could change a path or key.
-  static void checkStagingId(String id) {
-    if (!_stagingIdPattern.hasMatch(id)) {
-      throw ArgumentError('unsafe staging id');
+  /// Whether [digest] is a lowercase hex SHA-256, and so can name an object.
+  static bool isDigest(String digest) => _digestPattern.hasMatch(digest);
+
+  /// Throws an [ArgumentError] if the relative path or key [location] is in
+  /// [temporaryNamespace].
+  static void checkNotReserved(String location) {
+    final first = path.split(path.normalize(location)).first;
+    if (first.toLowerCase() == temporaryNamespace) {
+      throw ArgumentError(
+          'an archive path must not be inside $temporaryNamespace/');
     }
   }
 
-  /// Deletes temporary files older than [maxAge] that a crash left behind, and
-  /// returns how many. Nothing that does not carry the temporary naming of
-  /// this store is touched.
-  Future<int> reclaimTemporary(
-      {DateTime? now, Duration maxAge = temporaryFileMaxAge}) async {
-    final cutoff = (now ?? DateTime.now()).subtract(maxAge);
+  /// Throws an [ArgumentError] if [layout], a custom path function called with
+  /// sample values, answers a path in [temporaryNamespace], so that such a
+  /// configuration fails at startup rather than at the first publish.
+  ///
+  /// A function that cannot handle the sample is still checked on every call.
+  static void checkLayout(String Function() layout) {
+    final String location;
+    try {
+      location = layout();
+    } catch (_) {
+      return;
+    }
+    checkNotReserved(location);
+  }
+
+  /// A file name for a new temporary file. It says nothing about the archive,
+  /// so reclamation does not depend on the layout of the final path.
+  static String newTemporaryName() => '$pid-${_temporaryFiles++}-'
+      '${DateTime.now().microsecondsSinceEpoch}.tmp';
+
+  /// Deletes the files in [directory] last modified before [cutoff], and
+  /// returns how many.
+  static Future<int> reclaimDirectory(
+      Directory directory, DateTime cutoff) async {
+    if (!await directory.exists()) return 0;
     var count = 0;
-    await for (final entity in Directory.systemTemp.list(followLinks: false)) {
-      if (entity is! File ||
-          !_spoolFilePattern.hasMatch(path.basename(entity.path))) {
-        continue;
-      }
+    await for (final entity
+        in directory.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
       try {
         if ((await entity.stat()).modified.isBefore(cutoff)) {
           await entity.delete();
@@ -150,6 +168,14 @@ abstract class PackageStore {
     }
     return count;
   }
+
+  /// Deletes temporary files older than [maxAge] that a crash left behind, and
+  /// returns how many. Only [temporaryNamespace] is ever touched.
+  Future<int> reclaimTemporary(
+          {DateTime? now, Duration maxAge = temporaryFileMaxAge}) =>
+      reclaimDirectory(
+          Directory(path.join(Directory.systemTemp.path, temporaryNamespace)),
+          (now ?? DateTime.now()).subtract(maxAge));
 
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}
