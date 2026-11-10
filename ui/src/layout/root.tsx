@@ -61,12 +61,51 @@ function useUnauthorizedRedirect() {
   }, [client, navigate])
 }
 
+/** How long a new page may take to render its main landmark. */
+const focusWindowMs = 5000
+
+/**
+ * Moves the focus to the main landmark of a new page, as a full load would
+ * reset it, without scrolling. Changes of the query alone (filters, tabs,
+ * search) keep the focus where it is. A page that is still loading gets the
+ * focus once its main renders, also when the main is replaced on load.
+ */
+export function useFocusOnNavigation() {
+  const { pathname } = useLocation()
+  const previous = useRef(pathname)
+  useEffect(() => {
+    if (previous.current === pathname) return
+    previous.current = pathname
+    const focus = (main: HTMLElement) => main.focus({ preventScroll: true })
+    let main = document.getElementById('main')
+    // Not rendered yet: focus it when it is.
+    let pending = !main
+    if (main) focus(main)
+    const focusMain = () => {
+      main = document.getElementById('main')
+      if (!main || main === document.activeElement) return
+      const active = document.activeElement
+      const lost = !active || active === document.body || !active.isConnected
+      if (pending || lost) focus(main)
+      pending = false
+    }
+    const observer = new MutationObserver(focusMain)
+    observer.observe(document.body, { childList: true, subtree: true })
+    const stop = window.setTimeout(() => observer.disconnect(), focusWindowMs)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(stop)
+    }
+  }, [pathname])
+}
+
 /** Loads the config and the session, then lays out every page. */
 export function Root() {
   const config = useQuery(configQuery)
   const me = useQuery(meQuery)
   const location = useLocation()
   useUnauthorizedRedirect()
+  useFocusOnNavigation()
 
   if (config.isPending || me.isPending) return <ShellSkeleton />
   if (config.isError || me.isError) {

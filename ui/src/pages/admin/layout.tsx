@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Activity,
   Boxes,
@@ -68,6 +68,7 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
 /** The dashboard: a sidebar of sections, a drawer on small screens. */
 export function AdminLayout() {
   const [open, setOpen] = useState(false)
+  const picked = useRef(false)
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:grid-cols-[13rem_minmax(0,1fr)]">
       <div className="md:hidden">
@@ -78,11 +79,27 @@ export function AdminLayout() {
               Admin sections
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-4">
+          <SheetContent
+            side="left"
+            className="w-64 p-4"
+            onCloseAutoFocus={(event) => {
+              // After a section is picked the focus goes to its page instead.
+              if (picked.current) {
+                event.preventDefault()
+                document.getElementById('main')?.focus({ preventScroll: true })
+              }
+              picked.current = false
+            }}
+          >
             <SheetHeader className="p-0 pb-4">
               <SheetTitle>Administration</SheetTitle>
             </SheetHeader>
-            <AdminNav onNavigate={() => setOpen(false)} />
+            <AdminNav
+              onNavigate={() => {
+                picked.current = true
+                setOpen(false)
+              }}
+            />
           </SheetContent>
         </Sheet>
       </div>
