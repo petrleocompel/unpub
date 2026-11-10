@@ -150,8 +150,10 @@ Html packagePage(PageContext context, PackageView view) {
             'section',
             {'aria-label': view.tab.label},
             switch (view.tab) {
-              PackageTab.readme => _markdown(version.readme, 'README'),
-              PackageTab.changelog => _markdown(version.changelog, 'CHANGELOG'),
+              PackageTab.readme =>
+                _markdown(version.readme, 'README', version.pubspec),
+              PackageTab.changelog =>
+                _markdown(version.changelog, 'CHANGELOG', version.pubspec),
               PackageTab.versions => _versions(view),
               PackageTab.install => _install(view),
             }),
@@ -180,11 +182,31 @@ Html _discontinuedNotice(PackageView view) {
   ]);
 }
 
-Html _markdown(String? source, String file) {
+Html _markdown(String? source, String file, Map<String, dynamic> pubspec) {
   if (source == null || source.trim().isEmpty) {
     return el('p', {'class': 'muted'}, 'This version has no $file.md.');
   }
-  return el('div', {'class': 'markdown'}, renderMarkdown(source));
+  return el('div', {'class': 'markdown'},
+      renderMarkdown(source, links: markdownLinks(pubspec)));
+}
+
+/// Forges whose project pages are repositories, for a `homepage`.
+const _forges = {'github.com', 'gitlab.com'};
+
+/// Where links relative to the README and CHANGELOG of [pubspec] lead: its
+/// `repository`, or a `homepage` on GitHub or GitLab, if it is https.
+MarkdownLinks? markdownLinks(Map<String, dynamic> pubspec) {
+  Uri? url(String key) => switch (pubspec[key]) {
+        final String text => Uri.tryParse(text.trim()),
+        _ => null,
+      };
+  final repository = MarkdownLinks.forRepository(url('repository'));
+  if (repository != null) return repository;
+  final homepage = url('homepage');
+  if (homepage == null || !_forges.contains(homepage.host.toLowerCase())) {
+    return null;
+  }
+  return MarkdownLinks.forRepository(homepage);
 }
 
 Html _versions(PackageView view) => el('div', {

@@ -383,7 +383,13 @@ The server renders every page itself. There is no frontend build and no third-pa
 
 Search uses a MongoDB text index on names and descriptions, created by the server at startup, with stemming for English, and also matches any part of a name. Without the index, for example when another text index already exists on `packages`, it matches each word anywhere in the name or a description, and logs a warning at startup. A package counts as a Flutter package when any of its versions has a `flutter` section, an `environment.flutter` constraint or a dependency on `flutter`. An unknown package name sends the browser to the upstream in proxy mode, and shows a 404 page with a link to the upstream otherwise.
 
-README and CHANGELOG are rendered as GitHub flavoured markdown and then sanitized through an allowlist of elements and attributes. Scripts, styles, frames, forms, event handlers and `javascript:` or `data:` URLs are removed. Links to other sites get `rel="nofollow noopener"` and open in a new tab. Images may come from any `https` site.
+README and CHANGELOG are rendered as GitHub flavoured markdown and then sanitized through an allowlist of elements and attributes. Scripts, styles, frames, forms, event handlers and `javascript:` or `data:` URLs are removed. Links to other sites get `rel="nofollow noopener"` and open in a new tab. Only the first 512 KiB of a file is rendered, with a notice.
+
+The files of a package are not served, so URLs relative to the document are rewritten or removed:
+
+- Links to `http`, `https` and `mailto` URLs are kept. A link to a fragment, `#usage`, is kept and leads to the heading of that name: headings get an id prefixed with `md-`, such as `md-usage`, and fragments are prefixed alike.
+- A link to a relative path, `doc/usage.md`, `/LICENSE` or `../other`, leads into the repository: `<repository>/blob/HEAD/<path>`, with `repository` from the pubspec, or `homepage` if it is on `github.com` or `gitlab.com`, when it is an `https` URL. A repository URL naming a directory, like `https://github.com/org/repo/tree/main/packages/a`, is browsed from that directory and branch. Without such a URL the link is removed and its text stays.
+- Images must be `http` or `https` URLs. A relative image is replaced by its alt text.
 
 **Logging in.** Users log in with their email and password on `/login`. Failures show one generic message and count towards the same rate limit as `POST /webapi/login`. After logging in the browser goes back to the page it came from, which must be a path on this server. The login form carries its own token in a `SameSite=Strict` cookie, as there is no session yet.
 

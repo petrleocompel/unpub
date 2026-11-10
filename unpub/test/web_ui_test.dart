@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:shelf/shelf.dart' as shelf;
@@ -537,29 +538,86 @@ void main() {}
 | 1 | 2 |
 ''';
 
+    /// The elements of the rendered README or CHANGELOG of [page].
+    List<dom.Element> markdown(Page page) => html_parser
+        .parse(page.body)
+        .querySelectorAll('.markdown, .markdown *')
+        .toList();
+
     test('renders the README sanitized', () async {
       await publish('alpha', '1.0.0', readme: readme);
       final page = await fetch('GET', '/packages/alpha');
       expect(page.status, HttpStatus.ok);
-      final body = page.body;
-      expect(body, contains('<h1>Hello</h1>'));
-      expect(body, isNot(contains('<script>alert')));
-      expect(body, isNot(contains('alert(1)')));
-      expect(body, isNot(contains('onerror')));
-      expect(body, isNot(contains('onclick')));
-      expect(body.toLowerCase(), isNot(contains('javascript:')));
-      expect(body, isNot(contains('data:text')));
-      expect(body, isNot(contains('iframe')));
-      expect(body, isNot(contains('style=')));
-      expect(body, contains('<img src="x.png">'));
-      expect(body, contains('<p align="center">centered</p>'));
+      final elements = markdown(page);
+      final tags = {for (final element in elements) element.localName};
+      expect(tags, containsAll(['h1', 'p', 'a', 'pre', 'code', 'table']));
+      expect(tags, isNot(contains(anyOf('script', 'iframe', 'img'))));
+      for (final element in elements) {
+        for (final MapEntry(:key, :value) in element.attributes.entries) {
+          expect('$key', isNot(anyOf(startsWith('on'), 'style')));
+          if (key == 'href') {
+            expect(value, matches(RegExp(r'^(https:|#md-)')));
+          }
+        }
+      }
+      Map<Object, String> attributes(String tag) =>
+          elements.firstWhere((element) => element.localName == tag).attributes;
+      expect(attributes('h1'), {'id': 'md-hello'});
+      expect(elements.firstWhere((e) => e.text == 'centered').attributes,
+          {'align': 'center'});
+      final links = {
+        for (final link in elements.where((e) => e.localName == 'a'))
+          link.text: link.attributes,
+      };
+      expect(links, {
+        'ext': {
+          'href': 'https://example.com/docs',
+          'rel': 'nofollow noopener',
+          'target': '_blank',
+        },
+        'local': {'href': '#md-usage'},
+      });
+      // What lost its link or image keeps its text.
+      final text = elements.first.text;
+      expect(text, allOf(contains('bad'), contains('data'), contains('mixed')));
+      expect(text, isNot(contains('alert(')));
+      expect(attributes('code'), {'class': 'language-dart'});
+      expect(attributes('th'), {'align': 'center'});
+      expect(page.body.toLowerCase(), isNot(contains('javascript:')));
+    });
+
+    test('leads relative links into the repository', () async {
+      const readme = '[guide](doc/guide.md) ![logo](logo.png) '
+          '![badge](https://img.example/b.svg)';
+      await publish('alpha', '1.0.0',
+          readme: readme,
+          changelog: 'See [the readme](README.md).',
+          pubspec: {'repository': 'https://github.com/o/alpha'});
+      await publish('beta', '1.0.0', readme: readme);
+
+      final alpha = markdown(await fetch('GET', '/packages/alpha'));
       expect(
-          body,
-          contains('<a href="https://example.com/docs" '
-              'rel="nofollow noopener" target="_blank">ext</a>'));
-      expect(body, contains('<a href="#usage">local</a>'));
-      expect(body, contains('<code class="language-dart">'));
-      expect(body, contains('<th align="center">a</th>'));
+          alpha
+              .where((e) => e.localName == 'a')
+              .map((e) => e.attributes['href']),
+          ['https://github.com/o/alpha/blob/HEAD/doc/guide.md']);
+      expect(
+          alpha
+              .where((e) => e.localName == 'img')
+              .map((e) => e.attributes['src']),
+          ['https://img.example/b.svg']);
+      expect(alpha.first.text, contains('logo'));
+      final changelog =
+          markdown(await fetch('GET', '/packages/alpha?tab=changelog'));
+      expect(
+          changelog
+              .where((e) => e.localName == 'a')
+              .map((e) => e.attributes['href']),
+          ['https://github.com/o/alpha/blob/HEAD/README.md']);
+
+      final beta = markdown(await fetch('GET', '/packages/beta'));
+      expect(beta.where((e) => e.localName == 'a'), isEmpty);
+      expect(beta.first.text, contains('guide'));
     });
 
     test('shows the changelog, versions and install tabs', () async {
