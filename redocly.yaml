@@ -1,0 +1,6 @@
+# Lint rules for docs/openapi.yaml, used by `npx @redocly/cli lint` in CI.
+extends:
+  - recommended
+rules:
+  # The document and /webapi/config are open to everyone and cannot fail.
+  operation-4xx-response: off

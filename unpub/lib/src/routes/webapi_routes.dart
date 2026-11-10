@@ -17,6 +17,7 @@ import '../web/markdown.dart';
 import '../web/pages/package_list_page.dart' show PackageListRequest;
 import '../web/pages/package_page.dart' show markdownLinks;
 import '../web/pubspec_info.dart';
+import 'openapi_document.dart';
 import 'responses.dart';
 
 /// The package endpoints under `/webapi` and `GET /webapi/config`: those
@@ -28,6 +29,7 @@ class WebapiRoutes {
 
   void addRoutes(Router router) {
     router
+      ..get('/webapi/openapi.yaml', getOpenApi)
       ..get('/webapi/config', getConfig)
       ..get('/webapi/packages', getPackages)
       ..get('/webapi/v2/packages', listPackages)
@@ -39,6 +41,15 @@ class WebapiRoutes {
   }
 
   static const _noStore = {HttpHeaders.cacheControlHeader: 'no-store'};
+
+  /// `docs/openapi.yaml`, the contract of these routes. Open in every read
+  /// mode.
+  Future<shelf.Response> getOpenApi(shelf.Request req) async =>
+      shelf.Response.ok(openApiDocument, headers: {
+        HttpHeaders.contentTypeHeader: 'application/yaml; charset=utf-8',
+        HttpHeaders.cacheControlHeader: 'public, max-age=300',
+        'x-content-type-options': 'nosniff',
+      });
 
   /// What the web client needs to know before anything else. Open in every
   /// read mode, and without secrets.
