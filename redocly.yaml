@@ -2,5 +2,20 @@
 extends:
   - recommended
 rules:
-  # The document and /webapi/config are open to everyone and cannot fail.
+  # Replaced by the rule below, which exempts only the two operations that
+  # cannot answer 4xx: the document and /webapi/config are open to everyone,
+  # even with credentials that are not accepted.
   operation-4xx-response: off
+  rule/operation-4xx-response:
+    subject:
+      type: Responses
+    where:
+      - subject:
+          type: Operation
+          property: operationId
+        assertions:
+          notPattern: '^(getOpenApi|getConfig)$'
+    assertions:
+      requireAny: ['400', '401', '403', '404', '409', '413', '429', 4XX]
+    message: Every operation except getOpenApi and getConfig documents a 4xx response.
+    severity: error

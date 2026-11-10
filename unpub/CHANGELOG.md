@@ -17,6 +17,7 @@ Prepares the server for the single-page web client of phase 6: the JSON API it n
 - Every item of `GET /webapi/webhooks` has `deliveries: {pending, succeeded, failed}`, counted for the whole page in one aggregation.
 - Deliveries in `GET /webapi/webhooks/<id>/deliveries` have `payload`, the exact body that `X-Unpub-Signature` signs, and `durationMs`, the time of the last attempt, now stored with each attempt (null for deliveries attempted before).
 - `expiresIn` of a new token also takes years, such as `1y` (365 days), and `never`, the same as leaving it out. Durations in the configuration take `y` too.
+- The spec has examples for the main objects, no longer requires the deprecated `createdAt` and `isRetracted` of a version (still sent), and documents that `User.displayName` is never null and the package detail stays wrapped in `data`.
 - `SpaClient` and `spaContentSecurityPolicy` are exported.
 - Serves `docs/openapi.yaml` at `GET /webapi/openapi.yaml`. A test checks it against the router, and CI lints it and builds and tests the client once `ui/package.json` exists.
 - The Docker image builds the client in a `node:22-alpine` stage when `ui/package.json` exists and copies it to `/app/ui`.
