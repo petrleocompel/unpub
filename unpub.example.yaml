@@ -1,0 +1,150 @@
+# Example unpub configuration. Copy to unpub.yaml and adjust.
+#
+# Every key can be overridden by an environment variable named
+# UNPUB_<SECTION>_<KEY>, for example UNPUB_MONGO_URI, UNPUB_SERVER_PORT or
+# UNPUB_STORAGE_S3_BUCKET. CamelCase keys take underscores: server.publicUrl is
+# UNPUB_SERVER_PUBLIC_URL. Prefer the environment for secrets.
+
+server:
+  host: 0.0.0.0
+  port: 4000
+  # External URL of the server. Required behind a reverse proxy, because it
+  # builds the archive and upload URLs given to `dart pub`. An origin only.
+  # publicUrl: https://pub.example.com
+  # Take the client address from the last entry of X-Forwarded-For. Enable it
+  # only behind a reverse proxy that sets the header.
+  # trustForwardedFor: false
+
+mongo:
+  # The database name is required.
+  uri: mongodb://localhost:27017/dart_pub
+
+storage:
+  # file or s3
+  type: file
+  file:
+    path: unpub-packages
+  # Used when type is s3. Without accessKey and secretKey the credentials come
+  # from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or the ECS task role.
+  # s3:
+  #   bucket: my-packages
+  #   region: eu-west-1
+  #   endpoint: s3.amazonaws.com  # host name only
+  #   port: 9000
+  #   useSSL: true
+  #   pathStyle: false
+  #   accessKey: ...
+  #   secretKey: ...
+  #   sessionToken: ...
+
+upstream:
+  # Where packages that do not exist locally come from.
+  url: https://pub.dev
+  # redirect: send clients to the upstream. proxy: fetch from the upstream and
+  # keep a copy in storage. Proxied packages cannot be published here.
+  mode: redirect
+  # Proxy mode only. How long metadata is served without asking the upstream.
+  # cacheTtl: 10m
+  # Proxy mode only. When set, only these packages are proxied and others 404.
+  # allowlist:
+  #   - http
+  #   - path
+  # Proxy mode only. How long the upstream may stay silent during a request.
+  # timeout: 30s
+  # Proxy mode only. Hosts besides that of url that archives may come from.
+  # pub.dev needs none.
+  # allowedArchiveHosts:
+  #   - storage.example.com
+  # Proxy mode only. Refuse archives the upstream gives no hash for. When false
+  # they are served unverified.
+  # requireSha256: true
+  # Proxy mode only. Largest archive fetched, in bytes. 256 MiB by default.
+  # maxArchiveBytes: 268435456
+  # Proxy mode only. How many archives are fetched at once. Others wait for
+  # up to timeout, then answer 503.
+  # maxConcurrentFetches: 4
+  # Proxy mode only. Accept a new name when the upstream cannot say whether it
+  # has it. Such a name shadows the upstream package from then on.
+  # allowPublishWhenUnavailable: false
+
+publish:
+  # Package names must start with one of these. Empty allows any name.
+  # allowedNamePrefixes:
+  #   - acme_
+  # Largest archive accepted, in bytes. 100 MiB by default.
+  # maxArchiveBytes: 104857600
+  # Largest size an archive may inflate to, in bytes. 512 MiB by default.
+  # maxUnpackedBytes: 536870912
+  # Files the archive must hold at its root, matched ignoring case.
+  # requiredFiles:
+  #   - README.md
+  #   - CHANGELOG.md
+  #   - LICENSE
+  # Refuse a version lower than the highest version not retracted.
+  # rejectOlderThanLatest: false
+  # Refuse a version that already exists. When false, publishing an existing
+  # version replaces it, which breaks clients that recorded its hash.
+  # requireVersionBump: true
+  # How long after publishing a non-administrator may retract. 0 is unlimited.
+  # retractionWindow: 7d
+  # How long storing an uploaded archive may take. Longer answers a retryable
+  # 503. Must be under 15 minutes, the time a publish keeps its version reserved.
+  # uploadTimeout: 10m
+
+auth:
+  # Creates this administrator when the server starts with no users. Ignored
+  # once any user exists. Prefer UNPUB_AUTH_ADMIN_PASSWORD for the password.
+  # admin:
+  #   email: you@example.com
+  #   password: at-least-8-characters
+  # public: anyone can read. authenticated: every route except /healthz,
+  # /readyz, /login, /static/* and POST /webapi/login needs a token or
+  # session. Browsers are sent to /login and read with the session once
+  # logged in. API clients still get a 401, and badges need a token too.
+  readAccess: public
+  # Deprecated, use personal tokens from `unpub admin create-token`.
+  # A static Bearer token that acts as an administrator with bootstrapEmail.
+  # Allowed characters: a-z A-Z 0-9 . _ ~ + / = -
+  # bootstrapToken: replace-with-a-long-random-token
+  bootstrapEmail: admin@localhost
+  # Deprecated. Static Bearer tokens that act as readers. As
+  # UNPUB_AUTH_READ_TOKENS, separate them with commas.
+  # readTokens:
+  #   - replace-with-a-long-random-token
+
+audit:
+  # Days audit events are kept, through a TTL index the server creates,
+  # changes or drops at every start. 0 keeps every event.
+  # retentionDays: 0
+
+webhooks:
+  # Queue and deliver webhook events. Webhooks themselves are managed on
+  # /admin/webhooks or through /webapi/webhooks.
+  # enabled: true
+  # How long one delivery attempt may take, at most 5m.
+  # timeout: 10s
+  # Attempts before a delivery is marked failed, 1 to 20. Retries come after
+  # about 30s, 2m, 10m and then every hour.
+  # maxAttempts: 5
+  # Accept plain http URLs. Signatures do not hide the body from the network.
+  # allowHttp: false
+  # Let webhooks reach loopback, link-local, private and unique local
+  # addresses, such as a CI server on the same network. Checked after DNS
+  # resolution at every delivery.
+  # allowPrivateNetworks: false
+  # Days finished deliveries are kept. 0 keeps them.
+  # retentionDays: 30
+
+metrics:
+  # Serve Prometheus metrics on /metrics.
+  # enabled: true
+  # Bearer token for the scraper. When set, /metrics needs it or an
+  # administrator token, also when reads are public. Prefer
+  # UNPUB_METRICS_TOKEN.
+  # token: replace-with-a-long-random-token
+
+logging:
+  # finest, finer, fine (debug), config, info, warning, severe (error), shout, off
+  level: info
+  # text or json
+  format: text
