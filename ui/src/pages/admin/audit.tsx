@@ -271,81 +271,79 @@ function AuditTable({ events }: { events: AuditEvent[] }) {
     })
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <caption className="sr-only">Audit events, newest first</caption>
-        <TableHeader>
-          <TableRow>
-            <TableHead scope="col">
-              <span className="sr-only">Details</span>
-            </TableHead>
-            <TableHead scope="col">Time</TableHead>
-            <TableHead scope="col">Action</TableHead>
-            <TableHead scope="col">Actor</TableHead>
-            <TableHead scope="col">Target</TableHead>
-            <TableHead scope="col">IP</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {events.map((event, index) => {
-            const expanded = open.has(index)
-            const hasDetails = Object.keys(event.details).length > 0
-            const detailsId = `audit-details-${index}`
-            return (
-              <Fragment key={`${event.at}-${index}`}>
-                <TableRow>
-                  <TableCell className="w-10">
-                    {hasDetails && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-expanded={expanded}
-                        aria-controls={detailsId}
-                        aria-label={expanded ? 'Hide details' : 'Show details'}
-                        onClick={() => toggle(index)}
-                      >
-                        {expanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
-                      </Button>
+    <Table containerClassName="rounded-lg border" stickyFirstColumn>
+      <caption className="sr-only">Audit events, newest first</caption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">
+            <span className="sr-only">Details</span>
+          </TableHead>
+          <TableHead scope="col">Time</TableHead>
+          <TableHead scope="col">Action</TableHead>
+          <TableHead scope="col">Actor</TableHead>
+          <TableHead scope="col">Target</TableHead>
+          <TableHead scope="col">IP</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {events.map((event, index) => {
+          const expanded = open.has(index)
+          const hasDetails = Object.keys(event.details).length > 0
+          const detailsId = `audit-details-${index}`
+          return (
+            <Fragment key={`${event.at}-${index}`}>
+              <TableRow>
+                <TableCell className="w-10">
+                  {hasDetails && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-expanded={expanded}
+                      aria-controls={detailsId}
+                      aria-label={expanded ? 'Hide details' : 'Show details'}
+                      onClick={() => toggle(index)}
+                    >
+                      {expanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
+                    </Button>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <DateTime value={event.at} />
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="font-mono font-normal">
+                    {event.action}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="grid">
+                    <span>{event.actor ?? '–'}</span>
+                    {(event.actorKind || event.token) && (
+                      <span className="text-xs text-muted-foreground">
+                        {event.actorKind}
+                        {event.token && <span className="font-mono"> {event.token}…</span>}
+                      </span>
                     )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Target event={event} />
+                </TableCell>
+                <TableCell className="font-mono text-xs">{event.ip ?? '–'}</TableCell>
+              </TableRow>
+              {expanded && (
+                <TableRow id={detailsId}>
+                  <TableCell colSpan={6} className="bg-muted/40">
+                    <pre className="overflow-x-auto font-mono text-xs leading-5">
+                      {JSON.stringify(event.details, null, 2)}
+                    </pre>
                   </TableCell>
-                  <TableCell>
-                    <DateTime value={event.at} />
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono font-normal">
-                      {event.action}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="grid">
-                      <span>{event.actor ?? '–'}</span>
-                      {(event.actorKind || event.token) && (
-                        <span className="text-xs text-muted-foreground">
-                          {event.actorKind}
-                          {event.token && <span className="font-mono"> {event.token}…</span>}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Target event={event} />
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{event.ip ?? '–'}</TableCell>
                 </TableRow>
-                {expanded && (
-                  <TableRow id={detailsId}>
-                    <TableCell colSpan={6} className="bg-muted/40">
-                      <pre className="overflow-x-auto font-mono text-xs leading-5">
-                        {JSON.stringify(event.details, null, 2)}
-                      </pre>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </div>
+              )}
+            </Fragment>
+          )
+        })}
+      </TableBody>
+    </Table>
   )
 }

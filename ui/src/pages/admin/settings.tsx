@@ -41,47 +41,45 @@ export function SettingsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead scope="col" className="w-1/3">
-                          Key
-                        </TableHead>
-                        <TableHead scope="col">Value</TableHead>
-                        <TableHead scope="col">Environment variable</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {section.settings.map((setting) => {
-                        const redacted = setting.value === '<redacted>'
-                        return (
-                          <TableRow key={setting.key}>
-                            <TableCell className="font-mono text-xs">{setting.key}</TableCell>
-                            <TableCell className="font-mono text-xs break-all">
-                              {redacted ? (
-                                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                  <Lock aria-hidden className="size-3" />
-                                  redacted
-                                </span>
-                              ) : (
-                                setting.value || (
-                                  <span className="text-muted-foreground">(empty)</span>
-                                )
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
-                                {setting.env}
-                                <CopyButton text={setting.env} label={setting.env} size="icon-xs" />
+                <Table containerClassName="[--sticky-bg:var(--color-card)]" stickyFirstColumn>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col" className="w-1/3">
+                        Key
+                      </TableHead>
+                      <TableHead scope="col">Value</TableHead>
+                      <TableHead scope="col">Environment variable</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {section.settings.map((setting) => {
+                      const redacted = setting.value === '<redacted>'
+                      return (
+                        <TableRow key={setting.key}>
+                          <TableCell className="font-mono text-xs">{setting.key}</TableCell>
+                          <TableCell className="font-mono text-xs break-all">
+                            {redacted ? (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                <Lock aria-hidden className="size-3" />
+                                redacted
                               </span>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                            ) : (
+                              setting.value || (
+                                <span className="text-muted-foreground">(empty)</span>
+                              )
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
+                              {setting.env}
+                              <CopyButton text={setting.env} label={setting.env} size="icon-xs" />
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           ))}

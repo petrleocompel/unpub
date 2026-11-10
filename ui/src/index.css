@@ -135,6 +135,26 @@
 
 /* Rendered README and CHANGELOG, sanitized by the server. */
 @layer components {
+  /* The first column of a wide table stays in view while the rest scrolls. */
+  [data-sticky-first] {
+    --sticky-bg: var(--color-background);
+  }
+  [data-sticky-first] tr > :first-child:not([colspan]) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: var(--sticky-bg);
+  }
+  [data-sticky-first]
+    tr:is(:hover, [data-current], :has([aria-expanded='true']))
+    > :first-child:not([colspan]) {
+    background-color: color-mix(in oklab, var(--color-muted) 50%, var(--sticky-bg));
+  }
+  @media (width < 40rem) {
+    [data-sticky-first] tr > :first-child:not([colspan]) {
+      box-shadow: inset -1px 0 0 var(--color-border);
+    }
+  }
   .markdown {
     @apply max-w-none text-[0.95rem] leading-7 break-words;
   }

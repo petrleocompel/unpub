@@ -90,68 +90,64 @@ export function AdminPackagesPage() {
           <EmptyState title={q ? 'No packages match' : 'No packages yet'} />
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <caption className="sr-only">Packages</caption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col" className="sticky left-0 bg-background">
-                      Name
-                    </TableHead>
-                    <TableHead scope="col">Latest</TableHead>
-                    <TableHead scope="col" className="text-right">
-                      Versions
-                    </TableHead>
-                    <TableHead scope="col">Uploaders</TableHead>
-                    <TableHead scope="col">State</TableHead>
-                    <TableHead scope="col">Updated</TableHead>
-                    <TableHead scope="col" className="text-right">
-                      Downloads
-                    </TableHead>
+            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+              <caption className="sr-only">Packages</caption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Latest</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Versions
+                  </TableHead>
+                  <TableHead scope="col">Uploaders</TableHead>
+                  <TableHead scope="col">State</TableHead>
+                  <TableHead scope="col">Updated</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Downloads
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {packages.data.items.map((item) => (
+                  <TableRow key={item.name}>
+                    <TableCell>
+                      <Link
+                        to={`/admin/packages/${encodeURIComponent(item.name)}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {item.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono">{item.latest}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(item.versionCount)}
+                    </TableCell>
+                    <TableCell className="max-w-64">
+                      {item.uploaders.length === 0 ? (
+                        <span className="text-muted-foreground">None</span>
+                      ) : (
+                        <span className="block truncate" title={item.uploaders.join(', ')}>
+                          {item.uploaders.join(', ')}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.isDiscontinued ? (
+                        <DiscontinuedBadge />
+                      ) : (
+                        <span className="text-muted-foreground">Active</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <DateTime value={item.updatedAt} date />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(item.downloads)}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {packages.data.items.map((item) => (
-                    <TableRow key={item.name}>
-                      <TableCell className="sticky left-0 bg-background">
-                        <Link
-                          to={`/admin/packages/${encodeURIComponent(item.name)}`}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {item.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="font-mono">{item.latest}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatNumber(item.versionCount)}
-                      </TableCell>
-                      <TableCell className="max-w-64">
-                        {item.uploaders.length === 0 ? (
-                          <span className="text-muted-foreground">None</span>
-                        ) : (
-                          <span className="block truncate" title={item.uploaders.join(', ')}>
-                            {item.uploaders.join(', ')}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {item.isDiscontinued ? (
-                          <DiscontinuedBadge />
-                        ) : (
-                          <span className="text-muted-foreground">Active</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <DateTime value={item.updatedAt} date />
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatNumber(item.downloads)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
             <Pager
               page={packages.data.page}
               size={packages.data.size}
@@ -250,70 +246,71 @@ function PackageModeration({ pkg }: { pkg: Package }) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <caption className="sr-only">Versions of {pkg.name}</caption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">Version</TableHead>
-                    <TableHead scope="col">Published</TableHead>
-                    <TableHead scope="col">Uploader</TableHead>
-                    <TableHead scope="col" className="text-right">
-                      Downloads
-                    </TableHead>
-                    <TableHead scope="col">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
+            <Table
+              containerClassName="rounded-lg border [--sticky-bg:var(--color-card)]"
+              stickyFirstColumn
+            >
+              <caption className="sr-only">Versions of {pkg.name}</caption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Version</TableHead>
+                  <TableHead scope="col">Published</TableHead>
+                  <TableHead scope="col">Uploader</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Downloads
+                  </TableHead>
+                  <TableHead scope="col">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pkg.versions.map((version) => (
+                  <TableRow key={version.version}>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          to={packagePath(pkg.name, version.version)}
+                          className="font-mono text-primary hover:underline"
+                        >
+                          {version.version}
+                        </Link>
+                        {version.version === pkg.latest && <LatestBadge />}
+                        {version.prerelease && <PrereleaseBadge />}
+                        {version.retracted && <RetractedBadge />}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <RelativeTime value={version.published} />
+                    </TableCell>
+                    <TableCell className="max-w-56 truncate">{version.uploader ?? '–'}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(version.downloads)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setRetracting(version)}>
+                          {version.retracted ? <RotateCcw aria-hidden /> : <Ban aria-hidden />}
+                          {version.retracted ? 'Restore' : 'Retract'}
+                          <span className="sr-only"> {version.version}</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          disabled={pkg.versions.length < 2}
+                          onClick={() => setDeleting(version)}
+                        >
+                          <Trash2 aria-hidden />
+                          Delete
+                          <span className="sr-only"> {version.version}</span>
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pkg.versions.map((version) => (
-                    <TableRow key={version.version}>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            to={packagePath(pkg.name, version.version)}
-                            className="font-mono text-primary hover:underline"
-                          >
-                            {version.version}
-                          </Link>
-                          {version.version === pkg.latest && <LatestBadge />}
-                          {version.prerelease && <PrereleaseBadge />}
-                          {version.retracted && <RetractedBadge />}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <RelativeTime value={version.published} />
-                      </TableCell>
-                      <TableCell className="max-w-56 truncate">{version.uploader ?? '–'}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatNumber(version.downloads)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => setRetracting(version)}>
-                            {version.retracted ? <RotateCcw aria-hidden /> : <Ban aria-hidden />}
-                            {version.retracted ? 'Restore' : 'Retract'}
-                            <span className="sr-only"> {version.version}</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive"
-                            disabled={pkg.versions.length < 2}
-                            onClick={() => setDeleting(version)}
-                          >
-                            <Trash2 aria-hidden />
-                            Delete
-                            <span className="sr-only"> {version.version}</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
 

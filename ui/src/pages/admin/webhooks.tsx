@@ -119,75 +119,71 @@ export function WebhooksPage() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <caption className="sr-only">Webhooks</caption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">URL</TableHead>
-                    <TableHead scope="col">Events</TableHead>
-                    <TableHead scope="col">Deliveries</TableHead>
-                    <TableHead scope="col">Enabled</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {webhooks.data.items.map((webhook) => {
-                    const deliveries = webhook.deliveries
-                    return (
-                      <TableRow key={webhook.id}>
-                        <TableCell className="max-w-80">
-                          <Link
-                            to={`/admin/webhooks/${webhook.id}`}
-                            className="block truncate font-mono text-sm text-primary hover:underline"
-                          >
-                            {webhook.url}
-                          </Link>
-                          {webhook.description && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {webhook.description}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <EventChips events={webhook.events} />
-                        </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          <span>{formatNumber(deliveries.succeeded)} delivered</span>
-                          {' · '}
-                          <span>{formatNumber(deliveries.pending)} pending</span>
-                          {' · '}
-                          <span
-                            className={
-                              deliveries.failed ? 'font-medium text-destructive' : undefined
-                            }
-                          >
-                            {formatNumber(deliveries.failed)} failed
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={webhook.enabled}
-                            aria-label={`${webhook.enabled ? 'Disable' : 'Enable'} ${webhook.url}`}
-                            disabled={update.isPending}
-                            onCheckedChange={(enabled) =>
-                              update.mutate(
-                                { id: webhook.id, enabled },
-                                {
-                                  onSuccess: () =>
-                                    toast.success(enabled ? 'Webhook enabled' : 'Webhook disabled'),
-                                  onError: (error) =>
-                                    toast.error('The webhook was not changed', errorMessage(error)),
-                                },
-                              )
-                            }
-                          />
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+              <caption className="sr-only">Webhooks</caption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">URL</TableHead>
+                  <TableHead scope="col">Events</TableHead>
+                  <TableHead scope="col">Deliveries</TableHead>
+                  <TableHead scope="col">Enabled</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {webhooks.data.items.map((webhook) => {
+                  const deliveries = webhook.deliveries
+                  return (
+                    <TableRow key={webhook.id}>
+                      <TableCell className="max-w-80">
+                        <Link
+                          to={`/admin/webhooks/${webhook.id}`}
+                          className="block truncate font-mono text-sm text-primary hover:underline"
+                        >
+                          {webhook.url}
+                        </Link>
+                        {webhook.description && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {webhook.description}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <EventChips events={webhook.events} />
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        <span>{formatNumber(deliveries.succeeded)} delivered</span>
+                        {' · '}
+                        <span>{formatNumber(deliveries.pending)} pending</span>
+                        {' · '}
+                        <span
+                          className={deliveries.failed ? 'font-medium text-destructive' : undefined}
+                        >
+                          {formatNumber(deliveries.failed)} failed
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={webhook.enabled}
+                          aria-label={`${webhook.enabled ? 'Disable' : 'Enable'} ${webhook.url}`}
+                          disabled={update.isPending}
+                          onCheckedChange={(enabled) =>
+                            update.mutate(
+                              { id: webhook.id, enabled },
+                              {
+                                onSuccess: () =>
+                                  toast.success(enabled ? 'Webhook enabled' : 'Webhook disabled'),
+                                onError: (error) =>
+                                  toast.error('The webhook was not changed', errorMessage(error)),
+                              },
+                            )
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
             <Pager
               page={webhooks.data.page}
               size={webhooks.data.size}

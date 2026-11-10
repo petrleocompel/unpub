@@ -237,76 +237,72 @@ function Tokens() {
           </EmptyState>
         ) : (
           <div className="grid gap-3">
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <caption className="sr-only">Your API tokens, newest first</caption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">Name</TableHead>
-                    <TableHead scope="col">Prefix</TableHead>
-                    <TableHead scope="col">Scopes</TableHead>
-                    <TableHead scope="col">Created</TableHead>
-                    <TableHead scope="col">Last used</TableHead>
-                    <TableHead scope="col">Expires</TableHead>
-                    <TableHead scope="col">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tokens.data.items.map((token) => {
-                    const expired = !!token.expiresAt && new Date(token.expiresAt).getTime() < now
-                    const inactive = !!token.revokedAt || expired
-                    return (
-                      <TableRow
-                        key={token.id}
-                        className={inactive ? 'text-muted-foreground' : undefined}
-                      >
-                        <TableCell className="font-medium">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {token.name}
-                            {token.revokedAt && <Badge variant="outline">Revoked</Badge>}
-                            {!token.revokedAt && expired && (
-                              <Badge variant="outline">Expired</Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{token.prefix}…</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {token.scopes.map((scope) => (
-                              <ScopeBadge key={scope} scope={scope} />
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <DateTime value={token.createdAt} date />
-                        </TableCell>
-                        <TableCell>
-                          {token.lastUsedAt ? <RelativeTime value={token.lastUsedAt} /> : 'Never'}
-                        </TableCell>
-                        <TableCell>
-                          {token.expiresAt ? <DateTime value={token.expiresAt} date /> : 'Never'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {!token.revokedAt && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setRevoking(token)}
-                              aria-label={`Revoke ${token.name}`}
-                            >
-                              <Trash2 aria-hidden />
-                              Revoke
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+              <caption className="sr-only">Your API tokens, newest first</caption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Prefix</TableHead>
+                  <TableHead scope="col">Scopes</TableHead>
+                  <TableHead scope="col">Created</TableHead>
+                  <TableHead scope="col">Last used</TableHead>
+                  <TableHead scope="col">Expires</TableHead>
+                  <TableHead scope="col">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tokens.data.items.map((token) => {
+                  const expired = !!token.expiresAt && new Date(token.expiresAt).getTime() < now
+                  const inactive = !!token.revokedAt || expired
+                  return (
+                    <TableRow
+                      key={token.id}
+                      className={inactive ? 'text-muted-foreground' : undefined}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {token.name}
+                          {token.revokedAt && <Badge variant="outline">Revoked</Badge>}
+                          {!token.revokedAt && expired && <Badge variant="outline">Expired</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{token.prefix}…</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {token.scopes.map((scope) => (
+                            <ScopeBadge key={scope} scope={scope} />
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DateTime value={token.createdAt} date />
+                      </TableCell>
+                      <TableCell>
+                        {token.lastUsedAt ? <RelativeTime value={token.lastUsedAt} /> : 'Never'}
+                      </TableCell>
+                      <TableCell>
+                        {token.expiresAt ? <DateTime value={token.expiresAt} date /> : 'Never'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!token.revokedAt && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRevoking(token)}
+                            aria-label={`Revoke ${token.name}`}
+                          >
+                            <Trash2 aria-hidden />
+                            Revoke
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
             <Pager
               page={tokens.data.page}
               size={tokens.data.size}

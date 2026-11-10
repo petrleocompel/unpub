@@ -3,9 +3,23 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+/**
+ * A table in its own horizontal scroll container. [containerClassName] styles
+ * the container (a border), [stickyFirstColumn] keeps the first column in
+ * view while the rest scrolls.
+ */
+function Table({
+  className,
+  containerClassName,
+  stickyFirstColumn = false,
+  ...props
+}: React.ComponentProps<'table'> & { containerClassName?: string; stickyFirstColumn?: boolean }) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      data-slot="table-container"
+      data-sticky-first={stickyFirstColumn || undefined}
+      className={cn('relative w-full overflow-x-auto', containerClassName)}
+    >
       <table
         data-slot="table"
         className={cn('w-full caption-bottom text-sm', className)}

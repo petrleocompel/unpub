@@ -297,65 +297,63 @@ function PackageHeader({ pkg }: { pkg: Package }) {
 
 function VersionsTable({ pkg }: { pkg: Package }) {
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <caption className="sr-only">Versions of {pkg.name}, highest first</caption>
-        <TableHeader>
-          <TableRow>
-            <TableHead scope="col">Version</TableHead>
-            <TableHead scope="col">Published</TableHead>
-            <TableHead scope="col">Uploader</TableHead>
-            <TableHead scope="col" className="text-right">
-              Downloads
-            </TableHead>
-            <TableHead scope="col">SHA-256</TableHead>
+    <Table containerClassName="rounded-lg border" stickyFirstColumn>
+      <caption className="sr-only">Versions of {pkg.name}, highest first</caption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">Version</TableHead>
+          <TableHead scope="col">Published</TableHead>
+          <TableHead scope="col">Uploader</TableHead>
+          <TableHead scope="col" className="text-right">
+            Downloads
+          </TableHead>
+          <TableHead scope="col">SHA-256</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {pkg.versions.map((version) => (
+          <TableRow
+            key={version.version}
+            data-current={version.version === pkg.version || undefined}
+            className="data-[current]:bg-muted/50"
+          >
+            <TableCell>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  to={packagePath(pkg.name, version.version)}
+                  className="font-mono font-medium text-primary hover:underline"
+                  aria-current={version.version === pkg.version ? 'page' : undefined}
+                >
+                  {version.version}
+                </Link>
+                {version.version === pkg.latest && <LatestBadge />}
+                {version.prerelease && <PrereleaseBadge />}
+                {version.retracted && <RetractedBadge />}
+              </div>
+            </TableCell>
+            <TableCell>
+              <DateTime value={version.published} date />
+            </TableCell>
+            <TableCell className="max-w-56 truncate">{version.uploader ?? '–'}</TableCell>
+            <TableCell className="text-right tabular-nums">
+              {formatNumber(version.downloads)}
+            </TableCell>
+            <TableCell>
+              {version.version === pkg.version && pkg.archiveSha256 ? (
+                <HashText hash={pkg.archiveSha256} label={`SHA-256 of ${version.version}`} />
+              ) : (
+                <Link
+                  to={`${packagePath(pkg.name, version.version)}?tab=versions`}
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Show
+                </Link>
+              )}
+            </TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pkg.versions.map((version) => (
-            <TableRow
-              key={version.version}
-              data-current={version.version === pkg.version || undefined}
-              className="data-[current]:bg-muted/50"
-            >
-              <TableCell>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    to={packagePath(pkg.name, version.version)}
-                    className="font-mono font-medium text-primary hover:underline"
-                    aria-current={version.version === pkg.version ? 'page' : undefined}
-                  >
-                    {version.version}
-                  </Link>
-                  {version.version === pkg.latest && <LatestBadge />}
-                  {version.prerelease && <PrereleaseBadge />}
-                  {version.retracted && <RetractedBadge />}
-                </div>
-              </TableCell>
-              <TableCell>
-                <DateTime value={version.published} date />
-              </TableCell>
-              <TableCell className="max-w-56 truncate">{version.uploader ?? '–'}</TableCell>
-              <TableCell className="text-right tabular-nums">
-                {formatNumber(version.downloads)}
-              </TableCell>
-              <TableCell>
-                {version.version === pkg.version && pkg.archiveSha256 ? (
-                  <HashText hash={pkg.archiveSha256} label={`SHA-256 of ${version.version}`} />
-                ) : (
-                  <Link
-                    to={`${packagePath(pkg.name, version.version)}?tab=versions`}
-                    className="text-xs text-muted-foreground hover:underline"
-                  >
-                    Show
-                  </Link>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+        ))}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -477,35 +475,33 @@ function StatsTab({ name }: { name: string }) {
         {data.versions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No downloads yet.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">Version</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Downloads
-                  </TableHead>
+          <Table containerClassName="rounded-lg border">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Version</TableHead>
+                <TableHead scope="col" className="text-right">
+                  Downloads
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.versions.map((version) => (
+                <TableRow key={version.version}>
+                  <TableCell className="font-mono">
+                    <Link
+                      to={packagePath(name, version.version)}
+                      className="text-primary hover:underline"
+                    >
+                      {version.version}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatNumber(version.downloads)}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.versions.map((version) => (
-                  <TableRow key={version.version}>
-                    <TableCell className="font-mono">
-                      <Link
-                        to={packagePath(name, version.version)}
-                        className="text-primary hover:underline"
-                      >
-                        {version.version}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatNumber(version.downloads)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </section>
     </div>

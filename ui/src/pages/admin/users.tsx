@@ -120,92 +120,88 @@ export function UsersPage() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <caption className="sr-only">Users, by email</caption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col" className="sticky left-0 bg-background">
-                      Email
-                    </TableHead>
-                    <TableHead scope="col">Display name</TableHead>
-                    <TableHead scope="col">Role</TableHead>
-                    <TableHead scope="col">Status</TableHead>
-                    <TableHead scope="col">Created</TableHead>
-                    <TableHead scope="col">Last login</TableHead>
-                    <TableHead scope="col">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.data.items.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="sticky left-0 bg-background font-medium">
-                        {user.email}
-                        {user.id === me?.user.id && (
-                          <span className="ml-2 text-xs text-muted-foreground">(you)</span>
+            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+              <caption className="sr-only">Users, by email</caption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Email</TableHead>
+                  <TableHead scope="col">Display name</TableHead>
+                  <TableHead scope="col">Role</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col">Created</TableHead>
+                  <TableHead scope="col">Last login</TableHead>
+                  <TableHead scope="col">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.data.items.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">
+                      {user.email}
+                      {user.id === me?.user.id && (
+                        <span className="ml-2 text-xs text-muted-foreground">(you)</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{user.displayName || '–'}</TableCell>
+                    <TableCell>
+                      <RoleBadge role={user.role} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.disabled ? (
+                          <DisabledBadge />
+                        ) : (
+                          <Badge variant="outline">Enabled</Badge>
                         )}
-                      </TableCell>
-                      <TableCell>{user.displayName || '–'}</TableCell>
-                      <TableCell>
-                        <RoleBadge role={user.role} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {user.disabled ? (
-                            <DisabledBadge />
-                          ) : (
-                            <Badge variant="outline">Enabled</Badge>
-                          )}
-                          {!user.hasPassword && <Badge variant="outline">No password</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DateTime value={user.createdAt} date />
-                      </TableCell>
-                      <TableCell>
-                        {user.lastLoginAt ? <RelativeTime value={user.lastLoginAt} /> : 'Never'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu modal={false}>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Actions for ${user.email}`}
-                            >
-                              <MoreHorizontal aria-hidden />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-                              {user.email}
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={() => setRoleFor(user)}>
-                              <ShieldCheck aria-hidden />
-                              Change role…
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setPasswordFor(user)}>
-                              <KeyRound aria-hidden />
-                              Set password…
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant={user.disabled ? 'default' : 'destructive'}
-                              onSelect={() => setToggling(user)}
-                            >
-                              {user.disabled ? <UserCheck aria-hidden /> : <UserX aria-hidden />}
-                              {user.disabled ? 'Enable…' : 'Disable…'}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                        {!user.hasPassword && <Badge variant="outline">No password</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <DateTime value={user.createdAt} date />
+                    </TableCell>
+                    <TableCell>
+                      {user.lastLoginAt ? <RelativeTime value={user.lastLoginAt} /> : 'Never'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Actions for ${user.email}`}
+                          >
+                            <MoreHorizontal aria-hidden />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
+                            {user.email}
+                          </DropdownMenuLabel>
+                          <DropdownMenuItem onSelect={() => setRoleFor(user)}>
+                            <ShieldCheck aria-hidden />
+                            Change role…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setPasswordFor(user)}>
+                            <KeyRound aria-hidden />
+                            Set password…
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant={user.disabled ? 'default' : 'destructive'}
+                            onSelect={() => setToggling(user)}
+                          >
+                            {user.disabled ? <UserCheck aria-hidden /> : <UserX aria-hidden />}
+                            {user.disabled ? 'Enable…' : 'Disable…'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             <Pager
               page={users.data.page}
               size={users.data.size}

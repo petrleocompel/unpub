@@ -256,137 +256,133 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
           </EmptyState>
         ) : (
           <div className="grid gap-3">
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <caption className="sr-only">Deliveries, newest first</caption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">
-                      <span className="sr-only">Payload</span>
-                    </TableHead>
-                    <TableHead scope="col">Time</TableHead>
-                    <TableHead scope="col">Event</TableHead>
-                    <TableHead scope="col">Status</TableHead>
-                    <TableHead scope="col" className="text-right">
-                      Attempts
-                    </TableHead>
-                    <TableHead scope="col">Response</TableHead>
-                    <TableHead scope="col">Duration</TableHead>
-                    <TableHead scope="col">Error</TableHead>
-                    <TableHead scope="col">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deliveries.data.items.map((delivery) => (
-                    <Fragment key={delivery.id}>
-                      <TableRow>
-                        <TableCell className="w-10">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-expanded={open === delivery.id}
-                            aria-controls={`payload-${delivery.id}`}
-                            aria-label={
-                              open === delivery.id ? 'Hide the payload' : 'Show the payload'
-                            }
-                            onClick={() => setOpen(open === delivery.id ? null : delivery.id)}
-                          >
-                            {open === delivery.id ? (
-                              <ChevronDown aria-hidden />
-                            ) : (
-                              <ChevronRight aria-hidden />
-                            )}
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <DateTime value={delivery.createdAt} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="grid">
-                            <span className="font-mono text-xs">{delivery.event}</span>
-                            {delivery.package && (
-                              <span className="text-xs text-muted-foreground">
-                                {delivery.package} {delivery.version}
-                              </span>
+            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+              <caption className="sr-only">Deliveries, newest first</caption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">
+                    <span className="sr-only">Payload</span>
+                  </TableHead>
+                  <TableHead scope="col">Time</TableHead>
+                  <TableHead scope="col">Event</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Attempts
+                  </TableHead>
+                  <TableHead scope="col">Response</TableHead>
+                  <TableHead scope="col">Duration</TableHead>
+                  <TableHead scope="col">Error</TableHead>
+                  <TableHead scope="col">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliveries.data.items.map((delivery) => (
+                  <Fragment key={delivery.id}>
+                    <TableRow>
+                      <TableCell className="w-10">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-expanded={open === delivery.id}
+                          aria-controls={`payload-${delivery.id}`}
+                          aria-label={
+                            open === delivery.id ? 'Hide the payload' : 'Show the payload'
+                          }
+                          onClick={() => setOpen(open === delivery.id ? null : delivery.id)}
+                        >
+                          {open === delivery.id ? (
+                            <ChevronDown aria-hidden />
+                          ) : (
+                            <ChevronRight aria-hidden />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <DateTime value={delivery.createdAt} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="grid">
+                          <span className="font-mono text-xs">{delivery.event}</span>
+                          {delivery.package && (
+                            <span className="text-xs text-muted-foreground">
+                              {delivery.package} {delivery.version}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DeliveryStatusBadge status={delivery.status} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{delivery.attempt}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {delivery.response?.status ?? '–'}
+                      </TableCell>
+                      <TableCell className="text-xs">{duration(delivery)}</TableCell>
+                      <TableCell
+                        className="max-w-64 truncate text-xs"
+                        title={delivery.error ?? undefined}
+                      >
+                        {delivery.error ?? '–'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={delivery.status === 'pending' || redeliver.isPending}
+                          onClick={() =>
+                            redeliver.mutate(
+                              { id: webhook.id, delivery: delivery.id },
+                              {
+                                onSuccess: () => {
+                                  toast.success('Delivery queued again')
+                                  void deliveries.refetch()
+                                },
+                                onError: (error) =>
+                                  toast.error('Redelivery failed', errorMessage(error)),
+                              },
+                            )
+                          }
+                        >
+                          <Send aria-hidden />
+                          Redeliver
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    {open === delivery.id && (
+                      <TableRow id={`payload-${delivery.id}`}>
+                        <TableCell colSpan={9} className="bg-muted/40 whitespace-normal">
+                          <div className="grid gap-3 py-1">
+                            <CodeBlock code={pretty(delivery.payload)} label="the payload" />
+                            <p className="text-xs text-muted-foreground">
+                              The body as sent and signed is the compact form of this JSON. Delivery
+                              id <code className="font-mono">{delivery.id}</code>, event id{' '}
+                              <code className="font-mono">{delivery.eventId}</code>
+                              {delivery.redeliveryOf && (
+                                <>
+                                  , a redelivery of{' '}
+                                  <code className="font-mono">{delivery.redeliveryOf}</code>
+                                </>
+                              )}
+                              .
+                            </p>
+                            {delivery.response?.body && (
+                              <div className="grid gap-1">
+                                <p className="text-xs font-medium">Response body (start)</p>
+                                <pre className="max-h-40 overflow-auto rounded-md border bg-background p-2 font-mono text-xs">
+                                  {delivery.response.body}
+                                </pre>
+                              </div>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <DeliveryStatusBadge status={delivery.status} />
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {delivery.attempt}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {delivery.response?.status ?? '–'}
-                        </TableCell>
-                        <TableCell className="text-xs">{duration(delivery)}</TableCell>
-                        <TableCell
-                          className="max-w-64 truncate text-xs"
-                          title={delivery.error ?? undefined}
-                        >
-                          {delivery.error ?? '–'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={delivery.status === 'pending' || redeliver.isPending}
-                            onClick={() =>
-                              redeliver.mutate(
-                                { id: webhook.id, delivery: delivery.id },
-                                {
-                                  onSuccess: () => {
-                                    toast.success('Delivery queued again')
-                                    void deliveries.refetch()
-                                  },
-                                  onError: (error) =>
-                                    toast.error('Redelivery failed', errorMessage(error)),
-                                },
-                              )
-                            }
-                          >
-                            <Send aria-hidden />
-                            Redeliver
-                          </Button>
-                        </TableCell>
                       </TableRow>
-                      {open === delivery.id && (
-                        <TableRow id={`payload-${delivery.id}`}>
-                          <TableCell colSpan={9} className="bg-muted/40 whitespace-normal">
-                            <div className="grid gap-3 py-1">
-                              <CodeBlock code={pretty(delivery.payload)} label="the payload" />
-                              <p className="text-xs text-muted-foreground">
-                                The body as sent and signed is the compact form of this JSON.
-                                Delivery id <code className="font-mono">{delivery.id}</code>, event
-                                id <code className="font-mono">{delivery.eventId}</code>
-                                {delivery.redeliveryOf && (
-                                  <>
-                                    , a redelivery of{' '}
-                                    <code className="font-mono">{delivery.redeliveryOf}</code>
-                                  </>
-                                )}
-                                .
-                              </p>
-                              {delivery.response?.body && (
-                                <div className="grid gap-1">
-                                  <p className="text-xs font-medium">Response body (start)</p>
-                                  <pre className="max-h-40 overflow-auto rounded-md border bg-background p-2 font-mono text-xs">
-                                    {delivery.response.body}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                    )}
+                  </Fragment>
+                ))}
+              </TableBody>
+            </Table>
             <Pager
               page={deliveries.data.page}
               size={deliveries.data.size}
