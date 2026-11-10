@@ -24,6 +24,8 @@ export function CompactTable({
       )}
       className={cn(
         '[&_thead_th:first-child]:bg-surface',
+        // Covers the sticky first cell too: utilities come after the sticky
+        // rule's layer (components) in src/index.css, so they win.
         '[&_tr[data-expanded]>td]:bg-surface [&_tr[data-muted]>td]:text-muted-foreground',
         className,
       )}
