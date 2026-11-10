@@ -5,11 +5,12 @@ import { ApiError, errorMessage } from '@/api/client'
 import { useChangePassword, useCreateToken, useRevokeToken, useTokens } from '@/api/queries'
 import type { Scope, Token, TokenCreated } from '@/api/types'
 import { hostedUrl, useSession } from '@/auth/session'
+import { Initials } from '@/components/avatar'
 import { RoleBadge, ScopeBadge } from '@/components/badges'
 import { CodeBlock } from '@/components/copy-button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CompactTable } from '@/components/dashboard/compact-table'
-import { Panel, PanelBody, PanelFooter, PanelHeader, ToneBadge } from '@/components/dashboard/panel'
+import { Panel, PanelBody, PanelFooter, PanelHeader } from '@/components/dashboard/panel'
 import { Segmented } from '@/components/dashboard/segmented'
 import {
   DashboardHeading,
@@ -20,6 +21,7 @@ import { Field, FormError, invalidField } from '@/components/form'
 import { intParam, Pager } from '@/components/pager'
 import { SecretBox } from '@/components/secret-box'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/states'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -74,16 +76,6 @@ function InlineCode({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** Up to two letters for an avatar: of the display name, else of the email. */
-export function initials(name: string | null | undefined, email: string) {
-  const words = (name ?? '').trim().split(/\s+/).filter(Boolean)
-  if (words.length >= 2) return `${words[0]![0]}${words[words.length - 1]![0]}`.toUpperCase()
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase()
-  const local = email.split('@')[0] ?? email
-  const parts = local.split(/[._-]+/).filter(Boolean)
-  return (parts.length >= 2 ? `${parts[0]![0]}${parts[1]![0]}` : local.slice(0, 2)).toUpperCase()
-}
-
 function Profile() {
   const { me } = useSession()
   if (!me) return null
@@ -93,12 +85,7 @@ function Profile() {
     <Panel id="profile" aria-labelledby="profile-title" className="scroll-mt-20">
       <PanelHeader title="Profile" titleId="profile-title" />
       <PanelBody className="flex flex-wrap items-start gap-6">
-        <span
-          aria-hidden
-          className="grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
-        >
-          {initials(displayName, user.email)}
-        </span>
+        <Initials email={user.email} size="lg" />
         <dl className="grid max-w-160 grow grid-cols-1 gap-x-4 gap-y-0.5 text-[0.8125rem] sm:grid-cols-[11.25rem_minmax(0,1fr)] sm:gap-y-2.5 [&>dd]:mb-2.5 sm:[&>dd]:mb-0">
           <dt className="text-muted-foreground">Email</dt>
           <dd className="font-medium break-all">{user.email}</dd>
@@ -325,15 +312,15 @@ function Tokens() {
                       </TableCell>
                       <TableCell>
                         {token.revokedAt ? (
-                          <ToneBadge tone="neutral">
+                          <Badge variant="outline">
                             <Ban aria-hidden />
                             Revoked
-                          </ToneBadge>
+                          </Badge>
                         ) : expired ? (
-                          <ToneBadge tone="neutral">
+                          <Badge variant="outline">
                             <Clock aria-hidden />
                             Expired
-                          </ToneBadge>
+                          </Badge>
                         ) : token.expiresAt ? (
                           <When value={token.expiresAt} now={now} />
                         ) : (
@@ -343,9 +330,8 @@ function Tokens() {
                       <TableCell className="text-right">
                         {!token.revokedAt && (
                           <Button
-                            variant="outline"
+                            variant="destructive-outline"
                             size="xs"
-                            className="border-destructive/45 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => setRevoking(token)}
                             aria-label={`Revoke ${token.name}`}
                           >

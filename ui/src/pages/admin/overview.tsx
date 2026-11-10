@@ -16,9 +16,10 @@ import type { Overview } from '@/api/types'
 import { useSession } from '@/auth/session'
 import { PrereleaseBadge } from '@/components/badges'
 import { CompactTable } from '@/components/dashboard/compact-table'
-import { Panel, PanelBody, PanelFooter, PanelHeader, ToneBadge } from '@/components/dashboard/panel'
+import { Dot, Panel, PanelBody, PanelFooter, PanelHeader } from '@/components/dashboard/panel'
 import { ErrorState } from '@/components/states'
 import { RelativeTime } from '@/components/time'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatBytes, formatNumber, isPrerelease } from '@/lib/format'
@@ -44,12 +45,10 @@ function ReadinessBadge({
   const label = known?.label ?? name
   const ok = check.status === 'ok'
   return (
-    <span title={check.error}>
-      <ToneBadge tone={ok ? 'success' : 'danger'}>
-        {ok ? <Icon aria-hidden /> : <CircleAlert aria-hidden />}
-        {ok ? `${label} ready` : `${label} not ready`}
-      </ToneBadge>
-    </span>
+    <Badge title={check.error} variant={ok ? 'success' : 'danger'}>
+      {ok ? <Icon aria-hidden /> : <CircleAlert aria-hidden />}
+      {ok ? `${label} ready` : `${label} not ready`}
+    </Badge>
   )
 }
 
@@ -269,13 +268,15 @@ function FailedDeliveries({ count }: { count: number }) {
     <Panel aria-labelledby="failed-deliveries">
       <PanelHeader title="Failed deliveries · 24 h" titleId="failed-deliveries">
         {count > 0 ? (
-          <ToneBadge tone="danger" dot>
+          <Badge variant="danger">
+            <Dot tone="danger" />
             {formatNumber(count)} failed
-          </ToneBadge>
+          </Badge>
         ) : (
-          <ToneBadge tone="success" dot>
+          <Badge variant="success">
+            <Dot tone="success" />
             None failed
-          </ToneBadge>
+          </Badge>
         )}
       </PanelHeader>
       <PanelBody className="text-[0.8125rem] text-muted-foreground">

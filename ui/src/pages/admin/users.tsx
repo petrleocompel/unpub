@@ -19,12 +19,12 @@ import { useSession } from '@/auth/session'
 import { DisabledBadge, RoleBadge } from '@/components/badges'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CompactTable } from '@/components/dashboard/compact-table'
-import { ToneBadge } from '@/components/dashboard/panel'
 import { Field, FormError } from '@/components/form'
 import { NativeSelect } from '@/components/native-select'
 import { intParam, Pager } from '@/components/pager'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/states'
 import { DateTime, RelativeTime } from '@/components/time'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -186,7 +186,7 @@ export function UsersPage() {
                             Enabled
                           </span>
                         )}
-                        {!user.hasPassword && <ToneBadge tone="neutral">No password</ToneBadge>}
+                        {!user.hasPassword && <Badge variant="outline">No password</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">

@@ -66,46 +66,6 @@ export function PanelFooter({ className, ...props }: ComponentProps<'div'>) {
   )
 }
 
-/** A tinted status badge: a dot or an icon and a word, never the colour alone. */
-export function ToneBadge({
-  tone,
-  dot = false,
-  children,
-  className,
-}: {
-  tone: 'success' | 'warning' | 'danger' | 'neutral'
-  dot?: boolean
-  children: ReactNode
-  className?: string
-}) {
-  return (
-    <span
-      className={cn(
-        'inline-flex h-5.5 shrink-0 items-center gap-1 rounded-full border px-2 text-xs leading-none font-medium whitespace-nowrap text-foreground [&>svg]:size-3',
-        tone === 'success' && 'border-success/35 bg-success/12 [&>svg]:text-success',
-        tone === 'warning' && 'border-warning/40 bg-warning/13 [&>svg]:text-warning',
-        tone === 'danger' && 'border-destructive/35 bg-destructive/10 [&>svg]:text-destructive',
-        tone === 'neutral' && 'bg-background',
-        className,
-      )}
-    >
-      {dot && (
-        <span
-          aria-hidden
-          className={cn(
-            'size-1.75 rounded-full',
-            tone === 'success' && 'bg-success',
-            tone === 'warning' && 'bg-warning',
-            tone === 'danger' && 'bg-destructive',
-            tone === 'neutral' && 'bg-muted-foreground',
-          )}
-        />
-      )}
-      {children}
-    </span>
-  )
-}
-
 /** An event name or another identifier, as a small monospace chip. */
 export function Chip({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -117,5 +77,20 @@ export function Chip({ children, className }: { children: ReactNode; className?:
     >
       {children}
     </span>
+  )
+}
+
+/** The dot of a status badge, next to its word. */
+export function Dot({ tone }: { tone: 'success' | 'warning' | 'danger' }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'size-[7px] rounded-full',
+        tone === 'success' && 'bg-success',
+        tone === 'warning' && 'bg-warning',
+        tone === 'danger' && 'bg-destructive',
+      )}
+    />
   )
 }
