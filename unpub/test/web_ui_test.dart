@@ -64,7 +64,53 @@ class _BrokenStore extends MongoStore {
       throw StateError('broken');
 }
 
+/// The built client the tests serve next to the pages.
+const clientFixture = 'test/fixtures/ui';
+
+/// Paths answered by the server itself wherever the pages are.
+bool _isServerPath(String path) =>
+    path.startsWith('/api/') ||
+    path.startsWith('/webapi/') ||
+    path.startsWith('/static/') ||
+    path.startsWith('/badge/') ||
+    path == '/healthz' ||
+    path == '/readyz' ||
+    path == '/metrics' ||
+    path.split('?').first.endsWith('.tar.gz') ||
+    path.split('?').first.endsWith('.json');
+
+final _urlAttribute = RegExp(r'\s(?:href|action|src|formaction)="([^"]*)"');
+
+/// The pages run twice: at `/`, as with `ui.mode: ssr`, and under `/classic`
+/// next to the single-page client, as with `ui.mode: spa`. Under `/classic`
+/// every request for a page gets the prefix, every URL of a page, redirect
+/// and cookie path is checked to carry it and has it taken off again, so the
+/// same expectations hold in both.
 void main() {
+  group('pages at /', () => _pages(''));
+  group('pages under /classic', () => _pages('/classic'));
+}
+
+void _pages(String base) {
+  /// [path] of a page as the server has it.
+  String served(String path) =>
+      base.isEmpty || _isServerPath(path) ? path : '$base$path';
+
+  /// [url] from a response, checked to be under [base] if it is a path on
+  /// this server, and given without it.
+  String local(String url) {
+    if (base.isEmpty || !url.startsWith('/') || url.startsWith('//')) {
+      return url;
+    }
+    expect(url, anyOf(base, startsWith('$base/')),
+        reason: 'a URL of a page under $base');
+    final rest = url.substring(base.length);
+    return rest.isEmpty ? '/' : rest;
+  }
+
+  String localBody(String body) => body.replaceAllMapped(_urlAttribute,
+      (match) => match[0]!.replaceFirst(match[1]!, local(match[1]!)));
+
   late Db db;
   late Directory storage;
   late AccountStore store;
@@ -117,6 +163,9 @@ void main() {
         config: config,
         upstream: 'https://upstream.example',
         upstreamProxy: upstreamProxy,
+        ui: base.isEmpty
+            ? const UiConfig()
+            : const UiConfig(assetsDir: clientFixture, mode: UiMode.spa),
       );
 
   setUpAll(() async {
@@ -160,7 +209,7 @@ void main() {
     };
     final response = await (using ?? app).handler(shelf.Request(
       method,
-      Uri.parse('http://internal:4000$path'),
+      Uri.parse('http://internal:4000${served(path)}'),
       headers: {
         if (html) 'accept': _html,
         if (as != null) 'cookie': '$sessionCookieName=${as.cookie}',
@@ -170,8 +219,30 @@ void main() {
       },
       body: method == 'POST' ? _form(fields) : null,
     ));
-    return Page(response.statusCode, response.headers, response.headersAll,
-        await response.readAsString());
+    var headersAll = response.headersAll;
+    var body = await response.readAsString();
+    if (base.isNotEmpty && !_isServerPath(path)) {
+      body = localBody(body);
+      headersAll = {
+        for (final MapEntry(:key, :value) in headersAll.entries)
+          key: switch (key) {
+            'location' => [for (final url in value) local(url)],
+            'set-cookie' => [
+                for (final cookie in value)
+                  cookie.replaceFirst('Path=$base/', 'Path=/'),
+              ],
+            _ => value,
+          },
+      };
+    }
+    return Page(
+        response.statusCode,
+        {
+          for (final MapEntry(:key, :value) in headersAll.entries)
+            key: value.join(',')
+        },
+        headersAll,
+        body);
   }
 
   Future<User> user(String email, Role role) =>

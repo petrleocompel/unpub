@@ -48,31 +48,52 @@ bool isHealthRequest(shelf.Request request) {
 bool isMetricsRequest(shelf.Request request) =>
     _readMethods.contains(request.method) && request.url.path == 'metrics';
 
-bool _isLoginRequest(shelf.Request request) =>
+/// The path of [request] relative to [pagesPath], where the server-rendered
+/// pages are, such as `classic`, or null if it is outside.
+String? _pagePath(shelf.Request request, String pagesPath) {
+  final path = request.url.path;
+  if (pagesPath.isEmpty) return path;
+  if (path == pagesPath) return '';
+  return path.startsWith('$pagesPath/')
+      ? path.substring(pagesPath.length + 1)
+      : null;
+}
+
+bool _isLoginRequest(shelf.Request request, String pagesPath) =>
     request.method == 'POST' &&
-    (request.url.path == 'webapi/login' || request.url.path == 'login');
+    (request.url.path == 'webapi/login' ||
+        _pagePath(request, pagesPath) == 'login');
 
 /// Whether [request] reads a page that stays open in every read mode: the
-/// login form and the stylesheet and script it needs.
-bool isOpenPageRequest(shelf.Request request) {
+/// login form and the stylesheet and script it needs. [pagesPath] is where
+/// the pages are, `''` for `/`.
+bool isOpenPageRequest(shelf.Request request, {String pagesPath = ''}) {
   if (!_readMethods.contains(request.method)) return false;
-  final path = request.url.path;
-  return path == 'login' || path.startsWith('static/');
+  final page = _pagePath(request, pagesPath);
+  return page == 'login' ||
+      (page?.startsWith('static/') ?? false) ||
+      request.url.path.startsWith('static/');
 }
 
 /// Whether [path] is where a signed-in user looks after their own account.
 ///
 /// These are writes, but they change nothing in the registry, and a reader
 /// has to be able to log out, change a password and get a token to read with.
-bool _isOwnAccountRoute(String path) =>
-    path == 'webapi/logout' ||
-    path == 'webapi/me/password' ||
-    path == 'webapi/tokens' ||
-    path.startsWith('webapi/tokens/') ||
-    path == 'logout' ||
-    path == 'account/password' ||
-    path == 'account/tokens' ||
-    path.startsWith('account/tokens/');
+bool _isOwnAccountRoute(shelf.Request request, String pagesPath) {
+  final path = request.url.path;
+  if (path == 'webapi/logout' ||
+      path == 'webapi/me/password' ||
+      path == 'webapi/tokens' ||
+      path.startsWith('webapi/tokens/')) {
+    return true;
+  }
+  final page = _pagePath(request, pagesPath);
+  return page != null &&
+      (page == 'logout' ||
+          page == 'account/password' ||
+          page == 'account/tokens' ||
+          page.startsWith('account/tokens/'));
+}
 
 /// The principal set by [authMiddleware], if the request was authenticated.
 Principal? principalOf(shelf.Request request) =>
@@ -82,9 +103,12 @@ Principal? principalOf(shelf.Request request) =>
 ///
 /// Anything with credentials that are missing or not accepted is anonymous,
 /// and may only use safe methods while [readAccess] is `public`, plus the
-/// health probes, the login endpoints and the login page with its assets.
-/// Handlers read the identity with [principalOf] and apply the rules specific
-/// to their resource.
+/// health probes, the login endpoints, the login page with its assets, and
+/// the reads [isOpenRequest] accepts, such as the shell and files of the
+/// single-page client, which hold no data. [pagesPath] is where the
+/// server-rendered pages are, such as `classic`, `''` for `/`. Handlers read
+/// the identity with [principalOf] and apply the rules specific to their
+/// resource.
 ///
 /// A failure is answered by [failureResponse], [authFailureResponse] by
 /// default.
@@ -93,12 +117,19 @@ shelf.Middleware authMiddleware(
   ReadAccess readAccess = ReadAccess.public,
   shelf.Response Function(shelf.Request request, AuthException error)?
       failureResponse,
+  String pagesPath = '',
+  bool Function(shelf.Request request)? isOpenRequest,
 }) {
+  bool open(shelf.Request request) =>
+      isOpenPageRequest(request, pagesPath: pagesPath) ||
+      (_readMethods.contains(request.method) &&
+          (isOpenRequest?.call(request) ?? false));
+
   return (shelf.Handler inner) {
     return (shelf.Request request) async {
       // Login is exempt from authentication so that a stale cookie, which
       // would otherwise demand a CSRF token, cannot prevent logging back in.
-      if (isHealthRequest(request) || _isLoginRequest(request)) {
+      if (isHealthRequest(request) || _isLoginRequest(request, pagesPath)) {
         return inner(request);
       }
 
@@ -106,7 +137,7 @@ shelf.Middleware authMiddleware(
         final principal = await authenticator.authenticate(request);
         if (!isMetricsRequest(request)) {
           _authorize(request, principal,
-              isOpenPageRequest(request) ? ReadAccess.public : readAccess);
+              open(request) ? ReadAccess.public : readAccess, pagesPath);
         }
         var authorized = request;
         final session = principal?.session;
@@ -126,8 +157,8 @@ shelf.Middleware authMiddleware(
 shelf.Response _defaultFailure(shelf.Request request, AuthException error) =>
     authFailureResponse(error);
 
-void _authorize(
-    shelf.Request request, Principal? principal, ReadAccess readAccess) {
+void _authorize(shelf.Request request, Principal? principal,
+    ReadAccess readAccess, String pagesPath) {
   if (isWriteRequest(request)) {
     if (principal == null) {
       throw AuthException.unauthorized(_hasAuthorization(request)
@@ -136,7 +167,7 @@ void _authorize(
               'Add one with: dart pub token add <server url>');
     }
     if (principal.credentialKind == CredentialKind.session &&
-        _isOwnAccountRoute(request.url.path)) {
+        _isOwnAccountRoute(request, pagesPath)) {
       return;
     }
     if (!principal.scopes.contains(Scope.publish)) {

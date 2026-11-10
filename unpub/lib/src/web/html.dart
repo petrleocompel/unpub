@@ -4,7 +4,37 @@
 /// insert markup as is goes through [Html.trusted], which is meant for the
 /// output of the sanitizer and for constants, so that unescaped insertion is
 /// explicit and easy to find.
+///
+/// Pages are written as if they were served at `/`. [underBasePath] serves
+/// them under a prefix instead: every root-relative URL the builder writes
+/// into a link, a form, a script or a stylesheet gets the prefix, so that no
+/// template has to know where it is mounted. Markup inserted with
+/// [Html.trusted], such as a sanitized README, is left as it is.
 library;
+
+import 'dart:async';
+
+const _basePathKey = #unpub.web.basePath;
+
+/// The attributes holding a URL that the base path applies to.
+const _urlAttributes = {'href', 'action', 'src', 'formaction'};
+
+/// Runs [render] with [basePath], such as `/classic`, put in front of the
+/// root-relative URLs it builds. An empty [basePath] changes nothing.
+T underBasePath<T>(String basePath, T Function() render) => basePath.isEmpty
+    ? render()
+    : runZoned(render, zoneValues: {_basePathKey: basePath});
+
+/// The base path of the page being rendered, `''` at the root.
+String get currentBasePath => Zone.current[_basePathKey] as String? ?? '';
+
+/// [url] under [currentBasePath] if it is a path on this server, as `/x`
+/// and unlike `//host/x` or `https://host/x`.
+String rebase(String url) {
+  final base = currentBasePath;
+  if (base.isEmpty || !url.startsWith('/') || url.startsWith('//')) return url;
+  return '$base$url';
+}
 
 /// Markup that is safe to insert into a page as is.
 final class Html {
@@ -75,6 +105,8 @@ void _writeAttributes(StringBuffer out, Map<String, Object?> attributes) {
     if (value == null || value == false) continue;
     if (value == true) {
       out.write(' $key');
+    } else if (_urlAttributes.contains(key)) {
+      out.write(' $key="${escapeHtml(rebase('$value'))}"');
     } else {
       out.write(' $key="${escapeHtml('$value')}"');
     }

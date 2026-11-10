@@ -93,6 +93,9 @@ class Harness {
     WebhookService? webhooks,
     Config? config,
     MetaStore? meta,
+    UiConfig ui = const UiConfig(),
+    bool secureCookies = false,
+    String? bootstrapToken,
   }) =>
       App(
         metaStore: meta ?? metaStore,
@@ -100,13 +103,19 @@ class Harness {
         authenticator: ChainAuthenticator([
           ApiTokenAuthenticator(accountStore),
           SessionAuthenticator(accountStore),
+          if (bootstrapToken != null)
+            StaticTokenAuthenticator(
+                bootstrapToken: bootstrapToken,
+                bootstrapEmail: 'bootstrap@example.com'),
         ]),
         readAccess: readAccess,
-        accountApi: AccountApi(accounts, limiter: LoginRateLimiter()),
+        accountApi: AccountApi(accounts,
+            limiter: LoginRateLimiter(), secureCookies: secureCookies),
         auditStore: audit,
         webhooks: webhooks,
         config: config,
         upstream: 'https://upstream.example',
+        ui: ui,
       );
 
   void install() {
@@ -228,6 +237,16 @@ class Harness {
     final account = await page('/account', as: Browser(cookie, ''));
     expect(account.status, HttpStatus.ok, reason: account.body);
     return Browser(cookie, account.field('csrf_token'));
+  }
+
+  /// Logs [email] in as the single-page client does, through
+  /// `POST /webapi/login`.
+  Future<Browser> apiLogIn(String email, {App? using}) async {
+    final reply = await send('POST', '/webapi/login',
+        using: using, json: {'email': email, 'password': harnessPassword});
+    expect(reply.status, HttpStatus.ok, reason: reply.body);
+    return Browser(reply.cookie(sessionCookieName)!,
+        (reply.json as Map)['csrfToken'] as String);
   }
 
   /// Publishes [name] [version] through the upload route with [bearer], and
