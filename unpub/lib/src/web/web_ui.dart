@@ -25,6 +25,7 @@ import '../routes/route_support.dart';
 import '../store/audit_store.dart';
 import '../store/meta_store.dart';
 import '../validation.dart';
+import '../webhooks/webhook_service.dart';
 import 'assets.dart';
 import 'html.dart';
 import 'layout.dart';
@@ -78,6 +79,9 @@ const _doneMessages = {
   'owner-transferred': 'The ownership was transferred.',
   'version-deleted': 'The version was deleted.',
   'package-deleted': 'The package was deleted.',
+  'webhook-updated': 'The webhook was updated.',
+  'webhook-deleted': 'The webhook was deleted.',
+  'redelivery-queued': 'The delivery was queued again.',
 };
 
 /// Paths answered with JSON or files, never with a page.

@@ -24,6 +24,7 @@ import 'store/meta_store.dart';
 import 'store/package_store.dart';
 import 'upstream/upstream_proxy.dart';
 import 'web/web_ui.dart';
+import 'webhooks/webhook_service.dart';
 
 class App {
   /// meta information store
@@ -47,6 +48,10 @@ class App {
 
   /// Records publishes and uploader changes.
   final AuditStore auditStore;
+
+  /// Sends package events to the registered webhooks. Absent when embedding
+  /// without them.
+  final WebhookService? webhooks;
 
   /// Whether the client address is taken from `X-Forwarded-For`.
   final bool trustForwardedFor;
@@ -82,6 +87,7 @@ class App {
     this.readAccess = ReadAccess.public,
     this.accountApi,
     this.auditStore = const NullAuditStore(),
+    this.webhooks,
     this.trustForwardedFor = false,
     this.upstream = 'https://pub.dev',
     this.upstreamProxy,

@@ -124,6 +124,9 @@ class PackageModeration {
         package: name,
         version: version,
       );
+      await app.notify(
+          principal, retracted ? 'version.retracted' : 'version.unretracted',
+          package: name, version: version);
     }
     return retracted ? 'version retracted' : 'version restored';
   }
@@ -169,6 +172,12 @@ class PackageModeration {
       package: name,
       details: {if (replacedBy != null) 'replacedBy': replacedBy},
     );
+    if (discontinued != wasDiscontinued || replacedBy != package.replacedBy) {
+      await app.notify(principal,
+          discontinued ? 'package.discontinued' : 'package.continued',
+          package: name,
+          data: {if (replacedBy != null) 'replacedBy': replacedBy});
+    }
     return discontinued ? 'package discontinued' : 'package continued';
   }
 
@@ -231,6 +240,10 @@ class PackageModeration {
           if (target.sha256 != null) 'sha256': target.sha256,
           'archiveDeleted': archiveDeleted,
         });
+    await app.notify(principal, 'version.deleted',
+        package: name,
+        version: version,
+        data: {if (target.sha256 != null) 'sha256': target.sha256});
     return 'version deleted';
   }
 
@@ -300,6 +313,9 @@ class PackageModeration {
           'versions': [for (final item in current.versions) item.version],
           'uploaders': current.uploaders ?? const <String>[],
           'archivesDeleted': archivesDeleted,
+        });
+        await app.notify(principal, 'package.deleted', package: name, data: {
+          'versions': [for (final item in current.versions) item.version],
         });
         return 'package deleted';
       } finally {

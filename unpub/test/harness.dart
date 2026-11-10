@@ -90,6 +90,7 @@ class Harness {
 
   App buildApp({
     ReadAccess readAccess = ReadAccess.public,
+    WebhookService? webhooks,
     Config? config,
     MetaStore? meta,
   }) =>
@@ -103,6 +104,7 @@ class Harness {
         readAccess: readAccess,
         accountApi: AccountApi(accounts, limiter: LoginRateLimiter()),
         auditStore: audit,
+        webhooks: webhooks,
         config: config,
         upstream: 'https://upstream.example',
       );

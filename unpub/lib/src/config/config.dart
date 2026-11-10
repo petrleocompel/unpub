@@ -65,6 +65,12 @@ const _schema = <String, _ValueKind>{
   'auth.admin.email': _ValueKind.string,
   'auth.admin.password': _ValueKind.string,
   'audit.retentionDays': _ValueKind.integer,
+  'webhooks.enabled': _ValueKind.boolean,
+  'webhooks.timeout': _ValueKind.string,
+  'webhooks.maxAttempts': _ValueKind.integer,
+  'webhooks.allowHttp': _ValueKind.boolean,
+  'webhooks.allowPrivateNetworks': _ValueKind.boolean,
+  'webhooks.retentionDays': _ValueKind.integer,
   'logging.level': _ValueKind.string,
   'logging.format': _ValueKind.string,
 };
@@ -375,6 +381,45 @@ class AuditConfig {
       retentionDays > 0 ? Duration(days: retentionDays) : null;
 }
 
+/// How webhooks are delivered.
+class WebhooksConfig {
+  static const defaultTimeout = Duration(seconds: 10);
+  static const defaultMaxAttempts = 5;
+  static const defaultRetentionDays = 30;
+
+  /// Whether events are queued and delivered at all.
+  final bool enabled;
+
+  /// How long one delivery attempt may take.
+  final Duration timeout;
+
+  /// Attempts before a delivery is given up as failed.
+  final int maxAttempts;
+
+  /// Whether a webhook URL may use plain http.
+  final bool allowHttp;
+
+  /// Whether a webhook may reach loopback, link-local, private and unique
+  /// local addresses.
+  final bool allowPrivateNetworks;
+
+  /// Days a finished delivery is kept, or 0 to keep every delivery.
+  final int retentionDays;
+
+  const WebhooksConfig({
+    this.enabled = true,
+    this.timeout = defaultTimeout,
+    this.maxAttempts = defaultMaxAttempts,
+    this.allowHttp = false,
+    this.allowPrivateNetworks = false,
+    this.retentionDays = defaultRetentionDays,
+  });
+
+  /// Null when deliveries are kept for good.
+  Duration? get retention =>
+      retentionDays > 0 ? Duration(days: retentionDays) : null;
+}
+
 class LoggingConfig {
   final Level level;
   final LogFormat format;
@@ -397,6 +442,7 @@ class Config {
   final PublishConfig publish;
   final AuthConfig auth;
   final AuditConfig audit;
+  final WebhooksConfig webhooks;
   final LoggingConfig logging;
 
   const Config({
@@ -407,6 +453,7 @@ class Config {
     this.publish = const PublishConfig(),
     required this.auth,
     this.audit = const AuditConfig(),
+    this.webhooks = const WebhooksConfig(),
     required this.logging,
   });
 
@@ -646,6 +693,7 @@ class _ConfigReader {
     final publish = _publish();
     final auth = _auth();
     final audit = _audit();
+    final webhooks = _webhooks();
     final logging = _logging();
     if (_problems.isNotEmpty) throw ConfigException(_problems);
     return Config(
@@ -656,6 +704,7 @@ class _ConfigReader {
       publish: publish,
       auth: auth,
       audit: audit,
+      webhooks: webhooks,
       logging: logging,
     );
   }
@@ -672,6 +721,28 @@ class _ConfigReader {
 
   AuditConfig _audit() =>
       AuditConfig(retentionDays: _days('audit.retentionDays', 0));
+
+  WebhooksConfig _webhooks() {
+    final attempts = _integer('webhooks.maxAttempts');
+    if (attempts != null && (attempts < 1 || attempts > 20)) {
+      _problems.add('${_describe('webhooks.maxAttempts')} must be between 1 '
+          'and 20');
+    }
+    final timeout = _duration('webhooks.timeout', allowZero: false);
+    if (timeout != null && timeout > const Duration(minutes: 5)) {
+      _problems
+          .add('${_describe('webhooks.timeout')} must be at most 5 minutes');
+    }
+    return WebhooksConfig(
+      enabled: _boolean('webhooks.enabled') ?? true,
+      timeout: timeout ?? WebhooksConfig.defaultTimeout,
+      maxAttempts: attempts ?? WebhooksConfig.defaultMaxAttempts,
+      allowHttp: _boolean('webhooks.allowHttp') ?? false,
+      allowPrivateNetworks: _boolean('webhooks.allowPrivateNetworks') ?? false,
+      retentionDays:
+          _days('webhooks.retentionDays', WebhooksConfig.defaultRetentionDays),
+    );
+  }
 
   /// A duration such as `10m`, or `0` when [allowZero] is true.
   Duration? _duration(String key, {required bool allowZero}) {

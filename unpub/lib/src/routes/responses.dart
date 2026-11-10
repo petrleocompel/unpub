@@ -14,9 +14,10 @@ import '../validation.dart';
 const _maxJsonBodyBytes = 64 * 1024;
 
 shelf.Response okWithJson(Map<String, dynamic> data,
-        {Map<String, String> headers = const {}}) =>
-    shelf.Response.ok(
-      json.encode(data),
+        {Map<String, String> headers = const {}, int status = HttpStatus.ok}) =>
+    shelf.Response(
+      status,
+      body: json.encode(data),
       headers: {
         HttpHeaders.contentTypeHeader: ContentType.json.mimeType,
         'Access-Control-Allow-Origin': '*',

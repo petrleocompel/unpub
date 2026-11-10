@@ -187,6 +187,11 @@ legend { padding: 0 .3rem; }
 /* Tables */
 .table-scroll { overflow-x: auto; }
 code.details { font-size: .8rem; word-break: break-all; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; }
+dl.facts dt { font-weight: 600; }
+dl.facts dd { margin: 0; }
+div.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+fieldset { border: 1px solid var(--border); border-radius: 4px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
 th { background: var(--subtle); font-weight: 600; }

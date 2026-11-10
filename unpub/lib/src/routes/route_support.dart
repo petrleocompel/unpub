@@ -12,6 +12,7 @@ import '../http_cache.dart';
 import '../models.dart';
 import '../pub_listing.dart';
 import '../upstream/upstream_proxy.dart';
+import '../webhooks/webhook_service.dart';
 import 'responses.dart';
 
 /// Changes when the listing format does, so that a client's validator from an
@@ -118,6 +119,21 @@ extension RouteSupport on App {
           version: version,
           target: target,
           details: details));
+
+  /// Queues [event] about [package] for the webhooks, after it happened.
+  Future<void> notify(
+    Principal principal,
+    String event, {
+    required String package,
+    String? version,
+    Map<String, Object?> data = const {},
+  }) async {
+    await webhooks?.notify(WebhookEvent(event,
+        package: package,
+        version: version,
+        actor: principal.email,
+        data: data));
+  }
 }
 
 bool clientHasArchive(shelf.Request req, String? hash) =>

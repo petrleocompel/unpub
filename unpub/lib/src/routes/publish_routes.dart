@@ -212,6 +212,10 @@ class PublishRoutes {
           package: name,
           version: version,
           details: {'uploader': uploader, 'sha256': archiveHash});
+      await app.notify(principal, 'package.published',
+          package: name,
+          version: version,
+          data: {'uploader': uploader, 'sha256': archiveHash});
 
       // TODO: Upload docs
       return shelf.Response.found(

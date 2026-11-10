@@ -19,7 +19,15 @@ class _AdminOpsUi {
       ..post('/admin/packages/<name>/versions/<version>/delete',
           web._guard2(deleteVersion))
       ..post('/admin/packages/<name>/delete', web._guard1(deletePackage))
-      ..post('/admin/packages/<name>/owner', web._guard1(transferOwnership));
+      ..post('/admin/packages/<name>/owner', web._guard1(transferOwnership))
+      ..get('/admin/webhooks', web._guard(webhooks))
+      ..post('/admin/webhooks', web._guard(createWebhook))
+      ..get('/admin/webhooks/<id>', web._guard1(webhook))
+      ..post('/admin/webhooks/<id>/enabled', web._guard1(setWebhookEnabled))
+      ..post('/admin/webhooks/<id>/secret', web._guard1(rotateWebhookSecret))
+      ..post('/admin/webhooks/<id>/delete', web._guard1(deleteWebhook))
+      ..post('/admin/webhooks/<id>/deliveries/<delivery>/redeliver',
+          web._guard2(redeliver));
   }
 
   Future<shelf.Response> audit(shelf.Request req) async {
@@ -93,4 +101,156 @@ class _AdminOpsUi {
           error: WebUi._sentence(error.message), status: error.statusCode);
     }
   }
+
+  // Webhooks.
+
+  WebhookService _webhooks() {
+    final hooks = app.webhooks;
+    if (hooks == null) {
+      throw const AccountException.notFound('This server has no webhooks.');
+    }
+    return hooks;
+  }
+
+  Future<shelf.Response> _webhooksPage(shelf.Request req, WebhookService hooks,
+          {String? notice,
+          String? error,
+          Map<String, Object> form = const {},
+          int status = HttpStatus.ok}) async =>
+      WebUi._html(
+          req,
+          adminWebhooksPage(web._context(req), await hooks.store.list(),
+              deliveryEnabled: hooks.config.enabled,
+              allowHttp: hooks.config.allowHttp,
+              notice: notice,
+              error: error,
+              form: form),
+          status: status);
+
+  Future<shelf.Response> webhooks(shelf.Request req) async {
+    web._administrator(req);
+    return _webhooksPage(req, _webhooks(),
+        notice: _doneMessages[req.url.queryParameters['done']]);
+  }
+
+  Future<shelf.Response> createWebhook(shelf.Request req) async {
+    final principal = web._administrator(req);
+    final hooks = _webhooks();
+    final form = await WebUi._form(req);
+    final events = form['events'] ?? const <String>[];
+    try {
+      final (hook, secret) = await hooks.create(
+          url: WebUi._field(form, 'url'),
+          events: events,
+          description: WebUi._field(form, 'description'),
+          by: app.auditContext(req, principal));
+      return await _webhookPage(req, hooks, hook.id,
+          secret: secret,
+          notice: 'The webhook was added.',
+          status: HttpStatus.created);
+    } on WebhookException catch (error) {
+      return _webhooksPage(req, hooks,
+          error: WebUi._sentence(error.message),
+          status: error.statusCode,
+          form: {
+            if (WebUi._field(form, 'url') case final url?) 'url': url,
+            'events': events,
+            if (WebUi._field(form, 'description') case final text?)
+              'description': text,
+          });
+    }
+  }
+
+  Future<shelf.Response> _webhookPage(
+      shelf.Request req, WebhookService hooks, String id,
+      {String? secret,
+      String? notice,
+      String? error,
+      int status = HttpStatus.ok}) async {
+    final hook = await hooks.store.find(id);
+    if (hook == null) {
+      return web._notFoundPage(req, 'There is no such webhook.');
+    }
+    return WebUi._html(
+        req,
+        adminWebhookPage(
+            web._context(req), hook, await hooks.store.deliveries(id),
+            secret: secret, notice: notice, error: error),
+        status: status);
+  }
+
+  Future<shelf.Response> webhook(shelf.Request req, String id) async {
+    web._administrator(req);
+    return _webhookPage(req, _webhooks(), id,
+        notice: _doneMessages[req.url.queryParameters['done']]);
+  }
+
+  /// Runs [change] of the webhook [id] and goes back to its page.
+  Future<shelf.Response> _changingWebhook(
+      shelf.Request req,
+      String id,
+      Future<String> Function(
+              WebhookService, AuditContext, Map<String, List<String>>)
+          change) async {
+    final principal = web._administrator(req);
+    final hooks = _webhooks();
+    final form = await WebUi._form(req);
+    try {
+      final done = await change(hooks, app.auditContext(req, principal), form);
+      return WebUi._redirect('${webhookHref(id)}?done=$done');
+    } on WebhookException catch (error) {
+      if (error.statusCode == HttpStatus.notFound &&
+          await hooks.store.find(id) == null) {
+        return web._notFoundPage(req, 'There is no such webhook.');
+      }
+      return _webhookPage(req, hooks, id,
+          error: WebUi._sentence(error.message), status: error.statusCode);
+    }
+  }
+
+  Future<shelf.Response> setWebhookEnabled(shelf.Request req, String id) =>
+      _changingWebhook(req, id, (hooks, by, form) async {
+        final enabled = switch (WebUi._field(form, 'enabled')) {
+          'true' => true,
+          'false' => false,
+          _ => throw const WebhookException.invalid(
+              'enabled must be true or false'),
+        };
+        await hooks.update(id, enabled: enabled, by: by);
+        return 'webhook-updated';
+      });
+
+  Future<shelf.Response> rotateWebhookSecret(
+      shelf.Request req, String id) async {
+    final principal = web._administrator(req);
+    final hooks = _webhooks();
+    await WebUi._form(req);
+    try {
+      final secret =
+          await hooks.rotateSecret(id, by: app.auditContext(req, principal));
+      return await _webhookPage(req, hooks, id,
+          secret: secret, notice: 'The secret was replaced.');
+    } on WebhookException {
+      return web._notFoundPage(req, 'There is no such webhook.');
+    }
+  }
+
+  Future<shelf.Response> deleteWebhook(shelf.Request req, String id) async {
+    final principal = web._administrator(req);
+    final hooks = _webhooks();
+    await WebUi._form(req);
+    try {
+      await hooks.delete(id, by: app.auditContext(req, principal));
+    } on WebhookException {
+      return web._notFoundPage(req, 'There is no such webhook.');
+    }
+    return WebUi._redirect('/admin/webhooks?done=webhook-deleted');
+  }
+
+  Future<shelf.Response> redeliver(
+          shelf.Request req, String id, String delivery) =>
+      _changingWebhook(req, id, (hooks, by, form) async {
+        await hooks.redeliver(id, delivery, by: by);
+        return 'redelivery-queued';
+      });
 }

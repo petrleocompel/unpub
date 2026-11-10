@@ -23,6 +23,8 @@ import 'store/package_store_factory.dart';
 import 'store/temporary_reclaimer.dart';
 import 'store/upstream_cache_store.dart';
 import 'upstream/upstream_proxy.dart';
+import 'webhooks/webhook_service.dart';
+import 'webhooks/webhook_store.dart';
 
 final _log = Logger('unpub.server');
 
@@ -36,9 +38,11 @@ class UnpubServer {
   final Db _db;
   final UpstreamProxy? _upstreamProxy;
   final TemporaryReclaimer _reclaimer;
+  final WebhookService _webhooks;
   Future<void>? _stopping;
 
-  UnpubServer._(this._http, this._db, this._upstreamProxy, this._reclaimer);
+  UnpubServer._(this._http, this._db, this._upstreamProxy, this._reclaimer,
+      this._webhooks);
 
   int get port => _http.port;
 
@@ -70,6 +74,10 @@ class UnpubServer {
       await audit.ensureIndexes(retention: config.audit.retention);
       await metaStore.ensureIndexes();
       await upstreamCache.ensureIndexes();
+      final webhookStore = WebhookStore(db);
+      await webhookStore.ensureIndexes(retention: config.webhooks.retention);
+      final webhooks =
+          WebhookService(webhookStore, config: config.webhooks, audit: audit);
       final service = AccountService(accounts, audit: audit);
       await service.bootstrapAdmin(config.auth.admin);
       await accounts.reconcileAdminSet(DateTime.now());
@@ -112,6 +120,7 @@ class UnpubServer {
           trustForwardedFor: config.server.trustForwardedFor,
         ),
         auditStore: audit,
+        webhooks: webhooks,
         trustForwardedFor: config.server.trustForwardedFor,
         upstream: config.upstream.url.toString(),
         upstreamProxy: upstreamProxy,
@@ -123,7 +132,8 @@ class UnpubServer {
       final reclaimer = TemporaryReclaimer(packageStore,
           references: MongoArchiveReferences(db))
         ..start();
-      return UnpubServer._(http, db, upstreamProxy, reclaimer);
+      webhooks.start();
+      return UnpubServer._(http, db, upstreamProxy, reclaimer, webhooks);
     } catch (_) {
       await db.close().catchError((Object _) {});
       rethrow;
@@ -162,6 +172,9 @@ class UnpubServer {
     }
     _upstreamProxy?.close();
     _reclaimer.stop();
+    await _webhooks.stop().timeout(_drainTimeout, onTimeout: () {
+      _log.warning('dropping webhook deliveries still running');
+    });
     await _db.close();
     _log.info('stopped');
   }

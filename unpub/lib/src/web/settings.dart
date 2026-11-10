@@ -87,6 +87,16 @@ Map<String, Map<String, String>> settingsOverview(Config config) {
           ? '0 (kept forever)'
           : '${config.audit.retentionDays}',
     },
+    'webhooks': {
+      'enabled': '${config.webhooks.enabled}',
+      'timeout': _duration(config.webhooks.timeout),
+      'maxAttempts': '${config.webhooks.maxAttempts}',
+      'allowHttp': '${config.webhooks.allowHttp}',
+      'allowPrivateNetworks': '${config.webhooks.allowPrivateNetworks}',
+      'retentionDays': config.webhooks.retentionDays == 0
+          ? '0 (kept forever)'
+          : '${config.webhooks.retentionDays}',
+    },
     'logging': {
       'level': config.logging.level.name,
       'format': config.logging.format.name,

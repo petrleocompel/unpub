@@ -13,6 +13,7 @@ Html _adminNav(PageContext context) => el('nav', {
         for (final (href, label) in const [
           ('/admin/users', 'Users'),
           ('/admin/packages', 'Packages'),
+          ('/admin/webhooks', 'Webhooks'),
           ('/admin/audit', 'Audit log'),
           ('/admin/settings', 'Settings'),
         ])
