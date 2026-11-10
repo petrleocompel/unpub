@@ -134,8 +134,13 @@ Html _filters(PackageListRequest request) => el('form', {
       el('label', const {}, [
         'Sort by',
         el('select', {
-          'name': 'sort'
+          'name': 'sort',
+          'id': 'search-sort',
         }, [
+          // Only a search has a relevance, which is then the default.
+          if (request.query != null)
+            _option('relevance', 'Relevance',
+                request.sort == PackageSort.relevance),
           _option(
               'downloads', 'Downloads', request.sort == PackageSort.downloads),
           _option('updated', 'Recently updated',

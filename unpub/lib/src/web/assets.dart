@@ -226,7 +226,31 @@ const _js = r'''
   if (!form || !results || !window.fetch) return;
   var timer = null;
   var latest = 0;
+  var query = form.elements.namedItem('q');
+  var sort = document.getElementById('search-sort');
+  // A sort other than the default was chosen, and stays when typing.
+  var sortChosen = !!sort && !!query &&
+      sort.value !== (query.value.trim() ? 'relevance' : 'downloads');
+  if (sort) sort.addEventListener('change', function () { sortChosen = true; });
+  // Relevance is only offered, and the default, while there is a query.
+  function syncSort() {
+    if (!sort || !query) return;
+    var relevance = sort.querySelector('option[value="relevance"]');
+    if (query.value.trim()) {
+      if (relevance) return;
+      relevance = document.createElement('option');
+      relevance.value = 'relevance';
+      relevance.textContent = 'Relevance';
+      sort.insertBefore(relevance, sort.firstChild);
+      if (!sortChosen) sort.value = 'relevance';
+    } else if (relevance) {
+      var selected = relevance.selected;
+      sort.removeChild(relevance);
+      if (selected) sort.value = 'downloads';
+    }
+  }
   function refresh() {
+    syncSort();
     var params = new URLSearchParams(new FormData(form));
     params.delete('page');
     var url = form.getAttribute('action') + '?' + params.toString();

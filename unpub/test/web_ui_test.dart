@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:html/parser.dart' as html_parser;
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
@@ -458,6 +459,51 @@ void main() {
         expect(result.count, 1);
         expect(result.packages, isEmpty);
       }
+    });
+
+    test('offers the relevance sort only with a search', () async {
+      await publish('alpha', '1.0.0');
+      List<(String, bool)> sortOptions(Page page) => [
+            for (final option in html_parser
+                .parse(page.body)
+                .querySelectorAll('select[name="sort"] option'))
+              (
+                option.attributes['value']!,
+                option.attributes.containsKey('selected')
+              ),
+          ];
+
+      final searched = await fetch('GET', '/packages?q=alpha');
+      expect(sortOptions(searched), [
+        ('relevance', true),
+        ('downloads', false),
+        ('updated', false),
+        ('name', false),
+      ]);
+      final byName = await fetch('GET', '/packages?q=alpha&sort=name');
+      expect(sortOptions(byName).first, ('relevance', false));
+      expect(sortOptions(byName).last, ('name', true));
+      expect(
+          sortOptions(
+              await fetch('GET', '/packages?q=alpha&sort=relevance&page=2')),
+          contains(('relevance', true)));
+
+      for (final path in ['/packages', '/packages?sort=relevance', '/']) {
+        final page = await fetch('GET', path);
+        expect(page.status, HttpStatus.ok, reason: path);
+        expect(listed(page), ['alpha'], reason: path);
+        expect(sortOptions(page), [
+          ('downloads', true),
+          ('updated', false),
+          ('name', false),
+        ]);
+      }
+      // A stale relevance sort without a search is the default one, left
+      // out of the links.
+      await publish('beta', '1.0.0');
+      final stale = await fetch('GET', '/packages?sort=relevance&size=1');
+      expect(stale.body, contains('href="/packages?size=1&amp;page=2"'));
+      expect(stale.body, isNot(contains('sort=relevance')));
     });
 
     test('answers a partial list for search as you type', () async {
