@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import * as f from '../fixtures'
@@ -28,12 +28,12 @@ describe('login', () => {
     await user.type(screen.getByLabelText('Password'), 'wrong')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('The email or the password is wrong.')
+    expect(alert).toHaveTextContent('The email or the password is not right.')
     expect(screen.getByLabelText('Password')).toHaveValue('')
     for (const field of [screen.getByLabelText('Email'), screen.getByLabelText('Password')]) {
       expect(field).toHaveAttribute('aria-invalid', 'true')
       expect(field).toHaveAttribute('aria-errormessage', alert.id)
-      expect(field).toHaveAccessibleDescription('The email or the password is wrong.')
+      expect(field).toHaveAccessibleDescription('The email or the password is not right.')
     }
 
     await user.type(screen.getByLabelText('Password'), 'right-password')
@@ -54,9 +54,21 @@ describe('login', () => {
     await user.type(await screen.findByLabelText('Email'), 'a@b.example')
     await user.type(screen.getByLabelText('Password'), 'whatever1')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Too many failed attempts. Try again in 2 minutes.',
-    )
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Too many attempts.')
+    expect(within(alert).getByText('Try again in 2 minutes.')).toHaveClass('sr-only')
+    expect(within(alert).getByText(/^Try again in [12]:\d\d\.$/)).toHaveAttribute('aria-hidden')
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeDisabled()
+  })
+
+  it('shows and hides the password', async () => {
+    const { user } = renderApp('/login')
+    const password = await screen.findByLabelText('Password')
+    expect(password).toHaveAttribute('type', 'password')
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(password).toHaveAttribute('type', 'text')
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(password).toHaveAttribute('type', 'password')
   })
 
   it('ignores a next that leaves the site', async () => {
@@ -205,7 +217,7 @@ describe('private registry', () => {
     const { router } = renderApp('/packages/my_company_core', { config: privateConfig })
     expect(await screen.findByRole('heading', { name: 'Log in to unpub' })).toBeInTheDocument()
     expect(where(router)).toBe('/login?next=%2Fpackages%2Fmy_company_core')
-    expect(screen.getByText(/This registry is private/)).toBeInTheDocument()
+    expect(screen.getByText(/is a private registry/)).toBeInTheDocument()
     expect(screen.queryByRole('searchbox')).toBeNull()
   })
 

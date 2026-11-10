@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { CircleAlert, Clock } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
@@ -7,15 +7,37 @@ import { cn } from '@/lib/utils'
  * The error of a form, announced when it appears. Fields it is about point to
  * its [id] with [invalidField].
  */
-export function FormError({ message, id }: { message: string | null | undefined; id: string }) {
+export function FormError({
+  message,
+  id,
+  tone = 'error',
+}: {
+  message: ReactNode
+  id: string
+  /** 'warning' for a wait rather than a mistake, as a rate limit. */
+  tone?: 'error' | 'warning'
+}) {
   if (!message) return null
+  const Icon = tone === 'warning' ? Clock : CircleAlert
   return (
     <p
       id={id}
       role="alert"
-      className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-[color-mix(in_oklab,var(--destructive)_7%,var(--card))] px-3.5 py-3 text-[0.84375rem] leading-[1.3125rem]"
+      className={cn(
+        'flex items-start gap-3 rounded-lg border px-3.5 py-3 text-[0.84375rem] leading-[1.3125rem] [&_b]:font-semibold',
+        tone === 'error' &&
+          'border-destructive/40 bg-[color-mix(in_oklab,var(--destructive)_7%,var(--card))]',
+        tone === 'warning' &&
+          'border-warning/45 bg-[color-mix(in_oklab,var(--warning)_9%,var(--card))]',
+      )}
     >
-      <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <Icon
+        aria-hidden
+        className={cn(
+          'mt-0.5 size-4 shrink-0',
+          tone === 'error' ? 'text-destructive' : 'text-warning',
+        )}
+      />
       <span>{message}</span>
     </p>
   )
