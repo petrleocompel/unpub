@@ -122,6 +122,27 @@ describe('package page', () => {
     expect(within(table).queryByRole('link', { name: 'Show' })).not.toBeInTheDocument()
   })
 
+  it('gives the token command of a private registry a copy button', async () => {
+    packageHandlers()
+    const { user } = renderApp('/packages/my_company_core?tab=install', {
+      me: f.me(f.user()),
+      config: f.config({ readAccess: 'authenticated' }),
+    })
+    const note = await screen.findByRole('note')
+    expect(note).toHaveTextContent('Private registry.')
+    expect(within(note).getByText('dart pub token add https://pub.example.com')).toBeInTheDocument()
+    await user.click(within(note).getByRole('button', { name: 'Copy the token command' }))
+    // The clipboard of user-event, without the "$ " of the prompt.
+    expect(await navigator.clipboard.readText()).toBe('dart pub token add https://pub.example.com')
+  })
+
+  it('shows no token command on a public registry', async () => {
+    packageHandlers()
+    renderApp('/packages/my_company_core?tab=install')
+    await screen.findByRole('tab', { name: 'Install', selected: true })
+    expect(screen.queryByRole('button', { name: 'Copy the token command' })).toBeNull()
+  })
+
   it('goes back to the previous tab', async () => {
     packageHandlers()
     const { user, router } = renderApp('/packages/my_company_core')

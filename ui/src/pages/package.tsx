@@ -551,14 +551,17 @@ function InstallTab({ pkg }: { pkg: Package }) {
       {config.readAccess === 'authenticated' && (
         <Alert variant="info" role="note">
           <KeyRound aria-hidden />
-          <AlertDescription className="block">
-            <strong>Private registry.</strong> Tell <code className={inlineCode}>dart pub</code>{' '}
-            your token once: <code className={inlineCode}>dart pub token add {url}</code>.{' '}
-            {me ? 'Create a read token on your ' : 'Log in and create a read token on your '}
-            <Link to="/account" className={link}>
-              account page
-            </Link>
-            .
+          <AlertDescription className="w-full justify-items-stretch gap-2.5">
+            <p>
+              <strong>Private registry.</strong> Tell <code className={inlineCode}>dart pub</code>{' '}
+              your token once.{' '}
+              {me ? 'Create a read token on your ' : 'Log in and create a read token on your '}
+              <Link to="/account" className={link}>
+                account page
+              </Link>
+              , then run:
+            </p>
+            <CodeBlock prompt code={`dart pub token add ${url}`} label="the token command" />
           </AlertDescription>
         </Alert>
       )}
