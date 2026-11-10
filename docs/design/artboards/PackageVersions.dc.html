@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Package page, versions</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 1420px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Package · Versions, retracted version, Actions menu (administrator) <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><a href="Package.dc.html">my_company_core</a><i class="i i-chevron-right i-xs"></i><span class="fg">1.3.1</span></nav>
+<div class="flex wrap items-start justify-between gap-3">
+<div class="pkg-title"><h1>my_company_core</h1><span class="ver">1.3.1</span></div>
+<div class="menu-anchor">
+<button class="btn btn-outline btn-sm" type="button" aria-haspopup="menu" aria-expanded="true">Actions<i class="i i-chevron-down i-sm"></i></button>
+<div class="menu menu-pop" role="menu" aria-label="Package actions" style="width: 260px;">
+<div class="menu-l">Version 1.3.1</div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-undo"></i>Restore this version</button>
+<div class="menu-sep"></div>
+<div class="menu-l">Package</div>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-archive"></i>Discontinue…</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-users"></i>Manage uploaders…</button>
+<div class="menu-sep"></div>
+<div class="menu-l flex items-center gap-1"><i class="i i-shield-check i-xs"></i>Administrator</div>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-transfer"></i>Transfer ownership…</button>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-trash"></i>Delete version 1.3.1…</button>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-trash"></i>Delete package…</button>
+</div>
+</div>
+</div>
+<div class="pkg-sub">
+<span>Published <time datetime="2026-09-02T14:40:00Z" title="2 Sep 2026, 16:40 CEST" class="fg">2 months ago</time></span><span class="sep" aria-hidden="true"></span>
+<span>by <a class="fg ulink" href="#">jane.doe@company.example</a></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">48 213</b> downloads</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk">Dart</span><span class="badge danger"><i class="i i-ban"></i>Retracted</span></div>
+<div class="alert danger" role="note"><i class="i i-ban"></i><div><b>Version 1.3.1 is retracted.</b> <code class="inl">dart pub get</code> no longer picks it for new resolutions; lockfiles that already use it keep working. The latest version is <a class="link" href="Package.dc.html">1.4.0</a>.</div></div>
+<nav class="tabs" aria-label="Package sections" style="border-bottom: 0;">
+<a href="Package.dc.html">README</a>
+<a href="#">Changelog</a>
+<a href="#" aria-current="page">Versions <span class="n">14</span></a>
+<a href="PackageInstall.dc.html">Install</a>
+<a href="PackageStats.dc.html">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container main col gap-4">
+<div class="flex wrap items-center justify-between gap-3">
+<h2 class="t-lg fw-6">14 versions</h2>
+<label class="flex items-center gap-2 t-sm"><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Show retracted versions"></button>Show retracted</label>
+</div>
+<div class="tbl-box">
+<table class="tbl sticky-first">
+<thead><tr><th aria-sort="descending">Version</th><th>Published</th><th>Uploader</th><th>Dart SDK</th><th>SHA-256</th><th><span class="sr-only">Archive</span></th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="9">
+<tr class="{{r.cls}}">
+<td><div class="flex items-center gap-2"><a class="link mono" href="#">{{r.v}}</a><sc-if value="{{r.latest}}" hint-placeholder-val="{{false}}"><span class="badge primary"><i class="i i-star"></i>Latest</span></sc-if><sc-if value="{{r.pre}}" hint-placeholder-val="{{false}}"><span class="badge"><i class="i i-flask"></i>Prerelease</span></sc-if><sc-if value="{{r.ret}}" hint-placeholder-val="{{false}}"><span class="badge danger"><i class="i i-ban"></i>Retracted</span></sc-if></div></td>
+<td title="{{r.abs}}">{{r.when}}</td>
+<td class="muted">{{r.by}}</td>
+<td class="mono t-xs muted">{{r.sdk}}</td>
+<td><span class="hash">{{r.hash}}<button type="button" aria-label="Copy the SHA-256 of {{r.v}}"><i class="i i-copy i-sm"></i></button></span></td>
+<td class="text-right"><a class="btn btn-ghost btn-icon btn-xs" href="#" aria-label="Download {{r.v}} archive"><i class="i i-download i-sm"></i></a></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<p class="hint">Dates are relative; hover or focus for the absolute time. The row of the version you are viewing is highlighted.</p>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":1420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const R = (v, when, abs, by, hash, o) => Object.assign({ v, when, abs, by, hash, sdk: '>=3.4.0 <4.0.0', cls: '', latest: false, pre: false, ret: false }, o || {});
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440' },
+        { label: '1440 · Dark', cls: 'w1440 dark' },
+        { label: '390 · Light', cls: 'w390' },
+        { label: '390 · Dark', cls: 'w390 dark' }
+      ],
+      rows: [
+        R('2.0.0-beta.3', '2 days ago', '2026-11-08 11:04', 'jane.doe', '3b1f0c9a7e42', { pre: true, sdk: '>=3.6.0 <4.0.0' }),
+        R('1.4.0', '3 days ago', '2026-11-07 09:12', 'jane.doe', '9f86d081884c', { latest: true }),
+        R('1.3.1', '2 months ago', '2026-09-02 14:40', 'jane.doe', 'e3b0c44298fc', { ret: true, cls: 'expanded' }),
+        R('1.3.0', '2 months ago', '2026-08-28 10:02', 'ada.lovelace', '2c26b46b68ff'),
+        R('1.2.2', '4 months ago', '2026-07-01 16:20', 'jane.doe', 'fcde2b2edba5'),
+        R('1.2.1', '5 months ago', '2026-06-11 08:45', 'jane.doe', '18ac3e7343f0'),
+        R('1.2.0', '6 months ago', '2026-05-04 12:30', 'ada.lovelace', '7d865e959b24'),
+        R('1.1.0', '9 months ago', '2026-02-14 09:00', 'ada.lovelace', 'a665a4592042', { sdk: '>=3.2.0 <4.0.0' }),
+        R('1.0.0+5', '1 year ago', '2025-10-30 15:15', 'ada.lovelace', 'b5bb9d8014a0', { sdk: '>=3.0.0 <4.0.0' })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -199,7 +199,7 @@ class AdminApiRoutes {
   }
 
   /// The effective configuration by section, as the settings page shows it,
-  /// with the environment variable of each key.
+  /// with the environment variable of each key and where its value came from.
   Future<shelf.Response> getSettings(shelf.Request req) async {
     final (_, refused) = administrator(req, reading: true);
     if (refused != null) return refused;
@@ -218,6 +218,7 @@ class AdminApiRoutes {
                     'key': '$section.$key',
                     'value': value,
                     'env': environmentVariableFor('$section.$key'),
+                    'source': config.sourceOf('$section.$key').label,
                   },
               ],
             },

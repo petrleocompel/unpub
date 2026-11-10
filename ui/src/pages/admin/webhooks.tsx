@@ -4,10 +4,11 @@ import { Link, useSearchParams } from 'react-router'
 import { errorMessage } from '@/api/client'
 import { useCreateWebhook, useUpdateWebhook, useWebhooks } from '@/api/queries'
 import { webhookEvents, type WebhookCreated, type WebhookEvent } from '@/api/types'
+import { Chip, Dot } from '@/components/dashboard/panel'
 import { Field, FormError } from '@/components/form'
 import { intParam, Pager } from '@/components/pager'
 import { SecretBox } from '@/components/secret-box'
-import { EmptyState, ErrorState, TableSkeleton } from '@/components/states'
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,15 +24,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
 import { formatNumber } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useTitle } from '@/lib/use-title'
@@ -42,12 +34,30 @@ export function EventChips({ events }: { events: WebhookEvent[] }) {
     <ul className="flex flex-wrap gap-1" aria-label="Events">
       {events.map((event) => (
         <li key={event}>
-          <Badge variant="secondary" className="font-mono font-normal">
-            {event}
-          </Badge>
+          <Chip>{event}</Chip>
         </li>
       ))}
     </ul>
+  )
+}
+
+/** The delivery counts of a webhook as three status badges. */
+export function DeliveryCounts({ counts }: { counts: Partial<Record<string, number>> }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <Badge variant="success">
+        <Dot tone="success" />
+        {formatNumber(counts.succeeded ?? 0)} delivered
+      </Badge>
+      <Badge variant="warning">
+        <Dot tone="warning" />
+        {formatNumber(counts.pending ?? 0)} pending
+      </Badge>
+      <Badge variant="danger">
+        <Dot tone="danger" />
+        {formatNumber(counts.failed ?? 0)} failed
+      </Badge>
+    </div>
   )
 }
 
@@ -64,11 +74,17 @@ export function WebhooksPage() {
     <>
       <AdminHeading
         title="Webhooks"
-        description="Tell CI or a chat bot when a package changes. Each delivery is signed with the secret of its webhook."
+        description={
+          <>
+            unpub POSTs a signed JSON event to each URL. Failed deliveries retry after 30 s, 2 min,
+            10 min, then hourly, up to <span className="font-mono">webhooks.maxAttempts</span>{' '}
+            attempts (5 by default).
+          </>
+        }
         actions={
-          <Button onClick={() => setCreating(true)}>
+          <Button size="sm" onClick={() => setCreating(true)}>
             <Plus aria-hidden />
-            Create webhook
+            New webhook
           </Button>
         }
       />
@@ -83,7 +99,7 @@ export function WebhooksPage() {
               Verify the <code className="font-mono">X-Unpub-Signature</code> header with it.{' '}
               <Link
                 to={`/admin/webhooks/${created.webhook.id}`}
-                className="text-primary underline underline-offset-4"
+                className="font-medium text-primary underline underline-offset-4"
               >
                 Open the webhook
               </Link>
@@ -97,7 +113,7 @@ export function WebhooksPage() {
           </SecretBox>
         )}
         {webhooks.data && !webhooks.data.enabled && (
-          <Alert>
+          <Alert variant="warning">
             <WebhookIcon aria-hidden />
             <AlertTitle>Deliveries are switched off</AlertTitle>
             <AlertDescription>
@@ -109,7 +125,7 @@ export function WebhooksPage() {
           </Alert>
         )}
         {webhooks.isPending ? (
-          <TableSkeleton columns={4} />
+          <ListSkeleton rows={3} label="Loading the webhooks" />
         ) : webhooks.isError ? (
           <ErrorState error={webhooks.error} onRetry={() => void webhooks.refetch()} />
         ) : webhooks.data.total === 0 ? (
@@ -119,71 +135,57 @@ export function WebhooksPage() {
           </EmptyState>
         ) : (
           <>
-            <Table containerClassName="rounded-lg border" stickyFirstColumn>
-              <caption className="sr-only">Webhooks</caption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">URL</TableHead>
-                  <TableHead scope="col">Events</TableHead>
-                  <TableHead scope="col">Deliveries</TableHead>
-                  <TableHead scope="col">Enabled</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {webhooks.data.items.map((webhook) => {
-                  const deliveries = webhook.deliveries
-                  return (
-                    <TableRow key={webhook.id}>
-                      <TableCell className="max-w-80">
-                        <Link
-                          to={`/admin/webhooks/${webhook.id}`}
-                          className="block truncate font-mono text-sm text-primary hover:underline"
-                        >
-                          {webhook.url}
-                        </Link>
-                        {webhook.description && (
-                          <p className="truncate text-xs text-muted-foreground">
-                            {webhook.description}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <EventChips events={webhook.events} />
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        <span>{formatNumber(deliveries.succeeded)} delivered</span>
-                        {' · '}
-                        <span>{formatNumber(deliveries.pending)} pending</span>
-                        {' · '}
-                        <span
-                          className={deliveries.failed ? 'font-medium text-destructive' : undefined}
-                        >
-                          {formatNumber(deliveries.failed)} failed
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={webhook.enabled}
-                          aria-label={`${webhook.enabled ? 'Disable' : 'Enable'} ${webhook.url}`}
-                          disabled={update.isPending}
-                          onCheckedChange={(enabled) =>
-                            update.mutate(
-                              { id: webhook.id, enabled },
-                              {
-                                onSuccess: () =>
-                                  toast.success(enabled ? 'Webhook enabled' : 'Webhook disabled'),
-                                onError: (error) =>
-                                  toast.error('The webhook was not changed', errorMessage(error)),
-                              },
-                            )
-                          }
-                        />
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <ul aria-label="Webhooks" className="divide-y rounded-lg border bg-card">
+              {webhooks.data.items.map((webhook) => (
+                <li
+                  key={webhook.id}
+                  className="grid gap-x-6 gap-y-3 px-4 py-3.5 hover:bg-muted/60 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5 sm:py-4"
+                >
+                  <div className="grid min-w-0 gap-1.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Link
+                        to={`/admin/webhooks/${webhook.id}`}
+                        className="truncate font-mono text-[0.8125rem] font-medium text-primary hover:underline"
+                      >
+                        {webhook.url}
+                      </Link>
+                      {!webhook.enabled && <Badge variant="outline">Paused</Badge>}
+                    </div>
+                    {webhook.description && (
+                      <p className="truncate text-[0.8125rem] text-muted-foreground">
+                        {webhook.description}
+                      </p>
+                    )}
+                    <EventChips events={webhook.events} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 sm:justify-end">
+                    <DeliveryCounts counts={webhook.deliveries} />
+                    <div className="flex items-center gap-2 text-[0.8125rem]">
+                      <Switch
+                        id={`enabled-${webhook.id}`}
+                        checked={webhook.enabled}
+                        aria-label={`${webhook.enabled ? 'Disable' : 'Enable'} ${webhook.url}`}
+                        disabled={update.isPending}
+                        onCheckedChange={(enabled) =>
+                          update.mutate(
+                            { id: webhook.id, enabled },
+                            {
+                              onSuccess: () =>
+                                toast.success(enabled ? 'Webhook enabled' : 'Webhook disabled'),
+                              onError: (error) =>
+                                toast.error('The webhook was not changed', errorMessage(error)),
+                            },
+                          )
+                        }
+                      />
+                      <span aria-hidden className="hidden sm:inline">
+                        Enabled
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
             <Pager
               page={webhooks.data.page}
               size={webhooks.data.size}
@@ -242,7 +244,22 @@ export function WebhookFields({
           value={url}
           aria-describedby={`${idPrefix}-url-hint`}
           onChange={(event) => setUrl(event.target.value)}
-          className="font-mono"
+          className="font-mono text-[0.8125rem] md:text-[0.8125rem]"
+        />
+      </Field>
+      <Field
+        id={`${idPrefix}-description`}
+        label={
+          <>
+            Description <span className="font-normal text-muted-foreground">(optional)</span>
+          </>
+        }
+      >
+        <Input
+          id={`${idPrefix}-description`}
+          maxLength={200}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
         />
       </Field>
       <fieldset className="grid gap-2">
@@ -269,14 +286,6 @@ export function WebhookFields({
           ))}
         </div>
       </fieldset>
-      <Field id={`${idPrefix}-description`} label="Description (optional)">
-        <Textarea
-          id={`${idPrefix}-description`}
-          rows={2}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </Field>
     </>
   )
 }
@@ -304,8 +313,8 @@ function CreateWebhookForm({ onDone }: { onDone: (created?: WebhookCreated) => v
   return (
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Create webhook</DialogTitle>
-        <DialogDescription>The signing secret is shown once, after creating.</DialogDescription>
+        <DialogTitle>New webhook</DialogTitle>
+        <DialogDescription>A signing secret is created with it and shown once.</DialogDescription>
       </DialogHeader>
       <WebhookFields
         idPrefix={id}

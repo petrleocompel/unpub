@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Account</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 2290px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Account · token just created <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for jane.doe@company.example"><span class="avatar">JD</span><span class="hide-sm">jane.doe@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Account</p>
+<nav aria-label="Account sections" class="col gap-1">
+<a href="#profile" aria-current="true"><i class="i i-user"></i>Profile</a>
+<a href="#password"><i class="i i-lock"></i>Password</a>
+<a href="#tokens"><i class="i i-key"></i>API tokens</a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-6" style="max-width: 1100px;">
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1>Account</h1><p>Your profile, your password and the tokens <code class="inl">dart pub</code> and CI use.</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+
+<section class="card" id="profile" aria-labelledby="h-profile-{{v.k}}">
+<div class="card-h"><h2 id="h-profile-{{v.k}}">Profile</h2></div>
+<div class="card-b flex wrap items-start gap-6">
+<span class="avatar lg">JD</span>
+<dl class="kv grow" style="max-width: 640px;">
+<dt>Email</dt><dd class="fw-5">jane.doe@company.example</dd>
+<dt>Display name</dt><dd>Jane Doe</dd>
+<dt>Role</dt><dd><span class="badge neutral">publisher</span></dd>
+<dt>This session</dt><dd class="flex wrap items-center gap-2"><span class="badge mono sq">read</span><span class="badge mono sq">publish</span><span class="t-xs muted">expires in 7 days</span></dd>
+</dl>
+</div>
+</section>
+
+<section class="card" id="password" aria-labelledby="h-pw-{{v.k}}">
+<div class="card-h"><h2 id="h-pw-{{v.k}}">Change password</h2></div>
+<form class="card-b grid gap-4 cols-1-sm" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+<div class="field"><label class="label" for="pw-cur-{{v.k}}">Current password</label><input class="input" id="pw-cur-{{v.k}}" type="password" autocomplete="current-password"></div>
+<div class="field"><label class="label" for="pw-new-{{v.k}}">New password</label><input class="input" id="pw-new-{{v.k}}" type="password" autocomplete="new-password"><p class="hint">At least 8 characters.</p></div>
+<div class="field"><label class="label" for="pw-rep-{{v.k}}">Repeat new password</label><input class="input" id="pw-rep-{{v.k}}" type="password" autocomplete="new-password"></div>
+</form>
+<div class="card-f" style="justify-content: space-between; align-items: center;"><p class="t-xs muted flex items-center gap-1"><i class="i i-info i-xs"></i>Saving logs out your other sessions.</p><button class="btn btn-primary btn-sm" type="submit">Change password</button></div>
+</section>
+
+<section class="card" id="tokens" aria-labelledby="h-tok-{{v.k}}">
+<div class="card-h"><div class="col"><h2 id="h-tok-{{v.k}}">API tokens</h2><p class="t-xs muted">For <code class="inl">dart pub</code>, CI and scripts. A token has your role at most.</p></div></div>
+<div class="card-b col gap-5">
+
+<div class="secret" role="status">
+<div class="flex items-start gap-3"><i class="i i-key t-warning" style="margin-top: 3px;"></i><div class="col gap-1"><p class="fw-6">Token “laptop-pub” created. Copy it now.</p><p class="t-sm muted">This is the only time unpub shows it. Leaving the page hides it for good.</p></div></div>
+<div class="secret-v"><span>unpub_pat_7Hq2v9KxR4mT1sLw8eZc3NbY6uPfA0dG</span><button class="btn btn-primary btn-sm" type="button"><i class="i i-copy"></i>Copy</button></div>
+<div class="col gap-2"><p class="t-sm">Then tell <code class="inl">dart pub</code> about it and paste the token when asked:</p>
+<div class="code"><pre><span class="pr">$ </span>dart pub token add https://pub.company.example</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy command"><i class="i i-copy"></i></button></div></div>
+</div>
+
+<form class="grid gap-4 items-end cols-1-sm" style="grid-template-columns: minmax(0, 1.2fr) auto auto auto;" aria-label="New token">
+<div class="field"><label class="label" for="tok-name-{{v.k}}">Name</label><input class="input" id="tok-name-{{v.k}}" placeholder="e.g. github-actions"></div>
+<fieldset class="field" style="border: 0; padding: 0; margin: 0;"><legend class="label" style="margin-bottom: 6px;">Scopes</legend><div class="flex gap-4" style="height: 36px; align-items: center;"><label class="check"><input type="checkbox" checked><span class="mono">read</span></label><label class="check"><input type="checkbox"><span class="mono">publish</span></label></div></fieldset>
+<div class="field"><span class="label" id="exp-{{v.k}}">Expires</span><div class="seg" role="group" aria-labelledby="exp-{{v.k}}"><button type="button" aria-pressed="false">30 d</button><button type="button" aria-pressed="true">90 d</button><button type="button" aria-pressed="false">1 y</button><button type="button" aria-pressed="false">Never</button></div></div>
+<button class="btn btn-primary" type="submit"><i class="i i-plus"></i>Create token</button>
+</form>
+
+<div class="tbl-box">
+<table class="tbl sticky-first">
+<thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Created</th><th>Last used</th><th>Expires</th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+<tr class="expanded"><td class="fw-5">laptop-pub</td><td class="mono t-xs muted">unpub_pat_7Hq2…</td><td><div class="flex gap-1"><span class="badge mono sq">read</span><span class="badge mono sq">publish</span></div></td><td>just now</td><td class="muted">never</td><td title="2027-02-08">in 90 days</td><td class="text-right"><button class="btn btn-danger-outline btn-xs" type="button">Revoke</button></td></tr>
+<tr><td class="fw-5">github-actions</td><td class="mono t-xs muted">unpub_pat_Kd81…</td><td><span class="badge mono sq">read</span></td><td title="2026-03-02">8 months ago</td><td>2 hours ago</td><td title="2027-03-02">in 4 months</td><td class="text-right"><button class="btn btn-danger-outline btn-xs" type="button">Revoke</button></td></tr>
+<tr><td class="fw-5">release-script</td><td class="mono t-xs muted">unpub_pat_p0Zx…</td><td><div class="flex gap-1"><span class="badge mono sq">read</span><span class="badge mono sq">publish</span></div></td><td>1 year ago</td><td>3 days ago</td><td class="muted">never</td><td class="text-right"><button class="btn btn-danger-outline btn-xs" type="button">Revoke</button></td></tr>
+<tr class="muted-row"><td class="fw-5">old-macbook</td><td class="mono t-xs">unpub_pat_3fQe…</td><td><span class="badge mono sq">read</span></td><td>1 year ago</td><td>5 months ago</td><td><span class="badge"><i class="i i-clock"></i>Expired</span></td><td class="text-right"><button class="btn btn-ghost btn-xs" type="button">Remove</button></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":2290}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440', k: 'a' },
+        { label: '1440 · Dark', cls: 'w1440 dark', k: 'b' },
+        { label: '390 · Light', cls: 'w390', k: 'c' },
+        { label: '390 · Dark', cls: 'w390 dark', k: 'd' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import { Toaster } from '@/components/toaster'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { toast } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 import { Footer } from './footer'
 import { Header } from './header'
 import { OfflineBanner } from './offline-banner'
@@ -17,11 +18,11 @@ export function ShellSkeleton() {
   return (
     <div aria-busy="true" aria-live="polite" className="min-h-screen">
       <span className="sr-only">Loading unpub…</span>
-      <div className="flex h-14 items-center gap-6 border-b px-4">
+      <div className="mx-auto flex h-15 max-w-7xl items-center gap-6 border-b px-4 sm:px-6">
         <Skeleton className="h-7 w-24" />
-        <Skeleton className="h-9 max-w-md flex-1" />
+        <Skeleton className="h-9.5 max-w-[520px] flex-1" />
       </div>
-      <div className="mx-auto grid max-w-7xl gap-4 p-4">
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-8 sm:px-6">
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-24 w-full" />
@@ -140,9 +141,10 @@ export function Root() {
         >
           Skip to content
         </a>
-        <Header />
+        {/* Above the header, as board 02 draws it. */}
         <OfflineBanner />
-        <div className="flex-1">
+        <Header />
+        <div className="flex flex-1 flex-col">
           <Suspense
             fallback={
               <div className="mx-auto max-w-7xl p-4">
@@ -160,13 +162,33 @@ export function Root() {
   )
 }
 
-/** A page container: the main landmark with the usual width. */
-export function Page({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
+/**
+ * A page container: the main landmark. [wide] is the 1280 px container of
+ * the public pages, the default a narrower column; [full] leaves the width
+ * and the padding to the page, for bands that span the window.
+ */
+export function Page({
+  children,
+  wide = false,
+  full = false,
+  className,
+}: {
+  children: React.ReactNode
+  wide?: boolean
+  full?: boolean
+  className?: string
+}) {
   return (
     <main
       id="main"
       tabIndex={-1}
-      className={`mx-auto w-full px-4 py-6 outline-none ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}
+      className={cn(
+        'w-full outline-none',
+        !full && 'mx-auto px-4 pt-5 pb-10 sm:px-6 sm:pt-8 sm:pb-14',
+        !full && (wide ? 'max-w-7xl' : 'max-w-5xl'),
+        full && 'flex flex-1 flex-col',
+        className,
+      )}
     >
       {children}
     </main>

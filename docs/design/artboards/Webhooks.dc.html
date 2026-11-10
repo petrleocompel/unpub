@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin webhooks</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 1410px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Admin · Webhooks, create dialog open <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app" style="position: relative;">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="#" aria-current="page"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Webhooks</h1><p>unpub POSTs a signed JSON event to each URL. Failed deliveries retry after 30 s, 2 min, 10 min, then hourly, 5 attempts in all.</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-primary btn-sm" type="button"><i class="i i-plus"></i>New webhook</button></div>
+</div>
+
+<ul class="pkg-list">
+<sc-for list="{{hooks}}" as="h" hint-placeholder-count="4">
+<li class="pkg-row" style="grid-template-columns: minmax(0, 1fr) auto; align-items: center;">
+<div class="col gap-1h min-w-0">
+<div class="flex items-center gap-2 min-w-0"><a class="link mono t-sm truncate" href="Webhook.dc.html">{{h.url}}</a><sc-if value="{{h.off}}" hint-placeholder-val="{{false}}"><span class="badge">Paused</span></sc-if></div>
+<p class="t-sm muted">{{h.desc}}</p>
+<div class="flex wrap gap-1"><sc-for list="{{h.events}}" as="e" hint-placeholder-count="2"><span class="chip">{{e}}</span></sc-for></div>
+</div>
+<div class="flex wrap items-center justify-end gap-4">
+<div class="flex gap-1h t-xs">
+<span class="badge success"><span class="dot"></span>{{h.ok}} delivered</span>
+<span class="badge warning"><span class="dot"></span>{{h.pending}} pending</span>
+<span class="badge danger"><span class="dot"></span>{{h.failed}} failed</span>
+</div>
+<label class="flex items-center gap-2 t-sm"><button class="switch" type="button" role="switch" aria-checked="{{h.on}}" aria-label="Enabled"></button><span class="hide-sm">Enabled</span></label>
+</div>
+</li>
+</sc-for>
+</ul>
+</main>
+</div>
+
+<div class="modal">
+<div class="scrim"></div>
+<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="nw-h-{{v.k}}">
+<button class="btn btn-ghost btn-icon btn-sm close" type="button" aria-label="Close"><i class="i i-x"></i></button>
+<div class="dialog-h"><h2 id="nw-h-{{v.k}}">New webhook</h2><p>A signing secret is created with it and shown once.</p></div>
+<form class="dialog-b">
+<div class="field"><label class="label" for="nw-url-{{v.k}}">Payload URL</label><input class="input focused mono t-sm" id="nw-url-{{v.k}}" type="url" value="https://ci.company.example/hooks/unpub"></div>
+<div class="field"><label class="label" for="nw-desc-{{v.k}}">Description <span class="muted fw-4">(optional)</span></label><input class="input" id="nw-desc-{{v.k}}" value="Trigger app builds on new versions"></div>
+<fieldset style="border: 0; padding: 0; margin: 0;" class="col gap-2"><legend class="label" style="margin-bottom: 8px;">Events</legend>
+<div class="grid gap-2 cols-1-sm" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+<label class="check"><input type="checkbox" checked><span class="mono t-xs">package.published</span></label>
+<label class="check"><input type="checkbox" checked><span class="mono t-xs">version.retracted</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">version.unretracted</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">version.deleted</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">package.discontinued</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">package.continued</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">package.deleted</span></label>
+</div>
+</fieldset>
+</form>
+<div class="dialog-f"><button class="btn btn-outline" type="button">Cancel</button><button class="btn btn-primary" type="submit">Create webhook</button></div>
+</div>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":1410}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440', k: 'a' },
+        { label: '1440 · Dark', cls: 'w1440 dark', k: 'b' },
+        { label: '390 · Light', cls: 'w390', k: 'c' },
+        { label: '390 · Dark', cls: 'w390 dark', k: 'd' }
+      ],
+      hooks: [
+        { url: 'https://hooks.slack.com/services/T04/B07/xyz', desc: '#mobile-releases channel', events: ['package.published', 'version.retracted'], ok: 412, pending: 1, failed: 3, on: 'true', off: false },
+        { url: 'https://ci.company.example/hooks/unpub', desc: 'Rebuild apps that depend on a new version', events: ['package.published'], ok: 1208, pending: 0, failed: 0, on: 'true', off: false },
+        { url: 'https://audit-sink.company.example/ingest', desc: 'Security event archive', events: ['package.deleted', 'version.deleted', 'version.retracted'], ok: 77, pending: 0, failed: 0, on: 'true', off: false },
+        { url: 'https://old-jenkins.company.example/generic-webhook', desc: 'Retired build server', events: ['package.published'], ok: 2930, pending: 0, failed: 0, on: 'false', off: true }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

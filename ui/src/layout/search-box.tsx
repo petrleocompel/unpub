@@ -102,7 +102,7 @@ export function SearchBox({ className }: { className?: string }) {
       </label>
       <Search
         aria-hidden
-        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute top-1/2 left-[11px] size-4 -translate-y-1/2 text-muted-foreground"
       />
       <Input
         ref={input}
@@ -113,7 +113,7 @@ export function SearchBox({ className }: { className?: string }) {
         autoComplete="off"
         spellCheck={false}
         aria-keyshortcuts="/"
-        className="pr-14 pl-8 [&::-webkit-search-cancel-button]:hidden"
+        className="h-9.5 rounded-lg bg-surface pr-10 pl-9 shadow-none [&::-webkit-search-cancel-button]:hidden"
         onChange={(event) => {
           const next = event.target.value
           setValue(next)
@@ -137,7 +137,7 @@ export function SearchBox({ className }: { className?: string }) {
         <button
           type="button"
           aria-label="Clear the search"
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:text-foreground"
+          className="absolute top-1/2 right-1.5 inline-grid size-6.5 -translate-y-1/2 place-items-center rounded-[5px] text-muted-foreground hover:bg-accent hover:text-foreground"
           onClick={() => {
             window.clearTimeout(timer.current)
             setValue('')
@@ -150,7 +150,7 @@ export function SearchBox({ className }: { className?: string }) {
       ) : (
         <kbd
           aria-hidden
-          className="pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground sm:block"
+          className="pointer-events-none absolute top-1/2 right-[9px] hidden h-5 min-w-5 -translate-y-1/2 place-items-center rounded border bg-background px-[5px] font-mono text-[0.6875rem] text-muted-foreground sm:inline-grid"
         >
           /
         </kbd>

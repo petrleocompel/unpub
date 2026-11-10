@@ -2,11 +2,12 @@ import { useState } from 'react'
 import {
   Archive,
   ArchiveRestore,
-  ChevronDown,
+  ArrowLeftRight,
   Ban,
-  RotateCcw,
+  ChevronDown,
+  ShieldCheck,
   Trash2,
-  UserCog,
+  Undo2,
   Users,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -52,41 +54,56 @@ export function PackageActionsMenu({ pkg }: { pkg: Package }) {
             <ChevronDown aria-hidden />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuLabel className="font-mono text-xs font-normal text-muted-foreground">
-            {pkg.name} {pkg.version}
-          </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => setDialog('retract')}>
-            {pkg.retracted ? <RotateCcw aria-hidden /> : <Ban aria-hidden />}
-            {pkg.retracted ? 'Restore this version…' : 'Retract this version…'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDialog('discontinue')}>
-            {pkg.isDiscontinued ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
-            {pkg.isDiscontinued ? 'Continue the package…' : 'Discontinue the package…'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDialog('uploaders')}>
-            <Users aria-hidden />
-            Manage uploaders…
-          </DropdownMenuItem>
+        <DropdownMenuContent align="end" className="w-65" aria-label="Package actions">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              Version <span className="font-mono">{pkg.version}</span>
+            </DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => setDialog('retract')}>
+              {pkg.retracted ? <Undo2 aria-hidden /> : <Ban aria-hidden />}
+              {pkg.retracted ? 'Restore this version…' : 'Retract this version…'}
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Package</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => setDialog('discontinue')}>
+              {pkg.isDiscontinued ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
+              {pkg.isDiscontinued ? 'Continue…' : 'Discontinue…'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setDialog('uploaders')}>
+              <Users aria-hidden />
+              Manage uploaders…
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
           {isAdmin && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setDialog('transfer')}>
-                <UserCog aria-hidden />
-                Transfer ownership…
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={pkg.versions.length < 2}
-                onSelect={() => setDialog('delete-version')}
-              >
-                <Trash2 aria-hidden />
-                Delete this version…
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={() => setDialog('delete-package')}>
-                <Trash2 aria-hidden />
-                Delete the package…
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>
+                  <ShieldCheck aria-hidden />
+                  Administrator
+                </DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setDialog('transfer')}>
+                  <ArrowLeftRight aria-hidden />
+                  Transfer ownership…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={pkg.versions.length < 2}
+                  onSelect={() => setDialog('delete-version')}
+                >
+                  <Trash2 aria-hidden />
+                  Delete version {pkg.version}…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setDialog('delete-package')}
+                >
+                  <Trash2 aria-hidden />
+                  Delete package…
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </>
           )}
         </DropdownMenuContent>

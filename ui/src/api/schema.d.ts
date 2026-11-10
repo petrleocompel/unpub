@@ -1356,6 +1356,11 @@ export interface components {
            * @example UNPUB_SERVER_PUBLIC_URL
            */
           env: string
+          /**
+           * @description Where the value came from: the built-in default, the YAML file, an `UNPUB_*` environment variable or a command-line flag.
+           * @enum {string}
+           */
+          source: 'default' | 'file' | 'env' | 'flag'
         }[]
       }[]
     }

@@ -1,12 +1,13 @@
-import { Fragment, useId, useState, type FormEvent } from 'react'
-import { ChevronDown, ChevronRight, KeyRound, Loader2, RotateCw, Send, Trash2 } from 'lucide-react'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { ChevronRight, Loader2, RefreshCw, RotateCw, Send, Trash2, X } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { errorMessage } from '@/api/client'
 import {
   useDeleteWebhook,
   useDeliveries,
   useRedeliver,
   useRotateWebhookSecret,
+  useSettings,
   useUpdateWebhook,
   useWebhook,
 } from '@/api/queries'
@@ -15,6 +16,8 @@ import { useSession } from '@/auth/session'
 import { DeliveryStatusBadge } from '@/components/badges'
 import { CodeBlock } from '@/components/copy-button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CompactTable } from '@/components/dashboard/compact-table'
+import { Chip, Dot, Panel, PanelBody, PanelHeader } from '@/components/dashboard/panel'
 import { FormError } from '@/components/form'
 import { intParam, Pager } from '@/components/pager'
 import { SecretBox } from '@/components/secret-box'
@@ -25,24 +28,42 @@ import {
   NotFoundState,
   TableSkeleton,
 } from '@/components/states'
-import { DateTime } from '@/components/time'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { formatNumber } from '@/lib/format'
+import { Switch } from '@/components/ui/switch'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatDate, formatDateTime, formatRelative } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useTitle } from '@/lib/use-title'
 import { AdminHeading } from './layout'
-import { WebhookFields } from './webhooks'
+import { settingDays, settingNumber } from './settings'
+import { DeliveryCounts, WebhookFields } from './webhooks'
+
+function Breadcrumb({ label }: { label: string }) {
+  return (
+    <nav aria-label="Breadcrumb">
+      <ol className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+        <li>
+          <Link to="/admin/webhooks" className="hover:text-foreground hover:underline">
+            Webhooks
+          </Link>
+        </li>
+        <li aria-hidden>
+          <ChevronRight className="size-3" />
+        </li>
+        <li aria-current="page" className="min-w-0 truncate text-foreground">
+          {label}
+        </li>
+      </ol>
+    </nav>
+  )
+}
+
+/** The URL without its scheme, as the title of its page. */
+function shortUrl(url: string) {
+  return url.replace(/^https?:\/\//, '')
+}
 
 export function WebhookPage() {
   const { id = '' } = useParams()
@@ -52,7 +73,7 @@ export function WebhookPage() {
   if (webhook.isPending) {
     return (
       <>
-        <AdminHeading title="Webhook" />
+        <AdminHeading title="Webhook" above={<Breadcrumb label="Webhook" />} />
         <TableSkeleton rows={6} />
       </>
     )
@@ -60,7 +81,7 @@ export function WebhookPage() {
   if (webhook.isError) {
     return (
       <>
-        <AdminHeading title="Webhook" />
+        <AdminHeading title="Webhook" above={<Breadcrumb label="Webhook" />} />
         {isNotFound(webhook.error) ? (
           <NotFoundState what="webhook" />
         ) : (
@@ -83,49 +104,43 @@ function WebhookDetails({ webhook, counts }: { webhook: Webhook; counts: Record<
   return (
     <>
       <AdminHeading
-        title="Webhook"
-        description={<span className="font-mono break-all">{webhook.url}</span>}
+        above={<Breadcrumb label={webhook.description || shortUrl(webhook.url)} />}
+        title={webhook.url}
+        titleClassName="truncate font-mono text-lg leading-7 md:text-lg md:leading-7"
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            {webhook.enabled ? (
+              <Badge variant="success">
+                <Dot tone="success" />
+                Enabled
+              </Badge>
+            ) : (
+              <Badge variant="outline">Paused</Badge>
+            )}
+            <span>
+              {webhook.description && `${webhook.description} · `}created{' '}
+              {formatDate(webhook.createdAt)}
+              {webhook.createdBy && ` by ${webhook.createdBy}`}
+            </span>
+          </span>
+        }
         actions={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setRotating(true)}>
-              <KeyRound aria-hidden />
-              Rotate secret…
-            </Button>
-            <Button variant="destructive" onClick={() => setDeleting(true)}>
-              <Trash2 aria-hidden />
-              Delete…
-            </Button>
-          </div>
+          <Button variant="destructive-outline" size="sm" onClick={() => setDeleting(true)}>
+            <Trash2 aria-hidden />
+            Delete…
+          </Button>
         }
       />
       <div className="grid gap-6">
-        {secret && (
-          <SecretBox title="The new signing secret" secret={secret} label="the webhook secret">
-            <p className="text-sm">
-              Deliveries are signed with it from now on. Update the receiver.
-            </p>
-            <div>
-              <Button variant="outline" size="sm" onClick={() => setSecret(null)}>
-                I have copied it
-              </Button>
-            </div>
-          </SecretBox>
-        )}
-        <dl className="grid grid-cols-3 gap-4 sm:max-w-lg">
-          {(['succeeded', 'pending', 'failed'] as const).map((status) => (
-            <div key={status} className="rounded-lg border p-3">
-              <dt className="text-xs text-muted-foreground">
-                {status === 'succeeded' ? 'Delivered' : status === 'pending' ? 'Pending' : 'Failed'}
-              </dt>
-              <dd className="text-xl font-semibold tabular-nums">
-                {formatNumber(counts[status] ?? 0)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <EditWebhook key={webhook.updatedAt} webhook={webhook} />
-        <Deliveries webhook={webhook} />
-        <PayloadHelp events={webhook.events} />
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <EditWebhook key={webhook.updatedAt} webhook={webhook} />
+          <SigningSecret
+            secret={secret}
+            onRotate={() => setRotating(true)}
+            onDismiss={() => setSecret(null)}
+          />
+        </div>
+        <Deliveries webhook={webhook} counts={counts} />
       </div>
       <ConfirmDialog
         open={rotating}
@@ -175,18 +190,10 @@ function EditWebhook({ webhook }: { webhook: Webhook }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>Settings</h2>
-        </CardTitle>
-        <CardDescription>
-          Created <DateTime value={webhook.createdAt} />
-          {webhook.createdBy && <> by {webhook.createdBy}</>}.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="grid max-w-2xl gap-4">
+    <Panel aria-labelledby={`${id}-title`}>
+      <PanelHeader title="Settings" titleId={`${id}-title`} />
+      <PanelBody>
+        <form onSubmit={submit} className="grid gap-4">
           <WebhookFields
             idPrefix={id}
             url={url}
@@ -197,11 +204,7 @@ function EditWebhook({ webhook }: { webhook: Webhook }) {
             setDescription={setDescription}
           />
           <div className="flex items-center gap-2">
-            <Checkbox
-              id={`${id}-enabled`}
-              checked={enabled}
-              onCheckedChange={(value) => setEnabled(value === true)}
-            />
+            <Switch id={`${id}-enabled`} checked={enabled} onCheckedChange={setEnabled} />
             <Label htmlFor={`${id}-enabled`} className="font-normal">
               Enabled: send deliveries for these events
             </Label>
@@ -210,70 +213,170 @@ function EditWebhook({ webhook }: { webhook: Webhook }) {
             id={`${id}-error`}
             message={update.error ? errorMessage(update.error) : null}
           />
-          <div>
-            <Button type="submit" disabled={update.isPending || events.length === 0}>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm" disabled={update.isPending || events.length === 0}>
               {update.isPending && <Loader2 aria-hidden className="animate-spin" />}
-              Save
+              Save changes
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </PanelBody>
+    </Panel>
   )
 }
 
-function Deliveries({ webhook }: { webhook: Webhook }) {
+/**
+ * The signing secret: rotating it, the new one shown once, and how a
+ * receiver verifies a delivery, explained where the secret is.
+ */
+function SigningSecret({
+  secret,
+  onRotate,
+  onDismiss,
+}: {
+  secret: string | null
+  onRotate: () => void
+  onDismiss: () => void
+}) {
+  const id = useId()
+  return (
+    <Panel aria-labelledby={`${id}-title`}>
+      <PanelHeader title="Signing secret" titleId={`${id}-title`}>
+        <Button variant="outline" size="sm" aria-label="Rotate secret…" onClick={onRotate}>
+          <RefreshCw aria-hidden />
+          Rotate…
+        </Button>
+      </PanelHeader>
+      <PanelBody className="grid gap-4">
+        {secret ? (
+          <SecretBox title="The new signing secret" secret={secret} label="the webhook secret">
+            <p className="text-[0.8125rem] text-muted-foreground">
+              The old secret stopped working. Update every receiver.
+            </p>
+            <div>
+              <Button variant="outline" size="sm" onClick={onDismiss}>
+                I have copied it
+              </Button>
+            </div>
+          </SecretBox>
+        ) : (
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Only a hash of the secret is stored, so it cannot be shown again. Rotate it to get a new
+            one; the current one stops working at once.
+          </p>
+        )}
+        <div className="grid gap-2">
+          <h3 className="text-[0.8125rem] font-semibold">Verifying a delivery</h3>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Each POST carries{' '}
+            <code className="rounded-sm border bg-muted px-1 font-mono text-xs text-foreground">
+              X-Unpub-Signature: sha256=&lt;hex&gt;
+            </code>
+            , the HMAC-SHA256 of the raw body with this secret as key. Compute it over the exact
+            bytes before parsing the JSON, and compare in constant time. The payload{' '}
+            <code className="font-mono">id</code> stays the same when a delivery is sent again, so
+            receivers can drop duplicates.
+          </p>
+          <CodeBlock
+            title="Check a signature in a shell, with the body in body.json"
+            code={`printf 'sha256=%s\\n' "$(openssl dgst -sha256 -hmac "$SECRET" -hex < body.json | sed 's/^.* //')"`}
+            label="the verification command"
+          />
+        </div>
+      </PanelBody>
+    </Panel>
+  )
+}
+
+function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<string, number> }) {
   const [params] = useSearchParams()
   const page = intParam(params, 'page', 1)
   const deliveries = useDeliveries(webhook.id, page)
   const redeliver = useRedeliver()
-  const [open, setOpen] = useState<string | null>(null)
+  const settings = useSettings()
+  // The open delivery, on the page it was opened on: the selection is
+  // derived from the current list, so a delivery that a refetch dropped,
+  // for example when newer ones pushed it off the page, closes its panel
+  // and cannot reopen it from another page.
+  const [open, setOpen] = useState<{ id: string; page: number } | null>(null)
+  const retention = settingDays(settings.data, 'webhooks.retentionDays')
+  const maxAttempts = settingNumber(settings.data, 'webhooks.maxAttempts')
+  const openId = open?.page === page ? open.id : null
+  const selected = deliveries.data?.items.find((delivery) => delivery.id === openId)
+  const close = (id: string) => {
+    setOpen(null)
+    document.getElementById(`delivery-${id}`)?.focus()
+  }
+  // When the panel left with its delivery, the focus went to the body: it
+  // lands on the first delivery left, or on the Refresh button.
+  const dropped = openId !== null && deliveries.data !== undefined && selected === undefined
+  useEffect(() => {
+    if (!dropped || document.activeElement !== document.body) return
+    const next =
+      document.querySelector<HTMLElement>('button[id^="delivery-"]') ??
+      document.getElementById('deliveries-refresh')
+    next?.focus()
+  }, [dropped])
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-2">
-        <div className="grid gap-1.5">
-          <CardTitle>
-            <h2>Deliveries</h2>
-          </CardTitle>
-          <CardDescription>Newest first. Failed attempts are retried with backoff.</CardDescription>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void deliveries.refetch()}
-          disabled={deliveries.isFetching}
-        >
-          <RotateCw aria-hidden className={deliveries.isFetching ? 'animate-spin' : undefined} />
-          Refresh
-        </Button>
-      </CardHeader>
-      <CardContent>
+    <>
+      <Panel aria-labelledby="deliveries-title">
+        <PanelHeader title="Deliveries" titleId="deliveries-title">
+          <div className="flex flex-wrap items-center gap-3">
+            {retention !== null && (
+              <span className="text-xs text-muted-foreground">
+                {retention === 0 ? 'Kept forever' : `Kept ${retention} days`}
+              </span>
+            )}
+            <DeliveryCounts counts={counts} />
+            <Button
+              variant="ghost"
+              size="sm"
+              id="deliveries-refresh"
+              onClick={() => void deliveries.refetch()}
+              disabled={deliveries.isFetching}
+            >
+              <RotateCw
+                aria-hidden
+                className={deliveries.isFetching ? 'motion-safe:animate-spin' : undefined}
+              />
+              Refresh
+            </Button>
+          </div>
+        </PanelHeader>
         {deliveries.isPending ? (
-          <TableSkeleton rows={4} columns={6} />
+          <PanelBody>
+            <TableSkeleton rows={4} columns={6} />
+          </PanelBody>
         ) : deliveries.isError ? (
-          <ErrorState error={deliveries.error} onRetry={() => void deliveries.refetch()} />
+          <PanelBody>
+            <ErrorState error={deliveries.error} onRetry={() => void deliveries.refetch()} />
+          </PanelBody>
         ) : deliveries.data.total === 0 ? (
-          <EmptyState title="No deliveries yet">
-            Deliveries appear when one of its events happens.
-          </EmptyState>
+          <PanelBody>
+            <EmptyState title="No deliveries yet">
+              Deliveries appear when one of its events happens.
+            </EmptyState>
+          </PanelBody>
         ) : (
-          <div className="grid gap-3">
-            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+          <>
+            <CompactTable boxed={false}>
               <caption className="sr-only">Deliveries, newest first</caption>
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">
-                    <span className="sr-only">Payload</span>
-                  </TableHead>
                   <TableHead scope="col">Time</TableHead>
                   <TableHead scope="col">Event</TableHead>
+                  <TableHead scope="col">Package</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Attempt
+                  </TableHead>
                   <TableHead scope="col">Status</TableHead>
                   <TableHead scope="col" className="text-right">
-                    Attempts
+                    Response
                   </TableHead>
-                  <TableHead scope="col">Response</TableHead>
-                  <TableHead scope="col">Duration</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Duration
+                  </TableHead>
                   <TableHead scope="col">Error</TableHead>
                   <TableHead scope="col">
                     <span className="sr-only">Actions</span>
@@ -281,58 +384,56 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {deliveries.data.items.map((delivery) => (
-                  <Fragment key={delivery.id}>
-                    <TableRow>
-                      <TableCell className="w-10">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-expanded={open === delivery.id}
+                {deliveries.data.items.map((delivery) => {
+                  const expanded = openId === delivery.id
+                  return (
+                    <TableRow key={delivery.id} data-expanded={expanded || undefined}>
+                      <TableCell>
+                        <button
+                          id={`delivery-${delivery.id}`}
+                          type="button"
+                          aria-expanded={expanded}
                           aria-controls={`payload-${delivery.id}`}
-                          aria-label={
-                            open === delivery.id ? 'Hide the payload' : 'Show the payload'
-                          }
-                          onClick={() => setOpen(open === delivery.id ? null : delivery.id)}
+                          title={formatDateTime(delivery.createdAt)}
+                          onClick={() => setOpen(expanded ? null : { id: delivery.id, page })}
+                          className="rounded-sm font-medium whitespace-nowrap text-primary hover:underline"
                         >
-                          {open === delivery.id ? (
-                            <ChevronDown aria-hidden />
-                          ) : (
-                            <ChevronRight aria-hidden />
-                          )}
-                        </Button>
+                          {formatRelative(delivery.createdAt)}
+                          <span className="sr-only">
+                            {expanded ? ': hide the payload' : ': show the payload'}
+                          </span>
+                        </button>
                       </TableCell>
                       <TableCell>
-                        <DateTime value={delivery.createdAt} />
+                        <Chip>{delivery.event}</Chip>
                       </TableCell>
-                      <TableCell>
-                        <div className="grid">
-                          <span className="font-mono text-xs">{delivery.event}</span>
-                          {delivery.package && (
-                            <span className="text-xs text-muted-foreground">
-                              {delivery.package} {delivery.version}
-                            </span>
-                          )}
-                        </div>
+                      <TableCell className="font-mono text-xs">
+                        {delivery.package ? `${delivery.package} ${delivery.version ?? ''}` : '–'}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap tabular-nums">
+                        {maxAttempts !== null && delivery.attempt <= maxAttempts
+                          ? `${delivery.attempt} of ${maxAttempts}`
+                          : delivery.attempt}
                       </TableCell>
                       <TableCell>
                         <DeliveryStatusBadge status={delivery.status} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{delivery.attempt}</TableCell>
-                      <TableCell className="font-mono text-xs">
+                      <TableCell className="text-right font-mono text-xs">
                         {delivery.response?.status ?? '–'}
                       </TableCell>
-                      <TableCell className="text-xs">{duration(delivery)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground tabular-nums">
+                        {duration(delivery)}
+                      </TableCell>
                       <TableCell
-                        className="max-w-64 truncate text-xs"
+                        className="max-w-64 truncate text-xs text-destructive"
                         title={delivery.error ?? undefined}
                       >
-                        {delivery.error ?? '–'}
+                        {delivery.error}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
-                          variant="ghost"
-                          size="sm"
+                          variant="outline"
+                          size="xs"
                           disabled={delivery.status === 'pending' || redeliver.isPending}
                           onClick={() =>
                             redeliver.mutate(
@@ -353,49 +454,121 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
                         </Button>
                       </TableCell>
                     </TableRow>
-                    {open === delivery.id && (
-                      <TableRow id={`payload-${delivery.id}`}>
-                        <TableCell colSpan={9} className="bg-muted/40 whitespace-normal">
-                          <div className="grid gap-3 py-1">
-                            <CodeBlock code={pretty(delivery.payload)} label="the payload" />
-                            <p className="text-xs text-muted-foreground">
-                              The body as sent and signed is the compact form of this JSON. Delivery
-                              id <code className="font-mono">{delivery.id}</code>, event id{' '}
-                              <code className="font-mono">{delivery.eventId}</code>
-                              {delivery.redeliveryOf && (
-                                <>
-                                  , a redelivery of{' '}
-                                  <code className="font-mono">{delivery.redeliveryOf}</code>
-                                </>
-                              )}
-                              .
-                            </p>
-                            {delivery.response?.body && (
-                              <div className="grid gap-1">
-                                <p className="text-xs font-medium">Response body (start)</p>
-                                <pre className="max-h-40 overflow-auto rounded-md border bg-background p-2 font-mono text-xs">
-                                  {delivery.response.body}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </Fragment>
-                ))}
+                  )
+                })}
               </TableBody>
-            </Table>
-            <Pager
-              page={deliveries.data.page}
-              size={deliveries.data.size}
-              total={deliveries.data.total}
-              label="Delivery pages"
-            />
-          </div>
+            </CompactTable>
+            {deliveries.data.total > deliveries.data.size && (
+              <div className="border-t px-3 py-2.5">
+                <Pager
+                  page={deliveries.data.page}
+                  size={deliveries.data.size}
+                  total={deliveries.data.total}
+                  label="Delivery pages"
+                />
+              </div>
+            )}
+          </>
         )}
-      </CardContent>
-    </Card>
+      </Panel>
+      {selected && (
+        <DeliveryPayload webhook={webhook} delivery={selected} onClose={() => close(selected.id)} />
+      )}
+    </>
+  )
+}
+
+/**
+ * The request of a delivery as it was sent: its headers and its body. It
+ * takes the focus when it opens, below the table, and gives it back to the
+ * row when closed.
+ */
+function DeliveryPayload({
+  webhook,
+  delivery,
+  onClose,
+}: {
+  webhook: Webhook
+  delivery: Delivery
+  onClose: () => void
+}) {
+  const { config } = useSession()
+  const panel = useRef<HTMLElement>(null)
+  useEffect(() => {
+    panel.current?.focus()
+  }, [delivery.id])
+  const path = (() => {
+    try {
+      const url = new URL(webhook.url)
+      return `${url.pathname}${url.search}`
+    } catch {
+      return webhook.url
+    }
+  })()
+  const headers = [
+    `POST ${path}`,
+    'Content-Type: application/json',
+    `User-Agent: unpub/${config.version}`,
+    `X-Unpub-Event: ${delivery.event}`,
+    `X-Unpub-Delivery: ${delivery.id}`,
+    'X-Unpub-Signature: sha256=<HMAC-SHA256 of the body>',
+  ].join('\n')
+  return (
+    <Panel
+      ref={panel}
+      id={`payload-${delivery.id}`}
+      aria-labelledby={`payload-${delivery.id}-title`}
+      tabIndex={-1}
+      className="scroll-mt-20"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation()
+          onClose()
+        }
+      }}
+    >
+      <PanelHeader
+        title={`Delivery ${delivery.id.slice(0, 8)} · payload`}
+        titleId={`payload-${delivery.id}-title`}
+      >
+        <span className="flex items-center gap-2">
+          <DeliveryStatusBadge status={delivery.status} />
+          {delivery.status === 'pending' && delivery.nextAt && (
+            <span className="text-xs text-muted-foreground">
+              next attempt {formatRelative(delivery.nextAt)}
+            </span>
+          )}
+          <Button variant="ghost" size="icon-xs" aria-label="Close the payload" onClick={onClose}>
+            <X aria-hidden />
+          </Button>
+        </span>
+      </PanelHeader>
+      <PanelBody className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="grid content-start gap-4">
+          <CodeBlock title="Request headers" code={headers} label="the request headers" />
+          {delivery.response?.body && (
+            <CodeBlock
+              title={`Response body (start), HTTP ${delivery.response.status}`}
+              code={delivery.response.body}
+              label="the response body"
+            />
+          )}
+        </div>
+        <div className="grid content-start gap-2">
+          <CodeBlock title="Body" code={pretty(delivery.payload)} label="the payload" />
+          <p className="text-xs text-muted-foreground">
+            Sent and signed as the compact form of this JSON. Event id{' '}
+            <code className="font-mono">{delivery.eventId}</code>
+            {delivery.redeliveryOf && (
+              <>
+                , a redelivery of <code className="font-mono">{delivery.redeliveryOf}</code>
+              </>
+            )}
+            .
+          </p>
+        </div>
+      </PanelBody>
+    </Panel>
   )
 }
 
@@ -413,60 +586,4 @@ function pretty(payload: string) {
   } catch {
     return payload
   }
-}
-
-function PayloadHelp({ events }: { events: WebhookEvent[] }) {
-  const { config } = useSession()
-  const event = events[0] ?? 'package.published'
-  const payload = JSON.stringify(
-    {
-      id: '673071c9a1b2c3d4e5f60718',
-      event,
-      at: '2026-11-10T09:12:00.000Z',
-      package: 'my_company_core',
-      ...(event.startsWith('version.') || event === 'package.published'
-        ? { version: '1.4.0' }
-        : {}),
-      actor: 'jane.doe@company.example',
-      data:
-        event === 'package.published' ? { uploader: 'jane.doe@company.example', sha256: '…' } : {},
-    },
-    null,
-    2,
-  )
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>Payload and signature</h2>
-        </CardTitle>
-        <CardDescription>Each delivery is a POST of a JSON body like this one.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 text-sm">
-        <CodeBlock code={payload} label="the example payload" />
-        <dl className="grid gap-2 sm:grid-cols-[14rem_1fr]">
-          <dt className="font-mono">X-Unpub-Event</dt>
-          <dd>The event, such as {event}.</dd>
-          <dt className="font-mono">X-Unpub-Delivery</dt>
-          <dd>The id of this delivery, new for every redelivery.</dd>
-          <dt className="font-mono">X-Unpub-Signature</dt>
-          <dd>
-            <code className="font-mono">sha256=&lt;hex&gt;</code>: the HMAC-SHA256 of the exact
-            body, keyed with the secret. Compare it in constant time.
-          </dd>
-          <dt className="font-mono">User-Agent</dt>
-          <dd>unpub/{config.version}</dd>
-        </dl>
-        <p>
-          The payload <code className="font-mono">id</code> stays the same when a delivery is sent
-          again, so receivers can drop duplicates. To check a signature in a shell, with the body in{' '}
-          <code className="font-mono">body.json</code>:
-        </p>
-        <CodeBlock
-          code={`printf 'sha256=%s\\n' "$(openssl dgst -sha256 -hmac "$SECRET" -hex < body.json | sed 's/^.* //')"`}
-          label="the verification command"
-        />
-      </CardContent>
-    </Card>
-  )
 }

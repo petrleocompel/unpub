@@ -1,6 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { buttonVariants } from '@/components/ui/button'
 import { NativeSelect } from '@/components/native-select'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -20,7 +19,9 @@ export function pageWindow(page: number, pages: number): (number | 'gap')[] {
 
 /**
  * Page links that keep the other query parameters. The page is the `page`
- * parameter, one-based; [sizes] adds a page size selector on `size`.
+ * parameter, one-based; [sizes] adds a page size selector on `size`, named
+ * [sizeLabel]. Laid out as board 03: the range on the left, the pages in the
+ * middle, the size on the right; centred on phones.
  */
 export function Pager({
   page,
@@ -28,12 +29,16 @@ export function Pager({
   total,
   sizes,
   label = 'Pages',
+  sizeLabel = 'Per page',
+  className,
 }: {
   page: number
   size: number
   total: number
   sizes?: number[]
   label?: string
+  sizeLabel?: string
+  className?: string
 }) {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
@@ -47,96 +52,100 @@ export function Pager({
   }
   const first = total === 0 ? 0 : (page - 1) * size + 1
   const last = Math.min(total, page * size)
-  const link = (enabled: boolean) =>
+  const item =
+    'inline-grid h-8 min-w-8 place-items-center rounded-md px-1.5 text-[0.8125rem] font-medium text-foreground tabular-nums'
+  const step = (enabled: boolean) =>
     cn(
-      buttonVariants({ variant: 'ghost', size: 'sm' }),
-      !enabled && 'pointer-events-none opacity-50',
+      item,
+      'hover:bg-accent [&_svg]:size-4',
+      !enabled && 'pointer-events-none text-muted-foreground opacity-60',
     )
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-      <p className="text-muted-foreground" aria-live="polite">
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-center gap-3 text-[0.8125rem] text-muted-foreground sm:justify-between',
+        className,
+      )}
+    >
+      <p aria-live="polite" className="tabular-nums">
         {total === 0
           ? 'No results'
           : `${formatNumber(first)}–${formatNumber(last)} of ${formatNumber(total)}`}
       </p>
-      <div className="flex flex-wrap items-center gap-3">
-        {sizes && (
-          <label className="flex items-center gap-2 text-muted-foreground">
-            Per page
-            <NativeSelect
-              value={String(size)}
-              className="h-8 w-20"
-              onChange={(event) => {
-                const next = new URLSearchParams(params)
-                next.set('size', event.target.value)
-                next.delete('page')
-                setParams(next)
-              }}
-            >
-              {sizes.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
-        )}
-        {pages > 1 && (
-          <nav aria-label={label}>
-            <ul className="flex items-center gap-1">
-              <li>
-                <Link
-                  to={href(page - 1)}
-                  className={link(page > 1)}
-                  aria-disabled={page <= 1}
-                  tabIndex={page <= 1 ? -1 : undefined}
-                  rel="prev"
-                >
-                  <ChevronLeft aria-hidden />
-                  <span>Previous</span>
-                </Link>
-              </li>
-              {pageWindow(page, pages).map((item, index) =>
-                item === 'gap' ? (
-                  <li key={`gap-${index}`} aria-hidden className="px-1 text-muted-foreground">
-                    …
-                  </li>
-                ) : (
-                  <li key={item}>
-                    <Link
-                      to={href(item)}
-                      aria-current={item === page ? 'page' : undefined}
-                      aria-label={`Page ${item}`}
-                      className={cn(
-                        buttonVariants({
-                          variant: item === page ? 'outline' : 'ghost',
-                          size: 'sm',
-                        }),
-                        'min-w-8',
-                      )}
-                    >
-                      {item}
-                    </Link>
-                  </li>
-                ),
-              )}
-              <li>
-                <Link
-                  to={href(page + 1)}
-                  className={link(page < pages)}
-                  aria-disabled={page >= pages}
-                  tabIndex={page >= pages ? -1 : undefined}
-                  rel="next"
-                >
-                  <span>Next</span>
-                  <ChevronRight aria-hidden />
-                </Link>
-              </li>
-            </ul>
-          </nav>
-        )}
-      </div>
+      {pages > 1 && (
+        <nav aria-label={label}>
+          <ul className="flex items-center gap-0.5">
+            <li>
+              <Link
+                to={href(page - 1)}
+                className={step(page > 1)}
+                aria-disabled={page <= 1}
+                aria-label="Previous page"
+                tabIndex={page <= 1 ? -1 : undefined}
+                rel="prev"
+              >
+                <ChevronLeft aria-hidden />
+              </Link>
+            </li>
+            {pageWindow(page, pages).map((value, index) =>
+              value === 'gap' ? (
+                <li key={`gap-${index}`} aria-hidden className={item}>
+                  …
+                </li>
+              ) : (
+                <li key={value}>
+                  <Link
+                    to={href(value)}
+                    aria-current={value === page ? 'page' : undefined}
+                    aria-label={`Page ${value}`}
+                    className={cn(
+                      item,
+                      value === page ? 'bg-primary text-primary-foreground' : 'hover:bg-accent',
+                    )}
+                  >
+                    {value}
+                  </Link>
+                </li>
+              ),
+            )}
+            <li>
+              <Link
+                to={href(page + 1)}
+                className={step(page < pages)}
+                aria-disabled={page >= pages}
+                aria-label="Next page"
+                tabIndex={page >= pages ? -1 : undefined}
+                rel="next"
+              >
+                <ChevronRight aria-hidden />
+              </Link>
+            </li>
+          </ul>
+        </nav>
+      )}
+      {sizes && (
+        <label className="flex basis-full items-center justify-center gap-2 sm:basis-auto">
+          {sizeLabel}
+          <NativeSelect
+            small
+            value={String(size)}
+            className="w-18"
+            onChange={(event) => {
+              const next = new URLSearchParams(params)
+              next.set('size', event.target.value)
+              next.delete('page')
+              setParams(next)
+            }}
+          >
+            {sizes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+      )}
     </div>
   )
 }

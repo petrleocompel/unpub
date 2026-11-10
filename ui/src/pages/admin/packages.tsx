@@ -1,5 +1,15 @@
-import { useState } from 'react'
-import { Ban, ExternalLink, RotateCcw, Search, Trash2, UserCog } from 'lucide-react'
+import { useId, useState } from 'react'
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  Ban,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Search,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { usePackage, usePackages } from '@/api/queries'
 import type { Package, Version } from '@/api/types'
@@ -10,6 +20,8 @@ import {
   ProxiedBadge,
   RetractedBadge,
 } from '@/components/badges'
+import { CompactTable } from '@/components/dashboard/compact-table'
+import { Panel, PanelBody, PanelHeader } from '@/components/dashboard/panel'
 import { intParam, Pager } from '@/components/pager'
 import {
   EmptyState,
@@ -18,19 +30,12 @@ import {
   NotFoundState,
   TableSkeleton,
 } from '@/components/states'
-import { DateTime, RelativeTime } from '@/components/time'
+import { RelativeTime } from '@/components/time'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { formatNumber } from '@/lib/format'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatDate, formatNumber } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useDebouncedParam } from '@/lib/use-debounced-param'
 import { useTitle } from '@/lib/use-title'
 import {
@@ -43,6 +48,74 @@ import {
 } from '@/packages/dialogs'
 import { packagePath } from '@/pages/package'
 import { AdminHeading } from './layout'
+
+/**
+ * The uploaders of a list row, short: names before the @, the rest counted.
+ * A name two uploaders share keeps its domain.
+ */
+export function shortUploaders(uploaders: string[]) {
+  const local = (email: string) => email.split('@')[0] ?? email
+  const names = uploaders.map((email) =>
+    uploaders.some((other) => other !== email && local(other) === local(email))
+      ? email
+      : local(email),
+  )
+  return names.length <= 2 ? names.join(', ') : `${names[0]} +${names.length - 1}`
+}
+
+/**
+ * The uploaders of a list row: the short list as a button that shows every
+ * full address under it, for keyboard and touch alike.
+ */
+function UploaderList({ uploaders }: { uploaders: string[] }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="grid justify-items-start gap-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+        className="inline-flex max-w-full items-center gap-1 rounded-[5px] text-left hover:text-foreground"
+      >
+        <span className="truncate">{shortUploaders(uploaders)}</span>
+        <span className="sr-only">
+          , {open ? 'hide' : 'show'} the {uploaders.length === 1 ? 'address' : 'addresses'}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            'size-3 shrink-0 transition-transform motion-reduce:transition-none',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && (
+        <ul id={id} className="grid gap-0.5 text-xs whitespace-normal">
+          {uploaders.map((email) => (
+            <li key={email} className="break-all">
+              {email}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** An address that may wrap after its name, at the @. */
+function Address({ email }: { email: string }) {
+  const at = email.indexOf('@')
+  if (at < 0) return <>{email}</>
+  return (
+    <>
+      {email.slice(0, at)}
+      <wbr />
+      {email.slice(at)}
+    </>
+  )
+}
 
 export function AdminPackagesPage() {
   useTitle('Packages · Admin')
@@ -57,17 +130,23 @@ export function AdminPackagesPage() {
     page,
     size,
   })
+  const total = packages.data && !q ? packages.data.total : null
 
   return (
     <>
       <AdminHeading
         title="Packages"
-        description="Every package published here, discontinued ones included."
+        description={
+          <>
+            {total !== null && `${formatNumber(total)} package${total === 1 ? '' : 's'}, `}
+            discontinued ones included. Open one to moderate it.
+          </>
+        }
       />
       <div className="grid gap-4">
-        <div className="relative max-w-sm">
+        <div className="relative max-w-90 min-w-50">
           <label htmlFor="admin-package-search" className="sr-only">
-            Search packages
+            Search packages by name
           </label>
           <Search
             aria-hidden
@@ -76,7 +155,7 @@ export function AdminPackagesPage() {
           <Input
             id="admin-package-search"
             type="search"
-            className="pl-8"
+            className="h-8 pl-8 text-[0.8125rem] md:text-[0.8125rem]"
             placeholder="Search packages"
             value={text}
             onChange={(event) => setText(event.target.value)}
@@ -90,21 +169,26 @@ export function AdminPackagesPage() {
           <EmptyState title={q ? 'No packages match' : 'No packages yet'} />
         ) : (
           <>
-            <Table containerClassName="rounded-lg border" stickyFirstColumn>
-              <caption className="sr-only">Packages</caption>
+            <CompactTable>
+              <caption className="sr-only">Packages, {q ? 'best match first' : 'by name'}</caption>
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col" aria-sort={q ? undefined : 'ascending'}>
+                    <span className="inline-flex items-center gap-1">
+                      Name
+                      {!q && <ArrowDown aria-hidden className="size-3" />}
+                    </span>
+                  </TableHead>
                   <TableHead scope="col">Latest</TableHead>
                   <TableHead scope="col" className="text-right">
                     Versions
                   </TableHead>
                   <TableHead scope="col">Uploaders</TableHead>
-                  <TableHead scope="col">State</TableHead>
-                  <TableHead scope="col">Updated</TableHead>
+                  <TableHead scope="col">Status</TableHead>
                   <TableHead scope="col" className="text-right">
                     Downloads
                   </TableHead>
+                  <TableHead scope="col">Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -122,13 +206,11 @@ export function AdminPackagesPage() {
                     <TableCell className="text-right tabular-nums">
                       {formatNumber(item.versionCount)}
                     </TableCell>
-                    <TableCell className="max-w-64">
+                    <TableCell className="max-w-64 text-muted-foreground">
                       {item.uploaders.length === 0 ? (
-                        <span className="text-muted-foreground">None</span>
+                        'None'
                       ) : (
-                        <span className="block truncate" title={item.uploaders.join(', ')}>
-                          {item.uploaders.join(', ')}
-                        </span>
+                        <UploaderList uploaders={item.uploaders} />
                       )}
                     </TableCell>
                     <TableCell>
@@ -138,16 +220,16 @@ export function AdminPackagesPage() {
                         <span className="text-muted-foreground">Active</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <DateTime value={item.updatedAt} date />
-                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatNumber(item.downloads)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <RelativeTime value={item.updatedAt} />
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </CompactTable>
             <Pager
               page={packages.data.page}
               size={packages.data.size}
@@ -161,6 +243,26 @@ export function AdminPackagesPage() {
   )
 }
 
+function Breadcrumb({ name }: { name: string }) {
+  return (
+    <nav aria-label="Breadcrumb">
+      <ol className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+        <li>
+          <Link to="/admin/packages" className="hover:text-foreground hover:underline">
+            Packages
+          </Link>
+        </li>
+        <li aria-hidden>
+          <ChevronRight className="size-3" />
+        </li>
+        <li aria-current="page" className="text-foreground">
+          {name}
+        </li>
+      </ol>
+    </nav>
+  )
+}
+
 export function AdminPackagePage() {
   const { name = '' } = useParams()
   const pkg = usePackage(name)
@@ -169,7 +271,7 @@ export function AdminPackagePage() {
   if (pkg.isPending) {
     return (
       <>
-        <AdminHeading title={name} />
+        <AdminHeading title={name} above={<Breadcrumb name={name} />} />
         <TableSkeleton rows={6} columns={4} />
       </>
     )
@@ -177,7 +279,7 @@ export function AdminPackagePage() {
   if (pkg.isError) {
     return (
       <>
-        <AdminHeading title={name} />
+        <AdminHeading title={name} above={<Breadcrumb name={name} />} />
         {isNotFound(pkg.error) ? (
           <NotFoundState what="package" />
         ) : (
@@ -195,167 +297,182 @@ function PackageModeration({ pkg }: { pkg: Package }) {
   const [deleting, setDeleting] = useState<Version | null>(null)
   const [transfer, setTransfer] = useState(false)
   const [deletePackage, setDeletePackage] = useState(false)
+  const count = pkg.versions.length
+  const created = pkg.versions.reduce<string | null>(
+    (first, version) => (!first || version.published < first ? version.published : first),
+    null,
+  )
 
   return (
     <>
       <AdminHeading
-        title={pkg.name}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
-            <span>
-              {pkg.versions.length} version{pkg.versions.length === 1 ? '' : 's'}
+        above={<Breadcrumb name={pkg.name} />}
+        title={
+          <span className="flex flex-wrap items-baseline gap-2">
+            {pkg.name}
+            <span className="font-mono text-[0.9375rem] font-normal text-muted-foreground">
+              {pkg.latest}
             </span>
-            <span>·</span>
+          </span>
+        }
+        description={
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <span>
+              {formatNumber(count)} version{count === 1 ? '' : 's'}
+            </span>
+            <span aria-hidden>·</span>
             <span>{formatNumber(pkg.downloads.package)} downloads</span>
+            {created && (
+              <>
+                <span aria-hidden>·</span>
+                <span>created {formatDate(created)}</span>
+              </>
+            )}
             {pkg.isDiscontinued && <DiscontinuedBadge />}
             {!pkg.private && <ProxiedBadge />}
           </span>
         }
         actions={
-          <Link
-            to={packagePath(pkg.name)}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-          >
-            Public page
-            <ExternalLink aria-hidden className="size-3.5" />
-          </Link>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={packagePath(pkg.name)}>
+              <ExternalLink aria-hidden />
+              Public page
+            </Link>
+          </Button>
         }
       />
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <h2>Discontinued</h2>
-            </CardTitle>
-            <CardDescription>
-              Hide the package from the list and point users to a replacement.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="max-w-md">
-            <DiscontinueForm key={`${pkg.isDiscontinued}-${pkg.replacedBy}`} pkg={pkg} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <h2>Versions</h2>
-            </CardTitle>
-            <CardDescription>
-              The last version cannot be deleted: delete the package instead.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table
-              containerClassName="rounded-lg border [--sticky-bg:var(--color-card)]"
-              stickyFirstColumn
-            >
-              <caption className="sr-only">Versions of {pkg.name}</caption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">Version</TableHead>
-                  <TableHead scope="col">Published</TableHead>
-                  <TableHead scope="col">Uploader</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Downloads
-                  </TableHead>
-                  <TableHead scope="col">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Panel aria-labelledby="versions-title">
+          <PanelHeader title="Versions" titleId="versions-title">
+            <span className="text-xs text-muted-foreground">
+              Retracting is reversible; deleting is not.
+            </span>
+          </PanelHeader>
+          <CompactTable boxed={false} containerClassName="rounded-b-lg">
+            <caption className="sr-only">Versions of {pkg.name}, newest first</caption>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Version</TableHead>
+                <TableHead scope="col">Published</TableHead>
+                <TableHead scope="col">By</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col" className="text-right">
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pkg.versions.map((version) => (
+                <TableRow key={version.version} data-muted={version.retracted || undefined}>
+                  <TableCell>
+                    <Link
+                      to={packagePath(pkg.name, version.version)}
+                      className="font-mono hover:text-primary hover:underline"
+                    >
+                      {version.version}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <RelativeTime value={version.published} />
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-muted-foreground">
+                    {version.uploader ? <Address email={version.uploader} /> : '–'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {version.version === pkg.latest && <LatestBadge />}
+                      {version.prerelease && <PrereleaseBadge />}
+                      {version.retracted && <RetractedBadge />}
+                      {version.version !== pkg.latest &&
+                        !version.prerelease &&
+                        !version.retracted && <span className="text-muted-foreground">—</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="outline" size="xs" onClick={() => setRetracting(version)}>
+                        {version.retracted ? <Undo2 aria-hidden /> : <Ban aria-hidden />}
+                        {version.retracted ? 'Restore' : 'Retract'}
+                        <span className="sr-only"> {version.version}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-destructive hover:text-destructive"
+                        disabled={count < 2}
+                        title={
+                          count < 2 ? 'The last version: delete the package instead' : undefined
+                        }
+                        aria-label={`Delete version ${version.version}`}
+                        onClick={() => setDeleting(version)}
+                      >
+                        <Trash2 aria-hidden />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pkg.versions.map((version) => (
-                  <TableRow key={version.version}>
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          to={packagePath(pkg.name, version.version)}
-                          className="font-mono text-primary hover:underline"
-                        >
-                          {version.version}
-                        </Link>
-                        {version.version === pkg.latest && <LatestBadge />}
-                        {version.prerelease && <PrereleaseBadge />}
-                        {version.retracted && <RetractedBadge />}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <RelativeTime value={version.published} />
-                    </TableCell>
-                    <TableCell className="max-w-56 truncate">{version.uploader ?? '–'}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatNumber(version.downloads)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setRetracting(version)}>
-                          {version.retracted ? <RotateCcw aria-hidden /> : <Ban aria-hidden />}
-                          {version.retracted ? 'Restore' : 'Retract'}
-                          <span className="sr-only"> {version.version}</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive"
-                          disabled={pkg.versions.length < 2}
-                          onClick={() => setDeleting(version)}
-                        >
-                          <Trash2 aria-hidden />
-                          Delete
-                          <span className="sr-only"> {version.version}</span>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              ))}
+            </TableBody>
+          </CompactTable>
+        </Panel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <h2>Uploaders</h2>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="max-w-lg">
-            <UploadersEditor pkg={pkg} />
-          </CardContent>
-        </Card>
+        <div className="grid gap-6">
+          <Panel aria-labelledby="discontinue-title">
+            <PanelHeader title="Discontinue" titleId="discontinue-title" />
+            <PanelBody>
+              <DiscontinueForm key={`${pkg.isDiscontinued}-${pkg.replacedBy}`} pkg={pkg} />
+            </PanelBody>
+          </Panel>
 
-        <Card className="border-destructive/40">
-          <CardHeader>
-            <CardTitle>
-              <h2>Danger zone</h2>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-medium">Transfer ownership</p>
-                <p className="text-sm text-muted-foreground">Make one user the only uploader.</p>
+          <Panel aria-labelledby="uploaders-title">
+            <PanelHeader title="Uploaders" titleId="uploaders-title">
+              <span className="text-xs text-muted-foreground">Can publish and retract</span>
+            </PanelHeader>
+            <PanelBody>
+              <UploadersEditor pkg={pkg} />
+            </PanelBody>
+          </Panel>
+
+          <Panel aria-labelledby="danger-title" className="border-destructive/35">
+            <PanelHeader
+              title="Danger zone"
+              titleId="danger-title"
+              titleClassName="text-destructive"
+            />
+            <div className="divide-y">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3.5 sm:px-4.5">
+                <div className="grid">
+                  <p className="text-[0.8125rem] font-medium">Transfer ownership</p>
+                  <p className="text-xs text-muted-foreground">
+                    Replace every uploader with one account.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setTransfer(true)}>
+                  <ArrowLeftRight aria-hidden />
+                  Transfer…
+                </Button>
               </div>
-              <Button variant="outline" onClick={() => setTransfer(true)}>
-                <UserCog aria-hidden />
-                Transfer…
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-medium">Delete the package</p>
-                <p className="text-sm text-muted-foreground">
-                  Every version, archive and statistic, for good.
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3.5 sm:px-4.5">
+                <div className="grid">
+                  <p className="text-[0.8125rem] font-medium">Delete package</p>
+                  <p className="text-xs text-muted-foreground">
+                    All {formatNumber(count)} version{count === 1 ? '' : 's'}, archives and
+                    statistics. Cannot be undone.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  aria-label="Delete package…"
+                  onClick={() => setDeletePackage(true)}
+                >
+                  <Trash2 aria-hidden />
+                  Delete…
+                </Button>
               </div>
-              <Button variant="destructive" onClick={() => setDeletePackage(true)}>
-                <Trash2 aria-hidden />
-                Delete package…
-              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </Panel>
+        </div>
       </div>
 
       <RetractDialog

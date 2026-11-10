@@ -2313,7 +2313,7 @@ components:
                 type: array
                 items:
                   type: object
-                  required: [key, value, env]
+                  required: [key, value, env, source]
                   properties:
                     key:
                       type: string
@@ -2325,6 +2325,13 @@ components:
                       type: string
                       description: The environment variable that sets the key.
                       examples: [UNPUB_SERVER_PUBLIC_URL]
+                    source:
+                      type: string
+                      enum: [default, file, env, flag]
+                      description: >-
+                        Where the value came from: the built-in default, the YAML
+                        file, an `UNPUB_*` environment variable or a command-line
+                        flag.
     Readiness:
       type: object
       required: [status, checks]

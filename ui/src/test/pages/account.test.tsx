@@ -21,12 +21,15 @@ describe('account', () => {
 
     await user.type(await screen.findByLabelText('Name'), 'ci-read')
     await user.click(screen.getByRole('checkbox', { name: 'publish' }))
-    await user.selectOptions(screen.getByLabelText('Expires after'), '30d')
+    await user.click(screen.getByRole('button', { name: '30 d' }))
+    expect(screen.getByRole('button', { name: '30 d' })).toHaveAttribute('aria-pressed', 'true')
     await user.click(screen.getByRole('button', { name: 'Create token' }))
 
     const box = await screen.findByRole('status', { name: /ci-read/ })
     expect(within(box).getByText('unpub_secret_value')).toBeInTheDocument()
-    expect(within(box).getByText('dart pub token add https://pub.example.com')).toBeInTheDocument()
+    expect(
+      within(box).getByText(/dart pub token add https:\/\/pub.example.com/),
+    ).toBeInTheDocument()
     expect(within(box).getByText(/will not be shown again/)).toBeInTheDocument()
     expect(await created[0]!.json()).toEqual({
       name: 'ci-read',
@@ -43,6 +46,30 @@ describe('account', () => {
     expect(screen.queryByText('unpub_secret_value')).toBeNull()
   })
 
+  it('keeps the page of tokens when a section is picked from the drawer', async () => {
+    const pages: string[] = []
+    server.use(
+      http.get(url('/webapi/tokens'), ({ request }) => {
+        const page = new URL(request.url).searchParams.get('page') ?? '1'
+        pages.push(page)
+        return HttpResponse.json(
+          f.page([f.token({ id: `t${page}`, name: `token-page-${page}` })], Number(page), 20, 40),
+        )
+      }),
+    )
+    const { user, router } = renderApp('/account?page=2', { me: f.me() })
+    expect(await screen.findByRole('cell', { name: 'token-page-2' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Sections' }))
+    const drawer = await screen.findByRole('dialog')
+    await user.click(within(drawer).getByRole('link', { name: 'API tokens' }))
+
+    await waitFor(() => expect(router.state.location.hash).toBe('#tokens'))
+    expect(where(router)).toBe('/account?page=2')
+    expect(screen.getByRole('cell', { name: 'token-page-2' })).toBeInTheDocument()
+    expect(pages).not.toContain('1')
+  })
+
   it('limits readers to read tokens', async () => {
     server.use(http.get(url('/webapi/tokens'), () => HttpResponse.json(f.page([]))))
     renderApp('/account', { me: f.me(f.user({ role: 'reader' })) })
@@ -57,17 +84,17 @@ describe('account', () => {
     const { user } = renderApp('/account', { me: f.me() })
     await user.type(await screen.findByLabelText('Current password'), 'old-password')
     await user.type(screen.getByLabelText('New password'), 'new-password-1')
-    await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-2')
+    await user.type(screen.getByLabelText('Repeat new password'), 'new-password-2')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('The new passwords do not match.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Confirm the new password')).toHaveAccessibleErrorMessage(
+    expect(screen.getByLabelText('Repeat new password')).toHaveAccessibleErrorMessage(
       'The new passwords do not match.',
     )
     expect(screen.getByLabelText('Current password')).not.toHaveAttribute('aria-invalid')
     expect(changed).toHaveLength(0)
 
-    await user.clear(screen.getByLabelText('Confirm the new password'))
-    await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-1')
+    await user.clear(screen.getByLabelText('Repeat new password'))
+    await user.type(screen.getByLabelText('Repeat new password'), 'new-password-1')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('Your other sessions have been logged out.')).toBeInTheDocument()
     expect(await changed[0]!.json()).toEqual({
@@ -86,7 +113,7 @@ describe('account', () => {
     const { user } = renderApp('/account', { me: f.me() })
     await user.type(await screen.findByLabelText('Current password'), 'nope')
     await user.type(screen.getByLabelText('New password'), 'new-password-1')
-    await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-1')
+    await user.type(screen.getByLabelText('Repeat new password'), 'new-password-1')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('The current password is wrong.')).toBeInTheDocument()
     expect(screen.getByLabelText('Current password')).toHaveAccessibleErrorMessage(

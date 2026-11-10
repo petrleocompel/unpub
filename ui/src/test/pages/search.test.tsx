@@ -76,7 +76,7 @@ describe('search box', () => {
     server.use(http.get(url('/webapi/users'), () => HttpResponse.json(f.page([f.admin], 1, 50))))
     const { user } = renderApp('/admin/users', { me: f.me() })
     const search = await screen.findByRole('searchbox', { name: 'Search packages' })
-    await user.click(await screen.findByRole('button', { name: 'Admin sections' }))
+    await user.click(await screen.findByRole('button', { name: 'Sections' }))
     const sheet = await screen.findByRole('dialog', { name: 'Administration' })
     expect(fireEvent.keyDown(document.activeElement ?? sheet, { key: '/' })).toBe(true)
     expect(search).not.toHaveFocus()

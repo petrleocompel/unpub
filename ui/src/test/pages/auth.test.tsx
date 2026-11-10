@@ -1,7 +1,8 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as f from '../fixtures'
+import { formatCountdown } from '@/pages/login'
 import { renderApp, where } from '../render'
 import { capture, error, server, url } from '../server'
 
@@ -28,12 +29,12 @@ describe('login', () => {
     await user.type(screen.getByLabelText('Password'), 'wrong')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('The email or the password is wrong.')
+    expect(alert).toHaveTextContent('The email or the password is not right.')
     expect(screen.getByLabelText('Password')).toHaveValue('')
     for (const field of [screen.getByLabelText('Email'), screen.getByLabelText('Password')]) {
       expect(field).toHaveAttribute('aria-invalid', 'true')
       expect(field).toHaveAttribute('aria-errormessage', alert.id)
-      expect(field).toHaveAccessibleDescription('The email or the password is wrong.')
+      expect(field).toHaveAccessibleDescription('The email or the password is not right.')
     }
 
     await user.type(screen.getByLabelText('Password'), 'right-password')
@@ -54,9 +55,62 @@ describe('login', () => {
     await user.type(await screen.findByLabelText('Email'), 'a@b.example')
     await user.type(screen.getByLabelText('Password'), 'whatever1')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Too many failed attempts. Try again in 2 minutes.',
-    )
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Too many attempts.')
+    expect(within(alert).getByText('Try again in 2 minutes.')).toHaveClass('sr-only')
+    expect(within(alert).getByText(/^Try again in [12]:\d\d\.$/)).toHaveAttribute('aria-hidden')
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeDisabled()
+  })
+
+  it('counts the wait down and lets the user try again at zero', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const attempts = capture('post', '/webapi/login', () =>
+        error(429, 'rate_limited', 'Too many attempts.', { 'Retry-After': '65' }),
+      )
+      const { user } = renderApp('/login')
+      await user.type(await screen.findByLabelText('Email'), 'a@b.example')
+      await user.type(screen.getByLabelText('Password'), 'whatever1')
+      await user.click(screen.getByRole('button', { name: 'Log in' }))
+      const alert = await screen.findByRole('alert')
+      // Real time passes while typing (shouldAdvanceTime), so read what is
+      // left instead of assuming the full 65 seconds are still on the clock.
+      const shown = within(alert).getByText(/^Try again in \d:\d\d\.$/)
+      const [, minutes, seconds] = /(\d):(\d\d)/.exec(shown.textContent ?? '')!
+      const left = Number(minutes) * 60 + Number(seconds)
+      expect(left).toBeGreaterThan(30)
+      expect(left).toBeLessThanOrEqual(65)
+      expect(within(alert).getByText('Try again in 2 minutes.')).toHaveClass('sr-only')
+      const button = screen.getByRole('button', { name: 'Log in' })
+      expect(button).toBeDisabled()
+
+      act(() => vi.advanceTimersByTime((left - 5) * 1000))
+      expect(within(alert).getByText(/^Try again in 0:0[45]\.$/)).toBeInTheDocument()
+      expect(button).toBeDisabled()
+
+      act(() => vi.advanceTimersByTime(6_000))
+      expect(alert).toHaveTextContent('Too many attempts. You can try again now.')
+      expect(within(alert).queryByText(/Try again in/)).toBeNull()
+      expect(button).toBeEnabled()
+      act(() => vi.advanceTimersByTime(5_000))
+      expect(alert).toHaveTextContent('You can try again now.')
+
+      await user.type(screen.getByLabelText('Password'), 'whatever2')
+      await user.click(button)
+      await waitFor(() => expect(attempts).toHaveLength(2))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows and hides the password', async () => {
+    const { user } = renderApp('/login')
+    const password = await screen.findByLabelText('Password')
+    expect(password).toHaveAttribute('type', 'password')
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(password).toHaveAttribute('type', 'text')
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(password).toHaveAttribute('type', 'password')
   })
 
   it('ignores a next that leaves the site', async () => {
@@ -205,7 +259,7 @@ describe('private registry', () => {
     const { router } = renderApp('/packages/my_company_core', { config: privateConfig })
     expect(await screen.findByRole('heading', { name: 'Log in to unpub' })).toBeInTheDocument()
     expect(where(router)).toBe('/login?next=%2Fpackages%2Fmy_company_core')
-    expect(screen.getByText(/This registry is private/)).toBeInTheDocument()
+    expect(screen.getByText(/is a private registry/)).toBeInTheDocument()
     expect(screen.queryByRole('searchbox')).toBeNull()
   })
 
@@ -223,9 +277,18 @@ describe('private registry', () => {
 describe('admin pages', () => {
   it('are forbidden to other roles', async () => {
     renderApp('/admin/users', { me: f.me(f.user()) })
-    expect(
-      await screen.findByRole('heading', { name: 'You may not open this page' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Administrators only' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Log in as an administrator' })).toBeInTheDocument()
+  })
+})
+
+describe('formatCountdown', () => {
+  it('shows minutes and seconds, rounding up and stopping at zero', () => {
+    expect(formatCountdown(120)).toBe('2:00')
+    expect(formatCountdown(65)).toBe('1:05')
+    expect(formatCountdown(42)).toBe('0:42')
+    expect(formatCountdown(0.2)).toBe('0:01')
+    expect(formatCountdown(0)).toBe('0:00')
+    expect(formatCountdown(-3)).toBe('0:00')
   })
 })

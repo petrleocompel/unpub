@@ -22,7 +22,7 @@ test.afterEach(() => {
 async function login(page: Page) {
   await page.goto('/login?next=/account')
   await page.getByLabel('Email').fill(adminEmail)
-  await page.getByLabel('Password').fill(adminPassword)
+  await page.getByLabel('Password', { exact: true }).fill(adminPassword)
   await page.getByRole('button', { name: 'Log in' }).click()
   await expect(page).toHaveURL(/\/account$/)
 }
@@ -64,9 +64,35 @@ test('lists, searches and shows a package', async ({ page }) => {
   expect(copied).toMatch(/^dart pub add e2e_demo --hosted-url http/)
 
   await page.getByRole('tab', { name: 'Versions' }).click()
-  await expect(
-    page.getByRole('tabpanel', { name: 'Versions' }).getByRole('link', { name: '1.2.0' }),
-  ).toBeVisible()
+  const versions = page.getByRole('tabpanel', { name: 'Versions' })
+  await expect(versions.getByRole('link', { name: '1.2.0', exact: true })).toBeVisible()
+  const download = versions.getByRole('link', { name: 'Download 1.2.0 archive' })
+  await expect(download).toHaveAttribute('href', '/packages/e2e_demo/versions/1.2.0.tar.gz')
+  const archive = await page.request.get((await download.getAttribute('href'))!)
+  expect(archive.status()).toBe(200)
+  expect((await archive.body()).subarray(0, 2)).toEqual(Buffer.from([0x1f, 0x8b]))
+})
+
+test('a heading reached by its fragment clears the sticky header', async ({ page }) => {
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 720 })
+    await page.goto('/packages/e2e_demo')
+    const heading = page
+      .getByRole('document', { name: 'README' })
+      .getByRole('heading', { name: 'Troubleshooting' })
+    await expect(heading).toBeAttached()
+    await page.evaluate(() => {
+      window.location.hash = 'md-troubleshooting'
+    })
+    const header = await page.locator('header').first().boundingBox()
+    expect(header, 'the header').not.toBeNull()
+    // Two rows on a phone, one from sm; the heading starts below either.
+    const below = header!.y + header!.height
+    await expect
+      .poll(async () => (await heading.boundingBox())?.y ?? Infinity)
+      .toBeLessThan(below + 40)
+    expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(below)
+  }
 })
 
 test('logs in, creates a token, creates a user and reads the audit log', async ({ page }) => {
@@ -101,4 +127,21 @@ test('the classic pages still work', async ({ page }) => {
   const response = await page.goto('/classic/packages')
   expect(response?.status()).toBe(200)
   await expect(page.getByRole('link', { name: 'e2e_demo' }).first()).toBeVisible()
+})
+
+// `UNPUB_E2E_SCREENSHOT=/tmp/list.png npm run test:e2e` takes the package
+// list with the fixture only. The README picture comes from the seeded
+// registry of `npm run screenshots` instead.
+test('screenshot of the package list', async ({ page }) => {
+  const out = process.env.UNPUB_E2E_SCREENSHOT
+  test.skip(!out, 'Set UNPUB_E2E_SCREENSHOT to the file to write')
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // A theme chosen in a reused storage state would win over the media query.
+  await page.addInitScript(() => localStorage.removeItem('unpub-theme'))
+  await page.goto('/')
+  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
+  await expect(page.getByRole('link', { name: 'e2e_demo' })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await page.screenshot({ path: out, animations: 'disabled' })
 })

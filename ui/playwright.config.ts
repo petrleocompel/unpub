@@ -17,5 +17,21 @@ export default defineConfig({
     trace: 'retain-on-failure',
     permissions: ['clipboard-read', 'clipboard-write'],
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: /screenshots\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    // `npm run screenshots` only, so that a plain `playwright test` skips it.
+    ...(process.env.UNPUB_E2E_SCREENSHOTS
+      ? [
+          {
+            name: 'screenshots',
+            testMatch: /screenshots\.spec\.ts/,
+            use: { ...devices['Desktop Chrome'] },
+          },
+        ]
+      : []),
+  ],
 })

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Package page, README</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 2460px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Package · README <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for jane.doe@company.example"><span class="avatar">JD</span><span class="hide-sm">jane.doe@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">my_company_core</span></nav>
+<div class="flex wrap items-start justify-between gap-3">
+<div class="pkg-title"><h1>my_company_core</h1><span class="ver">1.4.0</span><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Copy my_company_core: ^1.4.0"><i class="i i-copy i-sm"></i></button></div>
+<button class="btn btn-outline btn-sm" type="button" aria-haspopup="menu">Actions<i class="i i-chevron-down i-sm"></i></button>
+</div>
+<p class="t-md muted" style="max-width: 760px;">Core models, the HTTP client and error types shared by every Company app.</p>
+<div class="pkg-sub">
+<span>Published <time datetime="2026-11-07T09:12:00Z" title="7 Nov 2026, 10:12 CET" class="fg">3 days ago</time></span><span class="sep" aria-hidden="true"></span>
+<span>by <a class="fg ulink" href="#">jane.doe@company.example</a></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">48 213</b> downloads</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk">Dart</span><span class="badge primary"><i class="i i-star"></i>Latest</span></div>
+<nav class="tabs" aria-label="Package sections" style="margin-top: 6px; border-bottom: 0;">
+<a href="#" aria-current="page">README</a>
+<a href="#">Changelog</a>
+<a href="PackageVersions.dc.html">Versions <span class="n">14</span></a>
+<a href="PackageInstall.dc.html">Install</a>
+<a href="PackageStats.dc.html">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container pkg-layout">
+<div class="pkg-body">
+<article class="md min-w-0">
+<h2 id="features">Features <a class="anchor" href="#features" aria-label="Link to Features">#</a></h2>
+<p>One package for what every Company app needs before it can talk to a backend:</p>
+<ul>
+<li>Typed models for <code class="inl">Customer</code>, <code class="inl">Order</code> and <code class="inl">Money</code>, with JSON round-trips.</li>
+<li>An <code class="inl">ApiClient</code> with retries, request ids and the Company auth header.</li>
+<li>One <code class="inl">AppError</code> hierarchy, so every screen shows the same messages.</li>
+</ul>
+<h2 id="getting-started">Getting started <a class="anchor" href="#getting-started" aria-label="Link to Getting started">#</a></h2>
+<p>Add the package from the Company registry, then create one client per app:</p>
+<div class="code" style="margin-bottom: 14px;"><pre><span class="k">final</span> client = ApiClient(
+  baseUrl: Uri.parse(<span class="s">'https://api.company.example'</span>),
+  tokens: CompanyAuth.instance,
+);</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy code"><i class="i i-copy"></i></button></div>
+<h3 id="errors">Handling errors</h3>
+<p>Every call returns a <code class="inl">Result</code>. Map <code class="inl">AppError.network</code> to the offline banner and everything else to a toast.</p>
+<h2 id="configuration">Configuration <a class="anchor" href="#configuration" aria-label="Link to Configuration">#</a></h2>
+<table><thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code class="inl">retries</code></td><td>3</td><td>Attempts for idempotent requests</td></tr><tr><td><code class="inl">timeout</code></td><td>20 s</td><td>Per request</td></tr></tbody></table>
+</article>
+<nav class="toc" aria-label="On this page">
+<p class="section-h" style="padding: 0 12px 6px;">On this page</p>
+<a href="#features" aria-current="location">Features</a>
+<a href="#getting-started">Getting started</a>
+<a class="sub" href="#errors">Handling errors</a>
+<a href="#configuration">Configuration</a>
+</nav>
+</div>
+
+<aside class="aside" aria-label="Package details">
+<section>
+<h2>Version</h2>
+<div class="sel w-full"><select class="select" aria-label="Version"><option>1.4.0 · latest</option><option>2.0.0-beta.3 · prerelease</option><option>1.3.1 · retracted</option></select><i class="i i-chevron-down"></i></div>
+<p class="t-xs muted">14 versions · newest prerelease 2.0.0-beta.3</p>
+</section>
+<section>
+<h2>Metadata</h2>
+<dl class="col gap-1h">
+<div class="row"><dt class="muted">Dart SDK</dt><dd class="mono t-sm">&gt;=3.4.0 &lt;4.0.0</dd></div>
+<div class="row"><dt class="muted">Flutter</dt><dd class="muted">not required</dd></div>
+<div class="row"><dt class="muted">License</dt><dd>BSD-3-Clause</dd></div>
+</dl>
+<div class="flex wrap gap-1"><span class="chip">android</span><span class="chip">ios</span><span class="chip">linux</span><span class="chip">macos</span><span class="chip">web</span><span class="chip">windows</span></div>
+</section>
+<section>
+<h2>Dependencies</h2>
+<ul class="deps">
+<li><a class="link mono t-sm" href="#">company_logging</a><span class="ver t-xs">^2.0.0</span></li>
+<li><a class="link mono t-sm" href="#">http <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^1.2.0</span></li>
+<li><a class="link mono t-sm" href="#">json_annotation <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^4.9.0</span></li>
+<li><a class="link mono t-sm" href="#">meta <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^1.11.0</span></li>
+</ul>
+</section>
+<section>
+<h2>Uploaders</h2>
+<ul class="col gap-1h">
+<li class="flex items-center gap-2"><span class="avatar" style="width: 22px; height: 22px; font-size: 10px;">JD</span>jane.doe@company.example</li>
+<li class="flex items-center gap-2"><span class="avatar" style="width: 22px; height: 22px; font-size: 10px;">AL</span>ada.lovelace@company.example</li>
+</ul>
+</section>
+<section>
+<h2>Links</h2>
+<ul class="col gap-1h">
+<li><a class="link" href="#"><i class="i i-code i-sm"></i> Repository</a></li>
+<li><a class="link" href="#"><i class="i i-home i-sm"></i> Homepage</a></li>
+<li><a class="link" href="#"><i class="i i-bug i-sm"></i> Issue tracker</a></li>
+</ul>
+</section>
+</aside>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":2460}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440' },
+        { label: '1440 · Dark', cls: 'w1440 dark' },
+        { label: '390 · Light', cls: 'w390' },
+        { label: '390 · Dark', cls: 'w390 dark' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

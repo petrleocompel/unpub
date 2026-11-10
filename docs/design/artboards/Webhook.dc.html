@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin webhook</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 2410px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Admin · Webhook, secret just rotated <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html" aria-current="page"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-5">
+<div class="col gap-2">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="Webhooks.dc.html">Webhooks</a><i class="i i-chevron-right i-xs"></i><span class="fg">#mobile-releases</span></nav>
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1 min-w-0"><h1 class="mono truncate" style="font-size: 18px;">hooks.slack.com/services/T04/B07/xyz</h1><p class="flex wrap items-center gap-2"><span class="badge success"><span class="dot"></span>Enabled</span>#mobile-releases channel · created 3 Mar 2026</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-danger-outline btn-sm" type="button"><i class="i i-trash"></i>Delete</button></div>
+</div>
+</div>
+
+<div class="grid gap-6 cols-1-sm items-start" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+<section class="card">
+<div class="card-h"><h2>Settings</h2></div>
+<form class="card-b col gap-4">
+<div class="field"><label class="label" for="wh-url-{{v.k}}">Payload URL</label><input class="input mono t-sm" id="wh-url-{{v.k}}" value="https://hooks.slack.com/services/T04/B07/xyz"></div>
+<div class="field"><label class="label" for="wh-desc-{{v.k}}">Description</label><input class="input" id="wh-desc-{{v.k}}" value="#mobile-releases channel"></div>
+<fieldset style="border: 0; padding: 0; margin: 0;"><legend class="label" style="margin-bottom: 8px;">Events</legend>
+<div class="grid gap-2 cols-1-sm" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+<label class="check"><input type="checkbox" checked><span class="mono t-xs">package.published</span></label>
+<label class="check"><input type="checkbox" checked><span class="mono t-xs">version.retracted</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">version.unretracted</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">version.deleted</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">package.discontinued</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">package.continued</span></label>
+<label class="check"><input type="checkbox"><span class="mono t-xs">package.deleted</span></label>
+</div>
+</fieldset>
+<label class="flex items-center gap-2 t-sm"><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Enabled"></button>Enabled</label>
+<div class="flex justify-end"><button class="btn btn-primary btn-sm" type="submit">Save changes</button></div>
+</form>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Signing secret</h2><button class="btn btn-outline btn-sm" type="button"><i class="i i-refresh"></i>Rotate…</button></div>
+<div class="card-b col gap-4">
+<div class="secret" role="status">
+<div class="flex items-start gap-3"><i class="i i-key t-warning" style="margin-top: 3px;"></i><div class="col gap-1"><p class="fw-6">New secret. Copy it now.</p><p class="t-sm muted">The old secret stopped working. This one is not shown again.</p></div></div>
+<div class="secret-v"><span>whsec_Zr4pQ8n1VbX7kLm2Tg5cW9yHs3dJ0aFe</span><button class="btn btn-primary btn-sm" type="button"><i class="i i-copy"></i>Copy</button></div>
+</div>
+<div class="col gap-2">
+<p class="t-sm fw-6">Verifying a delivery</p>
+<p class="t-sm muted">Each POST carries <code class="inl">X-Unpub-Signature: sha256=&lt;hex&gt;</code>, the HMAC-SHA256 of the raw body with this secret as key. Compute it over the exact bytes before parsing the JSON, and compare in constant time.</p>
+</div>
+</div>
+</section>
+</div>
+
+<section class="card">
+<div class="card-h"><h2>Deliveries</h2><div class="flex items-center gap-2"><span class="t-xs muted">Kept 30 days</span><div class="sel"><select class="select sm" style="width: 120px;" aria-label="Status"><option>All statuses</option><option>Failed</option></select><i class="i i-chevron-down"></i></div></div></div>
+<div style="overflow-x: auto;">
+<table class="tbl sticky-first">
+<thead><tr><th>Time</th><th>Event</th><th>Package</th><th class="num">Attempt</th><th>Status</th><th class="num">Response</th><th class="num">Duration</th><th>Error</th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="d" hint-placeholder-count="7">
+<tr class="{{d.cls}}"><td><a class="link" href="#">{{d.t}}</a></td><td><span class="chip">{{d.e}}</span></td><td class="mono t-xs">{{d.p}}</td><td class="num">{{d.a}}</td><td><span class="badge {{d.tone}}"><span class="dot"></span>{{d.s}}</span></td><td class="num mono t-xs">{{d.code}}</td><td class="num muted">{{d.ms}}</td><td class="t-xs t-danger">{{d.err}}</td><td class="text-right"><button class="btn btn-outline btn-xs" type="button"><i class="i i-send"></i>Redeliver</button></td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Delivery 6730c1f2 · payload</h2><span class="badge danger"><span class="dot"></span>Failed · next attempt in 9 min</span></div>
+<div class="card-b grid gap-4 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);">
+<div class="code"><div class="code-h"><span>Request headers</span></div><pre><span class="k">POST</span> /services/T04/B07/xyz
+<span class="k">Content-Type</span>: application/json
+<span class="k">X-Unpub-Event</span>: package.published
+<span class="k">X-Unpub-Delivery</span>: 6730c1f2a9d3e4b5c6d7e8f9
+<span class="k">X-Unpub-Signature</span>: sha256=4f1c9a…e07b</pre></div>
+<div class="code"><div class="code-h"><span>Body</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-copy"></i>Copy</button></div><pre>{
+  <span class="k">"event"</span>: <span class="s">"package.published"</span>,
+  <span class="k">"package"</span>: <span class="s">"my_company_core"</span>,
+  <span class="k">"version"</span>: <span class="s">"2.0.0-beta.4"</span>,
+  <span class="k">"actor"</span>: <span class="s">"ci-bot@company.example"</span>,
+  <span class="k">"at"</span>: <span class="s">"2026-11-10T09:41:07Z"</span>
+}</pre></div>
+</div>
+</section>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":2410}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const D = (t, e, p, a, s, code, ms, err, cls) => ({ t, e, p, a, s, tone: s === 'Delivered' ? 'success' : s === 'Failed' ? 'danger' : 'warning', code, ms, err, cls: cls || '' });
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440', k: 'a' },
+        { label: '1440 · Dark', cls: 'w1440 dark', k: 'b' },
+        { label: '390 · Light', cls: 'w390', k: 'c' },
+        { label: '390 · Dark', cls: 'w390 dark', k: 'd' }
+      ],
+      rows: [
+        D('just now', 'package.published', 'api_client_generated 12.0.0+6', '1 / 5', 'Pending', '—', '—', ''),
+        D('12 min ago', 'package.published', 'my_company_core 2.0.0-beta.4', '3 / 5', 'Failed', '500', '412 ms', 'Server error', 'expanded'),
+        D('2 hours ago', 'version.retracted', 'my_company_core 1.3.1', '5 / 5', 'Failed', '—', '10 s', 'Timed out, gave up'),
+        D('2 days ago', 'package.published', 'my_company_core 2.0.0-beta.3', '1 / 5', 'Delivered', '200', '188 ms', ''),
+        D('3 days ago', 'package.published', 'my_company_core 1.4.0', '1 / 5', 'Delivered', '200', '201 ms', ''),
+        D('5 days ago', 'package.published', 'company_auth 3.1.0', '2 / 5', 'Delivered', '200', '176 ms', '')
+
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

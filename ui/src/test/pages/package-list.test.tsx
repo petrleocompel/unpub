@@ -75,7 +75,7 @@ describe('package list', () => {
     const sort = screen.getByRole('combobox', { name: 'Sort' })
     expect(within(sort).queryByRole('option', { name: 'Best match' })).toBeNull()
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'SDK' }), 'flutter')
+    await user.click(sdkButton('Flutter'))
     await user.click(screen.getByRole('switch', { name: 'Show discontinued' }))
     await user.selectOptions(sort, 'updated')
 
@@ -92,7 +92,7 @@ describe('package list', () => {
     packages()
     const { user, router } = renderApp('/packages')
     await screen.findByRole('link', { name: 'my_company_core' })
-    await user.selectOptions(screen.getByRole('combobox', { name: 'SDK' }), 'flutter')
+    await user.click(sdkButton('Flutter'))
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort' }), 'name')
     expect(where(router)).toBe('/packages?sdk=flutter&sort=name')
 
@@ -101,7 +101,8 @@ describe('package list', () => {
     expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveValue('downloads')
     await act(() => router.navigate(-1))
     expect(where(router)).toBe('/packages')
-    expect(screen.getByRole('combobox', { name: 'SDK' })).toHaveValue('')
+    expect(sdkButton('All')).toHaveAttribute('aria-pressed', 'true')
+    expect(sdkButton('Flutter')).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('pages through the results and changes the page size', async () => {
@@ -135,12 +136,47 @@ describe('package list', () => {
   it('echoes the query when nothing matches and resets', async () => {
     packages(0, [])
     const { user, router } = renderApp('/packages?q=nothing&sdk=dart')
-    expect(await screen.findByRole('heading', { name: 'No packages match' })).toBeInTheDocument()
-    expect(screen.getByText(/Nothing matches/)).toHaveTextContent(
-      'Nothing matches nothing with these filters.',
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing matches “nothing”' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/With the filter SDK: Dart/)).toHaveTextContent(
+      'With the filter SDK: Dart. Check the spelling, or search all SDKs.',
     )
-    await user.click(screen.getByRole('button', { name: 'Reset the search' }))
+    await user.click(screen.getByRole('button', { name: 'Search all SDKs' }))
+    expect(where(router)).toBe('/packages?q=nothing')
+    await user.click(await screen.findByRole('button', { name: 'Reset the search' }))
     expect(where(router)).toBe('/packages')
+  })
+
+  it('says no package matches the filters without a query', async () => {
+    packages(0, [])
+    renderApp('/packages?sdk=flutter')
+    expect(await screen.findByRole('heading', { name: 'No packages match' })).toBeInTheDocument()
+  })
+
+  it('filters by SDK with a segmented control the keyboard reaches', async () => {
+    const queries = packages()
+    const { user, router } = renderApp('/packages')
+    await screen.findByRole('link', { name: 'my_company_core' })
+    expect(screen.getByRole('group', { name: 'SDK' })).toBeInTheDocument()
+    expect(sdkButton('All')).toHaveAttribute('aria-pressed', 'true')
+
+    sdkButton('All').focus()
+    await user.tab()
+    expect(sdkButton('Dart')).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(where(router)).toBe('/packages?sdk=dart')
+    expect(sdkButton('Dart')).toHaveAttribute('aria-pressed', 'true')
+    expect(sdkButton('All')).toHaveAttribute('aria-pressed', 'false')
+    await waitFor(() => expect(queries.at(-1)?.get('sdk')).toBe('dart'))
+
+    await user.tab()
+    await user.keyboard(' ')
+    expect(where(router)).toBe('/packages?sdk=flutter')
+
+    await user.click(sdkButton('All'))
+    expect(where(router)).toBe('/packages')
+    expect(sdkButton('All')).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('shows the server message when the list fails', async () => {
@@ -154,6 +190,10 @@ describe('package list', () => {
     )
     renderApp('/')
     expect(await screen.findByRole('alert')).toHaveTextContent('MongoDB is down.')
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 })
+
+function sdkButton(name: string) {
+  return within(screen.getByRole('group', { name: 'SDK' })).getByRole('button', { name })
+}

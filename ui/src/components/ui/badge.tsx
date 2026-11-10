@@ -3,19 +3,28 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 import { Slot } from 'radix-ui'
 
+/*
+ * Badges of docs/design (board 01): 22 px pills, 12 px medium text, a 12 px
+ * icon. Status tones are tints of a state colour with the icon in that
+ * colour, so the word, not the colour, carries the meaning.
+ */
 const badgeVariants = cva(
-  'inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3',
+  'inline-flex h-5.5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border px-2 text-xs leading-none font-medium whitespace-nowrap transition-[color,background-color] [&>svg]:pointer-events-none [&>svg]:size-3',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground [a&]:hover:bg-primary/90',
-        secondary: 'bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
+        default: 'border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90',
+        secondary:
+          'border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
         destructive:
-          'bg-destructive text-white focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/90',
-        outline:
-          'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
-        ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 [a&]:hover:underline',
+          'border-transparent bg-destructive text-destructive-foreground [a&]:hover:bg-destructive/90',
+        outline: 'border-border bg-background text-foreground [a&]:hover:bg-accent',
+        primary: 'border-primary/30 bg-primary/12 text-foreground [&>svg]:text-primary',
+        success: 'border-success/35 bg-success/12 text-foreground [&>svg]:text-success',
+        warning: 'border-warning/40 bg-warning/13 text-foreground [&>svg]:text-warning',
+        danger: 'border-destructive/35 bg-destructive/10 text-foreground [&>svg]:text-destructive',
+        ghost: 'border-transparent [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
+        link: 'border-transparent text-primary underline-offset-4 [a&]:hover:underline',
       },
     },
     defaultVariants: {

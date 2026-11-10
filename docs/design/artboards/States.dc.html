@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>unpub states and dialogs</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 3120px; height: 1960px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="2">
+<div class="variant">
+<p class="vlabel">States, dialogs and error pages <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}" style="background: var(--surface);">
+<div class="grid gap-6" style="grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 40px;">
+
+<figure class="col gap-2"><figcaption class="section-h">Loading · package list</figcaption>
+<div class="card" aria-busy="true" aria-label="Loading packages" style="background: var(--background);">
+<sc-for list="{{three}}" as="x" hint-placeholder-count="3">
+<div class="pkg-row" style="border-top: 1px solid var(--border);"><div class="col gap-2"><span class="skel" style="width: 44%; height: 18px;"></span><span class="skel" style="width: 92%; height: 11px;"></span><span class="skel" style="width: 70%; height: 11px;"></span><span class="skel" style="width: 52px; height: 20px;"></span></div><div class="col gap-2 items-end"><span class="skel" style="width: 56px; height: 12px;"></span><span class="skel" style="width: 72px; height: 12px;"></span></div></div>
+</sc-for>
+</div>
+<p class="hint">Skeletons match the real row so nothing jumps. Shown after 150 ms; announced once as “Loading packages”.</p>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Loading · package page</figcaption>
+<div class="card col gap-4" aria-busy="true" style="padding: 20px; background: var(--background);">
+<span class="skel" style="width: 30%; height: 12px;"></span>
+<span class="skel" style="width: 60%; height: 28px;"></span>
+<div class="flex gap-2"><span class="skel" style="width: 48px; height: 20px;"></span><span class="skel" style="width: 64px; height: 20px;"></span></div>
+<div class="flex gap-4" style="border-bottom: 1px solid var(--border); padding-bottom: 10px;"><span class="skel" style="width: 64px; height: 14px;"></span><span class="skel" style="width: 80px; height: 14px;"></span><span class="skel" style="width: 64px; height: 14px;"></span></div>
+<div class="grid gap-6" style="grid-template-columns: 1fr 120px;"><div class="col gap-2"><span class="skel" style="width: 40%; height: 18px;"></span><span class="skel" style="width: 100%; height: 11px;"></span><span class="skel" style="width: 96%; height: 11px;"></span><span class="skel" style="width: 88%; height: 11px;"></span><span class="skel" style="width: 100%; height: 64px;"></span></div><div class="col gap-2"><span class="skel" style="width: 100%; height: 32px;"></span><span class="skel" style="width: 80%; height: 11px;"></span><span class="skel" style="width: 60%; height: 11px;"></span></div></div>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Offline / API unreachable</figcaption>
+<div class="card" style="overflow: hidden; background: var(--background);">
+<div class="banner offline" role="status"><i class="i i-wifi-off"></i><span class="grow">Can’t reach the unpub API. Showing what was loaded; retrying every 10 s.</span><button class="btn btn-outline btn-xs" type="button">Retry now</button></div>
+<div class="hdr"><div class="hdr-in" style="padding: 0 16px; height: 52px; gap: 12px;"><span class="brand" style="font-size: 16px;"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>unpub</span><span class="skel grow" style="height: 30px; max-width: 220px; opacity: 0.6;"></span></div></div>
+<div style="padding: 16px;" class="col gap-2"><span class="skel" style="width: 50%; height: 14px; opacity: 0.6;"></span><span class="skel" style="width: 80%; height: 10px; opacity: 0.6;"></span></div>
+</div>
+<p class="hint">Sits above the header, warning tone plus icon and text, never colour alone. Disappears when the API answers again.</p>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Empty registry</figcaption>
+<div class="state" style="background: var(--background);">
+<span class="ic"><i class="i i-package"></i></span>
+<h3>No packages yet</h3>
+<p>Publish the first one from its directory. Add your token once, then publish:</p>
+<div class="code w-full" style="text-align: left;"><pre><span class="pr">$ </span>dart pub token add https://pub.company.example
+<span class="pr">$ </span>dart pub publish --server https://pub.company.example</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy commands"><i class="i i-copy"></i></button></div>
+<p class="t-xs">Or set <code class="inl">publish_to: https://pub.company.example</code> in pubspec.yaml.</p>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">No results</figcaption>
+<div class="state" style="background: var(--background);">
+<span class="ic"><i class="i i-search-x"></i></span>
+<h3>Nothing matches “<span class="mono">blocc</span>”</h3>
+<p>With the filters SDK: Flutter. Check the spelling, or search all SDKs.</p>
+<div class="flex wrap justify-center gap-2"><button class="btn btn-outline btn-sm" type="button"><i class="i i-rotate"></i>Reset the search</button><button class="btn btn-ghost btn-sm" type="button">Search all SDKs</button></div>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Error with retry</figcaption>
+<div class="state" style="background: var(--background); border-style: solid; border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));">
+<span class="ic t-danger"><i class="i i-circle-alert"></i></span>
+<h3>Could not load the audit log</h3>
+<p>The server answered 503: <span class="mono">mongo is not reachable</span>.</p>
+<button class="btn btn-outline btn-sm" type="button"><i class="i i-rotate"></i>Retry</button>
+<p class="t-xs mono">request 01JC9Z0K3V8N</p>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">403 · Forbidden</figcaption>
+<div class="state" style="background: var(--background); padding: 40px 24px;">
+<p class="err-code" aria-hidden="true" style="font-size: 52px;">403</p>
+<h3>Administrators only</h3>
+<p>You are logged in as <b class="fg">jane.doe@company.example</b> (publisher). Log in as an administrator to open this page.</p>
+<div class="flex wrap justify-center gap-2"><a class="btn btn-primary btn-sm" href="Login.dc.html"><i class="i i-login"></i>Log in as administrator</a><a class="btn btn-outline btn-sm" href="PackageList.dc.html">Packages</a></div>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">500 · Server error</figcaption>
+<div class="state" style="background: var(--background); padding: 40px 24px;">
+<p class="err-code" aria-hidden="true" style="font-size: 52px;">500</p>
+<h3>Something broke on the server</h3>
+<p>Try again in a moment. If it keeps happening, send this id to your administrator:</p>
+<div class="secret-v" style="max-width: 300px; width: 100%;"><span>01JC9Z7QF2RXW4</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-copy"></i>Copy</button></div>
+<button class="btn btn-outline btn-sm" type="button"><i class="i i-rotate"></i>Reload</button>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Toasts · bottom right, 5 s, errors stay</figcaption>
+<div class="col gap-3 items-end" style="padding: 16px 0;">
+<div class="toast success" role="status"><i class="i i-circle-check"></i><div class="grow"><p class="t">User created</p><p class="d">eva.svobodova@company.example</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+<div class="toast info" role="status"><i class="i i-check"></i><div class="grow"><p class="t">Copied to clipboard</p></div></div>
+<div class="toast error" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Revoking failed</p><p class="d">403 · the token belongs to another user.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Dialog · delete package (type the name)</figcaption>
+<div class="card" style="position: relative; height: 380px; overflow: hidden;">
+<div class="modal">
+<div class="scrim"></div>
+<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="del-h-{{v.k}}">
+<div class="dialog-h"><h2 id="del-h-{{v.k}}" class="flex items-center gap-2"><i class="i i-alert t-danger"></i>Delete company_maps?</h2><p>All 5 versions and their archives are deleted. Apps that depend on it stop resolving. This cannot be undone.</p></div>
+<div class="dialog-b"><div class="field"><label class="label" for="del-n-{{v.k}}">Type <span class="mono">company_maps</span> to confirm</label><input class="input focused mono" id="del-n-{{v.k}}" value="company_ma"></div></div>
+<div class="dialog-f"><button class="btn btn-outline" type="button">Cancel</button><button class="btn btn-destructive" type="button" disabled>Delete package</button></div>
+</div>
+</div>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Dialog · transfer ownership (tick to confirm)</figcaption>
+<div class="card" style="position: relative; height: 380px; overflow: hidden;">
+<div class="modal">
+<div class="scrim"></div>
+<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="tr-h-{{v.k}}">
+<div class="dialog-h"><h2 id="tr-h-{{v.k}}">Transfer company_auth</h2><p>The new owner becomes the only uploader. jane.doe and ci-bot lose upload rights.</p></div>
+<div class="dialog-b">
+<div class="field"><label class="label" for="tr-to-{{v.k}}">New owner</label><input class="input" id="tr-to-{{v.k}}" value="petr.novy@company.example"></div>
+<label class="check"><input type="checkbox" checked>I understand the current uploaders lose access</label>
+</div>
+<div class="dialog-f"><button class="btn btn-outline" type="button">Cancel</button><button class="btn btn-primary" type="button"><i class="i i-transfer"></i>Transfer</button></div>
+</div>
+</div>
+</div>
+</figure>
+
+<figure class="col gap-2"><figcaption class="section-h">Dialog · rotate secret (tick to confirm)</figcaption>
+<div class="card" style="position: relative; height: 380px; overflow: hidden;">
+<div class="modal">
+<div class="scrim"></div>
+<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rot-h-{{v.k}}">
+<div class="dialog-h"><h2 id="rot-h-{{v.k}}">Rotate the signing secret?</h2><p>The current secret stops working at once. Receivers reject deliveries until they have the new one.</p></div>
+<div class="dialog-b"><label class="check"><input type="checkbox">I will update the receiver right away</label></div>
+<div class="dialog-f"><button class="btn btn-outline" type="button">Cancel</button><button class="btn btn-primary" type="button" disabled><i class="i i-refresh"></i>Rotate secret</button></div>
+</div>
+</div>
+</div>
+</figure>
+
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3120,"height":1960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      three: [1, 2, 3],
+      variants: [
+        { label: 'Light', cls: 'w1440', k: 'a' },
+        { label: 'Dark', cls: 'w1440 dark', k: 'b' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

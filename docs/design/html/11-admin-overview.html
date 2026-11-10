@@ -1,0 +1,350 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Admin overview</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 4060px; height: 1690px;">
+
+<div class="variant">
+<p class="vlabel">Admin · Overview <span>· 1440 · Light</span></p>
+<div class="frame w1440">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="#" aria-current="page"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-6">
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1>Overview</h1><p><span class="mono">pub.company.example</span> · unpub 3.0.0 · up 12 days</p></div>
+<div class="flex wrap items-center gap-2">
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+<span class="badge success"><i class="i i-database"></i>MongoDB ready · 4 ms</span>
+<span class="badge success"><i class="i i-drive"></i>Storage ready</span>
+</div>
+</div>
+
+<div class="grid gap-4 cols-2-sm" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
+<a class="card stat" href="AdminPackages.dc.html"><p class="l flex items-center gap-1h"><i class="i i-package i-sm"></i>Packages</p><p class="v">142</p><p class="t-xs muted">18 cached from pub.dev</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-tag i-sm"></i>Versions</p><p class="v">1 386</p><p class="t-xs muted">23 this week</p></div>
+<a class="card stat" href="AdminUsers.dc.html"><p class="l flex items-center gap-1h"><i class="i i-users i-sm"></i>Users</p><p class="v">37</p><p class="t-xs muted">3 admins · 2 disabled</p></a>
+<a class="card stat" href="Webhooks.dc.html"><p class="l flex items-center gap-1h"><i class="i i-webhook i-sm"></i>Webhooks</p><p class="v">4</p><p class="t-xs t-danger flex items-center gap-1"><i class="i i-circle-alert i-xs"></i>3 failed in 24 h</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-drive i-sm"></i>Storage</p><p class="v">3.2 GB</p><p class="t-xs muted">local · /var/lib/unpub</p></div>
+</div>
+
+<div class="grid gap-6 cols-1-sm" style="grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);">
+<section class="card">
+<div class="card-h"><h2>Recent publishes</h2><a class="link t-sm" href="AuditLog.dc.html">Audit log <i class="i i-chevron-right i-xs"></i></a></div>
+<div style="overflow-x: auto;">
+<table class="tbl">
+<thead><tr><th>Package</th><th>Version</th><th>By</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><a class="link" href="AdminPackage.dc.html">api_client_generated</a></td><td class="mono">12.0.0+5</td><td class="muted">ci-bot · token</td><td title="2026-11-10 09:41">1 hour ago</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td><div class="flex items-center gap-2"><span class="mono">2.0.0-beta.3</span><span class="badge"><i class="i i-flask"></i>Prerelease</span></div></td><td class="muted">jane.doe</td><td>2 days ago</td></tr>
+<tr><td><a class="link" href="#">company_design_system</a></td><td class="mono">5.2.1</td><td class="muted">petr.novy</td><td>yesterday</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td class="mono">1.4.0</td><td class="muted">jane.doe</td><td>3 days ago</td></tr>
+<tr><td><a class="link" href="#">company_auth</a></td><td class="mono">3.1.0</td><td class="muted">ci-bot · token</td><td>5 days ago</td></tr>
+<tr><td><a class="link" href="#">feature_flags</a></td><td class="mono">0.7.0</td><td class="muted">ada.lovelace</td><td>3 weeks ago</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Failed deliveries · 24 h</h2><span class="badge danger"><span class="dot"></span>3 failed</span></div>
+<ul class="divide">
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">12 min ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 3 of 5 · <span class="t-danger">HTTP 500</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">2 hours ago</span></div><p class="t-xs muted"><span class="chip">version.retracted</span> · attempt 5 of 5 · <span class="t-danger">gave up</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="#">ci.company.example/hooks/unpub</a><span class="t-xs muted nowrap">9 hours ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 2 of 5 · <span class="t-danger">timeout 10 s</span></p></li>
+</ul>
+<div class="card-f" style="justify-content: flex-start;"><a class="link t-sm" href="Webhooks.dc.html">All webhooks <i class="i i-chevron-right i-xs"></i></a></div>
+</section>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Overview <span>· 1440 · Dark</span></p>
+<div class="frame w1440 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="#" aria-current="page"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-6">
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1>Overview</h1><p><span class="mono">pub.company.example</span> · unpub 3.0.0 · up 12 days</p></div>
+<div class="flex wrap items-center gap-2">
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+<span class="badge success"><i class="i i-database"></i>MongoDB ready · 4 ms</span>
+<span class="badge success"><i class="i i-drive"></i>Storage ready</span>
+</div>
+</div>
+
+<div class="grid gap-4 cols-2-sm" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
+<a class="card stat" href="AdminPackages.dc.html"><p class="l flex items-center gap-1h"><i class="i i-package i-sm"></i>Packages</p><p class="v">142</p><p class="t-xs muted">18 cached from pub.dev</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-tag i-sm"></i>Versions</p><p class="v">1 386</p><p class="t-xs muted">23 this week</p></div>
+<a class="card stat" href="AdminUsers.dc.html"><p class="l flex items-center gap-1h"><i class="i i-users i-sm"></i>Users</p><p class="v">37</p><p class="t-xs muted">3 admins · 2 disabled</p></a>
+<a class="card stat" href="Webhooks.dc.html"><p class="l flex items-center gap-1h"><i class="i i-webhook i-sm"></i>Webhooks</p><p class="v">4</p><p class="t-xs t-danger flex items-center gap-1"><i class="i i-circle-alert i-xs"></i>3 failed in 24 h</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-drive i-sm"></i>Storage</p><p class="v">3.2 GB</p><p class="t-xs muted">local · /var/lib/unpub</p></div>
+</div>
+
+<div class="grid gap-6 cols-1-sm" style="grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);">
+<section class="card">
+<div class="card-h"><h2>Recent publishes</h2><a class="link t-sm" href="AuditLog.dc.html">Audit log <i class="i i-chevron-right i-xs"></i></a></div>
+<div style="overflow-x: auto;">
+<table class="tbl">
+<thead><tr><th>Package</th><th>Version</th><th>By</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><a class="link" href="AdminPackage.dc.html">api_client_generated</a></td><td class="mono">12.0.0+5</td><td class="muted">ci-bot · token</td><td title="2026-11-10 09:41">1 hour ago</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td><div class="flex items-center gap-2"><span class="mono">2.0.0-beta.3</span><span class="badge"><i class="i i-flask"></i>Prerelease</span></div></td><td class="muted">jane.doe</td><td>2 days ago</td></tr>
+<tr><td><a class="link" href="#">company_design_system</a></td><td class="mono">5.2.1</td><td class="muted">petr.novy</td><td>yesterday</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td class="mono">1.4.0</td><td class="muted">jane.doe</td><td>3 days ago</td></tr>
+<tr><td><a class="link" href="#">company_auth</a></td><td class="mono">3.1.0</td><td class="muted">ci-bot · token</td><td>5 days ago</td></tr>
+<tr><td><a class="link" href="#">feature_flags</a></td><td class="mono">0.7.0</td><td class="muted">ada.lovelace</td><td>3 weeks ago</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Failed deliveries · 24 h</h2><span class="badge danger"><span class="dot"></span>3 failed</span></div>
+<ul class="divide">
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">12 min ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 3 of 5 · <span class="t-danger">HTTP 500</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">2 hours ago</span></div><p class="t-xs muted"><span class="chip">version.retracted</span> · attempt 5 of 5 · <span class="t-danger">gave up</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="#">ci.company.example/hooks/unpub</a><span class="t-xs muted nowrap">9 hours ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 2 of 5 · <span class="t-danger">timeout 10 s</span></p></li>
+</ul>
+<div class="card-f" style="justify-content: flex-start;"><a class="link t-sm" href="Webhooks.dc.html">All webhooks <i class="i i-chevron-right i-xs"></i></a></div>
+</section>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Overview <span>· 390 · Light</span></p>
+<div class="frame w390">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="#" aria-current="page"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-6">
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1>Overview</h1><p><span class="mono">pub.company.example</span> · unpub 3.0.0 · up 12 days</p></div>
+<div class="flex wrap items-center gap-2">
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+<span class="badge success"><i class="i i-database"></i>MongoDB ready · 4 ms</span>
+<span class="badge success"><i class="i i-drive"></i>Storage ready</span>
+</div>
+</div>
+
+<div class="grid gap-4 cols-2-sm" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
+<a class="card stat" href="AdminPackages.dc.html"><p class="l flex items-center gap-1h"><i class="i i-package i-sm"></i>Packages</p><p class="v">142</p><p class="t-xs muted">18 cached from pub.dev</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-tag i-sm"></i>Versions</p><p class="v">1 386</p><p class="t-xs muted">23 this week</p></div>
+<a class="card stat" href="AdminUsers.dc.html"><p class="l flex items-center gap-1h"><i class="i i-users i-sm"></i>Users</p><p class="v">37</p><p class="t-xs muted">3 admins · 2 disabled</p></a>
+<a class="card stat" href="Webhooks.dc.html"><p class="l flex items-center gap-1h"><i class="i i-webhook i-sm"></i>Webhooks</p><p class="v">4</p><p class="t-xs t-danger flex items-center gap-1"><i class="i i-circle-alert i-xs"></i>3 failed in 24 h</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-drive i-sm"></i>Storage</p><p class="v">3.2 GB</p><p class="t-xs muted">local · /var/lib/unpub</p></div>
+</div>
+
+<div class="grid gap-6 cols-1-sm" style="grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);">
+<section class="card">
+<div class="card-h"><h2>Recent publishes</h2><a class="link t-sm" href="AuditLog.dc.html">Audit log <i class="i i-chevron-right i-xs"></i></a></div>
+<div style="overflow-x: auto;">
+<table class="tbl">
+<thead><tr><th>Package</th><th>Version</th><th>By</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><a class="link" href="AdminPackage.dc.html">api_client_generated</a></td><td class="mono">12.0.0+5</td><td class="muted">ci-bot · token</td><td title="2026-11-10 09:41">1 hour ago</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td><div class="flex items-center gap-2"><span class="mono">2.0.0-beta.3</span><span class="badge"><i class="i i-flask"></i>Prerelease</span></div></td><td class="muted">jane.doe</td><td>2 days ago</td></tr>
+<tr><td><a class="link" href="#">company_design_system</a></td><td class="mono">5.2.1</td><td class="muted">petr.novy</td><td>yesterday</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td class="mono">1.4.0</td><td class="muted">jane.doe</td><td>3 days ago</td></tr>
+<tr><td><a class="link" href="#">company_auth</a></td><td class="mono">3.1.0</td><td class="muted">ci-bot · token</td><td>5 days ago</td></tr>
+<tr><td><a class="link" href="#">feature_flags</a></td><td class="mono">0.7.0</td><td class="muted">ada.lovelace</td><td>3 weeks ago</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Failed deliveries · 24 h</h2><span class="badge danger"><span class="dot"></span>3 failed</span></div>
+<ul class="divide">
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">12 min ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 3 of 5 · <span class="t-danger">HTTP 500</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">2 hours ago</span></div><p class="t-xs muted"><span class="chip">version.retracted</span> · attempt 5 of 5 · <span class="t-danger">gave up</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="#">ci.company.example/hooks/unpub</a><span class="t-xs muted nowrap">9 hours ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 2 of 5 · <span class="t-danger">timeout 10 s</span></p></li>
+</ul>
+<div class="card-f" style="justify-content: flex-start;"><a class="link t-sm" href="Webhooks.dc.html">All webhooks <i class="i i-chevron-right i-xs"></i></a></div>
+</section>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Overview <span>· 390 · Dark</span></p>
+<div class="frame w390 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="#" aria-current="page"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-6">
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1>Overview</h1><p><span class="mono">pub.company.example</span> · unpub 3.0.0 · up 12 days</p></div>
+<div class="flex wrap items-center gap-2">
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+<span class="badge success"><i class="i i-database"></i>MongoDB ready · 4 ms</span>
+<span class="badge success"><i class="i i-drive"></i>Storage ready</span>
+</div>
+</div>
+
+<div class="grid gap-4 cols-2-sm" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
+<a class="card stat" href="AdminPackages.dc.html"><p class="l flex items-center gap-1h"><i class="i i-package i-sm"></i>Packages</p><p class="v">142</p><p class="t-xs muted">18 cached from pub.dev</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-tag i-sm"></i>Versions</p><p class="v">1 386</p><p class="t-xs muted">23 this week</p></div>
+<a class="card stat" href="AdminUsers.dc.html"><p class="l flex items-center gap-1h"><i class="i i-users i-sm"></i>Users</p><p class="v">37</p><p class="t-xs muted">3 admins · 2 disabled</p></a>
+<a class="card stat" href="Webhooks.dc.html"><p class="l flex items-center gap-1h"><i class="i i-webhook i-sm"></i>Webhooks</p><p class="v">4</p><p class="t-xs t-danger flex items-center gap-1"><i class="i i-circle-alert i-xs"></i>3 failed in 24 h</p></a>
+<div class="card stat"><p class="l flex items-center gap-1h"><i class="i i-drive i-sm"></i>Storage</p><p class="v">3.2 GB</p><p class="t-xs muted">local · /var/lib/unpub</p></div>
+</div>
+
+<div class="grid gap-6 cols-1-sm" style="grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);">
+<section class="card">
+<div class="card-h"><h2>Recent publishes</h2><a class="link t-sm" href="AuditLog.dc.html">Audit log <i class="i i-chevron-right i-xs"></i></a></div>
+<div style="overflow-x: auto;">
+<table class="tbl">
+<thead><tr><th>Package</th><th>Version</th><th>By</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><a class="link" href="AdminPackage.dc.html">api_client_generated</a></td><td class="mono">12.0.0+5</td><td class="muted">ci-bot · token</td><td title="2026-11-10 09:41">1 hour ago</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td><div class="flex items-center gap-2"><span class="mono">2.0.0-beta.3</span><span class="badge"><i class="i i-flask"></i>Prerelease</span></div></td><td class="muted">jane.doe</td><td>2 days ago</td></tr>
+<tr><td><a class="link" href="#">company_design_system</a></td><td class="mono">5.2.1</td><td class="muted">petr.novy</td><td>yesterday</td></tr>
+<tr><td><a class="link" href="#">my_company_core</a></td><td class="mono">1.4.0</td><td class="muted">jane.doe</td><td>3 days ago</td></tr>
+<tr><td><a class="link" href="#">company_auth</a></td><td class="mono">3.1.0</td><td class="muted">ci-bot · token</td><td>5 days ago</td></tr>
+<tr><td><a class="link" href="#">feature_flags</a></td><td class="mono">0.7.0</td><td class="muted">ada.lovelace</td><td>3 weeks ago</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Failed deliveries · 24 h</h2><span class="badge danger"><span class="dot"></span>3 failed</span></div>
+<ul class="divide">
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">12 min ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 3 of 5 · <span class="t-danger">HTTP 500</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="Webhook.dc.html">hooks.slack.com/services/T0…</a><span class="t-xs muted nowrap">2 hours ago</span></div><p class="t-xs muted"><span class="chip">version.retracted</span> · attempt 5 of 5 · <span class="t-danger">gave up</span></p></li>
+<li class="col gap-1" style="padding: 12px 18px;"><div class="flex items-center justify-between gap-3"><a class="link t-sm truncate" href="#">ci.company.example/hooks/unpub</a><span class="t-xs muted nowrap">9 hours ago</span></div><p class="t-xs muted"><span class="chip">package.published</span> · attempt 2 of 5 · <span class="t-danger">timeout 10 s</span></p></li>
+</ul>
+<div class="card-f" style="justify-content: flex-start;"><a class="link t-sm" href="Webhooks.dc.html">All webhooks <i class="i i-chevron-right i-xs"></i></a></div>
+</section>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>

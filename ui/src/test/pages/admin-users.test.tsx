@@ -124,8 +124,35 @@ describe('admin users', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Disable…' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: 'Disable user' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'The last administrator cannot be demoted or disabled. Make another user an administrator first.',
+    expect(await screen.findByText('Could not disable the user')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '409 · The last administrator cannot be demoted or disabled. Make another user an administrator first.',
+      ),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('shows why the last administrator cannot be demoted', async () => {
+    usersApi([f.admin])
+    const { user } = renderApp('/admin/users', { me: f.me() })
+    await user.click(
+      await screen.findByRole('button', { name: 'Actions for admin@company.example' }),
+    )
+    await user.click(await screen.findByRole('menuitem', { name: 'Change role…' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.selectOptions(within(dialog).getByLabelText('Role'), 'reader')
+    await user.click(within(dialog).getByRole('button', { name: 'Change role' }))
+    expect(await screen.findByText('Could not change the role')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('marks the email column as the sorted one', async () => {
+    usersApi([f.admin])
+    renderApp('/admin/users', { me: f.me() })
+    expect(await screen.findByRole('columnheader', { name: 'Email' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
     )
   })
 })

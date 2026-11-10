@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
+import { shortUploaders } from '@/pages/admin/packages'
 import * as f from '../fixtures'
 import { renderApp, where } from '../render'
 import { capture, server, url } from '../server'
@@ -26,7 +27,78 @@ describe('package moderation', () => {
     expect(link).toHaveAttribute('href', '/admin/packages/my_company_core')
     const row = link.closest('tr')!
     expect(within(row).getByText('7')).toBeInTheDocument()
-    expect(within(row).getByText('a@x.example, b@x.example')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: /^a, b/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    )
+  })
+
+  it('shortens long uploader lists', () => {
+    expect(shortUploaders(['a@x.example'])).toBe('a')
+    expect(shortUploaders(['a@x.example', 'b@x.example', 'c@x.example'])).toBe('a +2')
+    // A name two uploaders share keeps its domain.
+    expect(shortUploaders(['alice@company.example', 'alice@contractor.example'])).toBe(
+      'alice@company.example, alice@contractor.example',
+    )
+  })
+
+  it('shows every full uploader address from the keyboard', async () => {
+    server.use(
+      http.get(url('/webapi/v2/packages'), () =>
+        HttpResponse.json(
+          f.page([
+            f.summary('my_company_core', {
+              uploaders: [
+                'alice@company.example',
+                'alice@contractor.example',
+                'bob@company.example',
+              ],
+            }),
+          ]),
+        ),
+      ),
+    )
+    const { user } = renderApp('/admin/packages', { me: f.me() })
+    const row = (await screen.findByRole('link', { name: 'my_company_core' })).closest('tr')!
+    const toggle = within(row).getByRole('button', { name: /show the addresses/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(row).queryByRole('list')).not.toBeInTheDocument()
+
+    toggle.focus()
+    await user.keyboard('{Enter}')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveAccessibleName(/hide the addresses/)
+    const list = within(row).getByRole('list')
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['alice@company.example', 'alice@contractor.example', 'bob@company.example'])
+
+    await user.keyboard(' ')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(row).queryByRole('list')).not.toBeInTheDocument()
+  })
+
+  it('shows the full address of who published a version', async () => {
+    server.use(
+      http.get(url('/webapi/package/:name'), () =>
+        HttpResponse.json({
+          data: f.pkg({
+            versions: [
+              f.version('1.4.0', { uploader: 'alice@company.example' }),
+              f.version('1.3.0', { uploader: 'alice@contractor.example' }),
+            ],
+          }),
+        }),
+      ),
+    )
+    renderApp('/admin/packages/my_company_core', { me: f.me() })
+    const first = (await screen.findByRole('link', { name: '1.4.0' })).closest('tr')!
+    const second = screen.getByRole('link', { name: '1.3.0' }).closest('tr')!
+    expect(first).toHaveTextContent('alice@company.example')
+    expect(second).toHaveTextContent('alice@contractor.example')
   })
 
   it('deletes a package only after typing its name', async () => {
