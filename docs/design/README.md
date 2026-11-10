@@ -67,23 +67,27 @@ The canvas itself is a private claude.ai Design artifact owned by the author; as
 
 ## Changes from the brief
 
-- **SDK filter as a segmented control** (All / Dart / Flutter) instead of a select: three options, always visible, one click. The sort stays a select. Not applied to `ui/` yet (it still uses the native select).
+- **SDK filter as a segmented control** (All / Dart / Flutter) instead of a select: three options, always visible, one click. The sort stays a select. Applied in `ui/` (`SegmentedControl` on the package list).
 - **Webhook events** are the server’s real list (`package.published`, `version.retracted`, `version.unretracted`, `version.deleted`, `package.discontinued`, `package.continued`, `package.deleted`), not the brief’s generic examples.
 - **Theme toggle in the header, as the client already has it.** The brief puts it in the user menu, but anonymous visitors on a public registry have no user menu, so the header keeps its icon button (system / light / dark). The Components board also shows it as a segmented control inside the user menu, an optional addition.
 - **Settings show the overriding environment variable under every key** (`UNPUB_SERVER_PUBLIC_URL`), and keys still at their default value are muted, so an operator sees what was actually configured.
 - **Password hints say 8 characters**, the server’s `minPasswordLength`.
 - **Webhook detail explains verification next to the secret** rather than only in the payload preview, because rotating is when people update their receivers.
-- **404 suggests the closest package name** (“Did you mean my_company_core?”) above the search; this needs a fuzzy match on the server or client and can ship later without changing the layout.
+- **404 suggests the closest package name** (“Did you mean my_company_core?”) above the search. The client asks the search for five names and picks the closest by edit distance; nothing is suggested when no name is close.
+- **The Versions board has a Dart SDK column**, but the API has no SDK constraint per version, so the client keeps a Downloads column there. The rest of board 05 is applied: the Show retracted switch and an archive download on every row.
 
 ## Applied to `ui/`
 
-These are changed in the client to match the design; everything else already followed the brief and only picks up the new tokens.
+Phase 7 of [the roadmap](../ROADMAP.md) applied every board to the client. Behaviour and API calls stayed the same, apart from the additions listed under the boards below. `ui/README.md`, "Restyling", says how to change the look from here.
 
-- `src/index.css`: new light and dark values; new `--surface`, `--info` and `--elevation-*` tokens mapped to `bg-surface`, `text-info` and `shadow-xs … shadow-lg`; README heading and table styles.
-- `src/layout/header.tsx`: the new `Mark` and wordmark; nav item with an accent background when active; 60 px header.
-- `public/favicon.svg`: the new mark.
-- `src/components/badges.tsx`: tinted tones for Latest, Retracted, Discontinued, Disabled and delivery statuses; SDK badge with a shape-coded dot (square Dart, round Flutter).
-- `src/pages/admin/layout.tsx`: full-height sidebar on `--surface`, active item as a raised chip with a blue icon, “Administration” label, content padding.
-- `src/layout/root.tsx`, `footer.tsx`, `search-box.tsx`, `pages/package-list.tsx`, `pages/package.tsx`, `components/ui/tabs.tsx`: surface footer, search field, list rows, package title and line-style tabs with a primary underline.
+**Tokens and foundations (board 00).** `src/index.css` holds the light and dark values of `tokens.css`, including `--surface`, `--info`, `--code`, `--chart-*`, `--scrim` and `--elevation-*` (as `shadow-xs … shadow-lg`). One global focus ring, 2 px `--ring` with a 2 px offset, replaces the per-control rings. README and CHANGELOG styles follow board 04; their headings keep the height of the sticky header (`--header-height`, two rows below 640 px) clear when reached by a fragment link.
 
-Run `npm run format`, `npm run lint`, `npm run typecheck` and `npm test -- --run` in `ui/` after pulling these changes; they were not run when the changes were made.
+**Components (board 01).** The hand-written shadcn/ui components in `src/components/ui` (button sizes and `destructive-outline`, badge tones, alerts, inputs, switch, table with a sticky first column, dialog, sheet, dropdown menu, tooltip) and the new `segmented.tsx`, whose pill chrome the default tabs share; line tabs with a primary underline. In `src/components`: `CodeBlock` with a title and a `$` prompt, `HashText`, `Initials`, the bar chart, the pager with a page size, `EmptyState` / `ErrorState` with an icon tile, the secret box and toasts.
+
+**States (board 02).** List and page skeletons, the offline banner, empty registry and no results, error with retry, the forbidden page and the delete, transfer and rotate dialogs.
+
+**Public pages (boards 03 to 09).** The header with the mark and the search (a row of its own on phones), the footer on `--surface`. The package list with the segmented SDK filter and its rows. The package page as a band on `--surface` with breadcrumb, meta line, badges, notices and line tabs; the README with an "On this page" table of contents that follows the section in view; Versions with the Show retracted switch, hashes and archive downloads; Install as numbered steps with copyable commands, and on a private registry the `dart pub token add` command to copy; Stats with tiles, the chart and its table view, and downloads per version. The login page with the countdown of a 429. The not found page with the closest name.
+
+**Account and administration (boards 10 to 18).** One dashboard shell in `src/components/dashboard` for both: the sidebar on `--surface` (a Sections drawer on phones) with the failed deliveries of the last 24 hours on Webhooks, the page heading, panels, a compact table. Account with Profile, Password and API tokens, the token command with a prompt. The overview with readiness badges, tiles, recent publishes and failed deliveries; users as a compact table with the last-administrator toast; packages and package moderation; the audit log as a compact table with a details row; webhooks as rows with delivery badges and the detail as drawn; settings as cards by section with the environment variable under every key.
+
+The unit tests, the end-to-end smoke test (`npm run test:e2e`, which fails on any console error and so on any CSP violation) and the README screenshot, taken from that run, cover the result.
