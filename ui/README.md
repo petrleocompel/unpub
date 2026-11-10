@@ -19,17 +19,17 @@ npm run dev
 
 The Vite development server proxies `/webapi`, `/api`, `/badge`, `/static`, `/classic`, the probes, `/metrics` and the archives (`/packages/<name>/versions/<version>.tar.gz`) to `http://localhost:4000`. Set `UNPUB_DEV_SERVER` to use another server. Every other path is a route of the client. Log in with an account of that server; set `auth.admin.email` and `auth.admin.password` in its configuration to get the first administrator.
 
-| Script | What it does |
-| --- | --- |
-| `npm run dev` | The development server with the proxy. |
-| `npm run build` | Type-checks and builds into `dist/`, which the server serves as `ui.assetsDir`. |
-| `npm run preview` | Serves `dist/` without the server, for a quick look. The API is not proxied. |
-| `npm run lint` | ESLint (typescript-eslint, react-hooks, jsx-a11y) and Prettier. `npm run format` fixes the formatting. |
-| `npm run typecheck` | TypeScript, strict. |
-| `npm test` | Vitest with Testing Library and MSW, in watch mode; `npm test -- --run` once. |
-| `npm run test:e2e` | The Playwright smoke run against the real server, see below. |
-| `npm run api:types` | Regenerates `src/api/schema.d.ts` from `../docs/openapi.yaml`. |
-| `npm run api:check` | Fails when `src/api/schema.d.ts` is out of date. CI runs it. |
+| Script              | What it does                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `npm run dev`       | The development server with the proxy.                                                                 |
+| `npm run build`     | Type-checks and builds into `dist/`, which the server serves as `ui.assetsDir`.                        |
+| `npm run preview`   | Serves `dist/` without the server, for a quick look. The API is not proxied.                           |
+| `npm run lint`      | ESLint (typescript-eslint, react-hooks, jsx-a11y) and Prettier. `npm run format` fixes the formatting. |
+| `npm run typecheck` | TypeScript, strict.                                                                                    |
+| `npm test`          | Vitest with Testing Library and MSW, in watch mode; `npm test -- --run` once.                          |
+| `npm run test:e2e`  | The Playwright smoke run against the real server, see below.                                           |
+| `npm run api:types` | Regenerates `src/api/schema.d.ts` from `../docs/openapi.yaml`.                                         |
+| `npm run api:check` | Fails when `src/api/schema.d.ts` is out of date. CI runs it.                                           |
 
 ## The API types
 
@@ -37,16 +37,16 @@ The Vite development server proxies `/webapi`, `/api`, `/badge`, `/static`, `/cl
 
 ## Layout
 
-| Path | What is there |
-| --- | --- |
-| `src/routes.tsx` | The routes, the same paths as the server-rendered pages. Account and administration load on demand. |
-| `src/layout/` | The shell: header with search, user menu and theme toggle, footer, offline banner. Loads `/webapi/config` and `/webapi/me` first. |
-| `src/pages/` | One file per page, `src/pages/admin/` for the dashboard. |
-| `src/packages/` | The package dialogs (retract, discontinue, uploaders, transfer, delete) shared by the package page and the admin page, and the markdown view. |
-| `src/components/` | Shared components. `src/components/ui/` are shadcn/ui components added with `npx shadcn@latest add <name>`. |
-| `src/lib/` | Formatting, theme, toasts, the base path. |
-| `src/test/` | Fixtures, MSW handlers, the render helper and the page tests. |
-| `e2e/` | The Playwright smoke test and its fixture package. |
+| Path              | What is there                                                                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/routes.tsx`  | The routes, the same paths as the server-rendered pages. Account and administration load on demand.                                           |
+| `src/layout/`     | The shell: header with search, user menu and theme toggle, footer, offline banner. Loads `/webapi/config` and `/webapi/me` first.             |
+| `src/pages/`      | One file per page, `src/pages/admin/` for the dashboard.                                                                                      |
+| `src/packages/`   | The package dialogs (retract, discontinue, uploaders, transfer, delete) shared by the package page and the admin page, and the markdown view. |
+| `src/components/` | Shared components. `src/components/ui/` are shadcn/ui components added with `npx shadcn@latest add <name>`.                                   |
+| `src/lib/`        | Formatting, theme, toasts, the base path.                                                                                                     |
+| `src/test/`       | Fixtures, MSW handlers, the render helper and the page tests.                                                                                 |
+| `e2e/`            | The Playwright smoke test and its fixture package.                                                                                            |
 
 ## Content-Security-Policy
 
