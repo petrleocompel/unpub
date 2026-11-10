@@ -18,6 +18,7 @@ import '../auth/auth_middleware.dart';
 import '../auth/authenticator.dart';
 import '../logging.dart';
 import '../models.dart';
+import '../package_moderation.dart';
 import '../publish_policy.dart';
 import '../store/meta_store.dart';
 import '../store/object_locks.dart';
@@ -417,16 +418,8 @@ class PublishRoutes {
     email = normalizeEmail(email);
     if (!isValidEmail(email)) return badRequest('email is invalid');
 
-    final (package, refusal) = await app.packageForChange(name, principal);
-    if (refusal != null) return refusal;
-
-    if (findEmail(package!.uploaders, email) != null) {
-      return badRequest('email already exists');
-    }
-
-    await _metaStore.addUploader(name, email);
-    await app.audit(req, principal, 'uploader.added', name, {'email': email});
-    return successMessage('uploader added');
+    return moderationResponse(
+        () => PackageModeration(app).addUploader(req, principal, name, email!));
   }
 
   Future<shelf.Response> removeUploader(
@@ -438,15 +431,7 @@ class PublishRoutes {
 
     email = Uri.decodeComponent(email);
 
-    final (package, refusal) = await app.packageForChange(name, principal);
-    if (refusal != null) return refusal;
-
-    final stored = findEmail(package!.uploaders, email);
-    if (stored == null) return badRequest('email not uploader');
-
-    await _metaStore.removeUploader(name, stored);
-    await app
-        .audit(req, principal, 'uploader.removed', name, {'email': stored});
-    return successMessage('uploader removed');
+    return moderationResponse(() =>
+        PackageModeration(app).removeUploader(req, principal, name, email));
   }
 }

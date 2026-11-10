@@ -6,6 +6,7 @@ import 'package:shelf/shelf.dart' as shelf;
 
 import '../auth/auth_middleware.dart';
 import '../auth/authenticator.dart';
+import '../package_moderation.dart';
 import '../upstream/upstream_proxy.dart';
 import '../validation.dart';
 
@@ -69,5 +70,15 @@ Future<Object?> readJsonBody(shelf.Request req) async {
     return json.decode(utf8.decode(bytes.takeBytes()));
   } on FormatException {
     return null;
+  }
+}
+
+/// The success message of [change], or the error refusing it.
+Future<shelf.Response> moderationResponse(
+    Future<String> Function() change) async {
+  try {
+    return successMessage(await change());
+  } on ModerationException catch (error) {
+    return badRequest(error.message, status: error.statusCode);
   }
 }

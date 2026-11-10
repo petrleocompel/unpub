@@ -112,21 +112,6 @@ extension RouteSupport on App {
         target: target,
         details: details,
       ));
-
-  /// The package when [principal] may manage it, or the response refusing it.
-  ///
-  /// Only an administrator learns that a package does not exist.
-  Future<(UnpubPackage?, shelf.Response?)> packageForChange(
-      String name, Principal principal) async {
-    final package = await metaStore.queryPackage(name);
-    if (package == null && principal.canPublish && principal.isAdmin) {
-      return (null, notFound());
-    }
-    if (package == null || !principal.canChangePackage(package.uploaders)) {
-      return (null, badRequest('no permission', status: HttpStatus.forbidden));
-    }
-    return (package, null);
-  }
 }
 
 bool clientHasArchive(shelf.Request req, String? hash) =>

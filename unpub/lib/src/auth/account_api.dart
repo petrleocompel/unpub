@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf_router/shelf_router.dart';
 
+import 'account_flows.dart';
 import 'account_service.dart';
 import 'accounts.dart';
 import 'auth_middleware.dart';
@@ -162,29 +163,6 @@ class AccountApi {
     return principal;
   }
 
-  /// Rejects everything except a password login.
-  ///
-  /// Changing credentials or roles would let a narrowed or expiring token
-  /// trade itself for full access, so no token may do it. The command line
-  /// goes through [AccountService] directly and is not affected.
-  static Principal _requireSession(Principal principal) {
-    if (principal.credentialKind != CredentialKind.session) {
-      throw const AuthException.forbidden(
-          'Log in with a password to do this. API tokens cannot change '
-          'credentials or roles.',
-          code: 'session_required');
-    }
-    return principal;
-  }
-
-  /// Rejects a token that was not granted [Scope.read].
-  static void _requireRead(Principal principal) {
-    if (!principal.scopes.contains(Scope.read)) {
-      throw const AuthException.forbidden('This token cannot read.',
-          code: 'insufficient_scope');
-    }
-  }
-
   Future<User> _account(Principal principal) async {
     final id = principal.userId;
     if (id == null) {
@@ -193,14 +171,6 @@ class AccountApi {
     }
     return accounts.requireUserById(id);
   }
-
-  String _setSessionCookie(String value) => '$sessionCookieName=$value; '
-      'Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionLifetime.inSeconds}'
-      '${secureCookies ? '; Secure' : ''}';
-
-  String get _clearSessionCookie => '$sessionCookieName=; '
-      'Path=/; HttpOnly; SameSite=Lax; Max-Age=0'
-      '${secureCookies ? '; Secure' : ''}';
 
   static shelf.Response _tooManyAttempts(Duration wait) => _error(
         HttpStatus.tooManyRequests,
@@ -219,27 +189,31 @@ class AccountApi {
       throw const AccountException.invalid('email is invalid');
     }
 
-    final address = _address(request);
-    final wait = limiter.acquire(address, email);
-    if (wait != null) return _tooManyAttempts(wait);
-
-    final result =
-        await accounts.login(email: email, password: password, ip: address);
-    if (result == null) {
-      return _error(HttpStatus.unauthorized, 'invalid_credentials',
-          'Invalid email or password.');
+    final outcome = await attemptLogin(
+      accounts,
+      limiter,
+      email: email,
+      password: password,
+      address: _address(request),
+      previousCookie: sessionCookie(request),
+    );
+    final LoginResult result;
+    switch (outcome) {
+      case Throttled(:final wait):
+        return _tooManyAttempts(wait);
+      case LoggedIn(result: final loggedIn):
+        result = loggedIn;
+      default:
+        return _error(HttpStatus.unauthorized, 'invalid_credentials',
+            'Invalid email or password.');
     }
-    limiter.succeeded(address, email);
-
-    // A new login replaces whatever session this browser held before.
-    final previous = sessionCookie(request);
-    if (previous != null) await accounts.logout(previous);
 
     return _json(
       HttpStatus.ok,
       {'user': result.user.toJson(), 'csrfToken': result.session.csrfToken},
       headers: {
-        HttpHeaders.setCookieHeader: _setSessionCookie(result.cookieValue),
+        HttpHeaders.setCookieHeader:
+            sessionCookieHeader(result.cookieValue, secure: secureCookies),
       },
     );
   }
@@ -251,7 +225,10 @@ class AccountApi {
     return _json(
       HttpStatus.ok,
       {'success': true},
-      headers: {HttpHeaders.setCookieHeader: _clearSessionCookie},
+      headers: {
+        HttpHeaders.setCookieHeader:
+            clearedSessionCookieHeader(secure: secureCookies)
+      },
     );
   }
 
@@ -268,87 +245,41 @@ class AccountApi {
   }
 
   Future<shelf.Response> _changeOwnPassword(shelf.Request request) async {
-    final principal = _requireSession(_principal(request));
+    final principal = requirePasswordSession(_principal(request));
     final user = await _account(principal);
     final body = await _readJson(request);
     final current = _requiredString(body, 'currentPassword');
     final replacement = _requiredString(body, 'newPassword');
 
-    final address = _address(request);
-    final wait = limiter.acquire(address, user.email);
-    if (wait != null) return _tooManyAttempts(wait);
-    if (!await accounts.verifyPassword(user, current)) {
-      return _error(HttpStatus.forbidden, 'invalid_credentials',
-          'The current password is wrong.');
-    }
-    limiter.succeeded(address, user.email);
-
-    await accounts.setPassword(
-      user,
-      replacement,
+    final outcome = await changeOwnPassword(
+      accounts,
+      limiter,
+      user: user,
+      current: current,
+      replacement: replacement,
+      address: _address(request),
       by: _by(request, principal),
       keepSessionId: principal.session?.id,
     );
+    switch (outcome) {
+      case Throttled(:final wait):
+        return _tooManyAttempts(wait);
+      case Rejected():
+        return _error(HttpStatus.forbidden, 'invalid_credentials',
+            'The current password is wrong.');
+      default:
+    }
     return _json(HttpStatus.ok, {'success': true});
   }
 
   Future<shelf.Response> _listTokens(shelf.Request request) async {
     final principal = _principal(request);
-    _requireRead(principal);
+    requireReadScope(principal);
     final user = await _account(principal);
     final tokens = await accounts.store.listTokens(user.id);
     return _json(HttpStatus.ok, {
       'tokens': [for (final token in tokens) token.toJson()],
     });
-  }
-
-  /// Validates the requested scopes. A token cannot create a token that can
-  /// do more than itself.
-  static Set<Scope>? _requestedScopes(
-      Map<String, dynamic> body, Principal principal, User user) {
-    final raw = body['scopes'];
-    if (raw == null) {
-      return principal.scopes.intersection(scopesAllowedFor(user.role));
-    }
-    if (raw is! List) {
-      throw const AccountException.invalid('scopes must be a list');
-    }
-    final scopes = <Scope>{};
-    for (final name in raw) {
-      final scope = Scope.tryParse(name);
-      if (scope == null) {
-        throw const AccountException.invalid(
-            'scopes may only contain read and publish');
-      }
-      scopes.add(scope);
-    }
-    if (!principal.scopes.containsAll(scopes)) {
-      throw const AccountException.forbidden(
-          'a token cannot grant scopes it does not hold');
-    }
-    return scopes;
-  }
-
-  /// The expiry of a new token. A token cannot outlive the one creating it.
-  DateTime? _requestedExpiry(Map<String, dynamic> body, Principal principal) {
-    final text = _optionalString(body, 'expiresIn');
-    DateTime? expiresAt;
-    if (text != null) {
-      final duration = parseDuration(text);
-      if (duration == null) {
-        throw const AccountException.invalid(
-            'expiresIn must look like 12h, 30d or 8w');
-      }
-      expiresAt = accounts.clock().add(duration);
-    }
-    final limit = principal.tokenExpiresAt;
-    if (limit == null) return expiresAt;
-    if (expiresAt == null) return limit;
-    if (expiresAt.isAfter(limit)) {
-      throw const AccountException.invalid(
-          'a token cannot outlive the token creating it');
-    }
-    return expiresAt;
   }
 
   Future<shelf.Response> _createToken(shelf.Request request) async {
@@ -358,8 +289,9 @@ class AccountApi {
     final created = await accounts.createToken(
       user,
       name: _requiredString(body, 'name'),
-      scopes: _requestedScopes(body, principal, user),
-      expiresAt: _requestedExpiry(body, principal),
+      scopes: requestedScopes(body['scopes'], principal, user),
+      expiresAt: requestedExpiry(
+          _optionalString(body, 'expiresIn'), principal, accounts.clock()),
       by: _by(request, principal),
     );
     return _json(HttpStatus.created, {
@@ -378,7 +310,7 @@ class AccountApi {
         throw const AccountException.notFound('no such token');
       }
       // A leaked or narrowed token must not be able to lock other people out.
-      _requireSession(principal);
+      requirePasswordSession(principal);
     }
     await accounts.revokeToken(token, by: _by(request, principal));
     final revoked = await accounts.store.findTokenById(id);
@@ -386,7 +318,7 @@ class AccountApi {
   }
 
   Future<shelf.Response> _listUsers(shelf.Request request) async {
-    _requireRead(_admin(request));
+    requireReadScope(_admin(request));
     final users = await accounts.store.listUsers();
     return _json(HttpStatus.ok, {
       'users': [for (final user in users) user.toJson()],
@@ -394,7 +326,7 @@ class AccountApi {
   }
 
   Future<shelf.Response> _createUser(shelf.Request request) async {
-    final principal = _requireSession(_admin(request));
+    final principal = requirePasswordSession(_admin(request));
     final body = await _readJson(request);
     final role = _optionalRole(body);
     if (role == null) {
@@ -411,7 +343,7 @@ class AccountApi {
   }
 
   Future<shelf.Response> _updateUser(shelf.Request request, String id) async {
-    final principal = _requireSession(_admin(request));
+    final principal = requirePasswordSession(_admin(request));
     final body = await _readJson(request);
     final disabled = body['disabled'];
     if (disabled != null && disabled is! bool) {
@@ -430,7 +362,7 @@ class AccountApi {
 
   Future<shelf.Response> _setUserPassword(
       shelf.Request request, String id) async {
-    final principal = _requireSession(_admin(request));
+    final principal = requirePasswordSession(_admin(request));
     final body = await _readJson(request);
     final password = _requiredString(body, 'password');
     final user = await accounts.requireUserById(id);
