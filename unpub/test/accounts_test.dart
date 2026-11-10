@@ -1184,6 +1184,20 @@ void main() {
       expect(jsonEncode(list.body), isNot(contains(secret)));
     });
 
+    test('expiresIn takes 1y and never', () async {
+      final year = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'year', 'expiresIn': '1y'});
+      expect(year.status, HttpStatus.created, reason: '${year.body}');
+      final expiresAt =
+          DateTime.parse(year.body['token']['expiresAt'] as String);
+      expect(expiresAt.difference(DateTime.now()).inDays,
+          inInclusiveRange(364, 365));
+      final never = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'never', 'expiresIn': 'never'});
+      expect(never.status, HttpStatus.created, reason: '${never.body}');
+      expect(never.body['token']['expiresAt'], isNull);
+    });
+
     test('defaults to the scopes the role allows', () async {
       final reply = await send('POST', '/webapi/tokens',
           browser: browser, body: {'name': 'x'});

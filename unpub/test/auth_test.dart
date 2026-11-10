@@ -372,7 +372,8 @@ void main() {
     expect(parseDuration('12h'), const Duration(hours: 12));
     expect(parseDuration('30d'), const Duration(days: 30));
     expect(parseDuration('2w'), const Duration(days: 14));
-    for (var text in ['', '30', 'd', '0d', '-1d', '1y']) {
+    expect(parseDuration('1y'), const Duration(days: 365));
+    for (var text in ['', '30', 'd', '0d', '-1d', '1x', 'never']) {
       expect(parseDuration(text), isNull, reason: text);
     }
   });

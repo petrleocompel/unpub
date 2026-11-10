@@ -279,8 +279,16 @@ paths:
                     $ref: '#/components/schemas/Scope'
                 expiresIn:
                   type: string
-                  description: A lifetime such as `30d`, `90d`, `52w` or `12h`. Without it the token does not expire.
-                  examples: [30d]
+                  pattern: '^(never|[0-9]{1,6}[smhdwy])$'
+                  description: >-
+                    The lifetime: a positive number of at most six digits and a
+                    unit, `s`, `m`, `h`, `d`, `w` (7 days) or `y` (365 days), such
+                    as `12h`, `30d`, `90d`, `52w` or `1y`; or `never`, the same as
+                    leaving it out, for a token that does not expire. A token
+                    created by a token that expires cannot outlive it: `never` or
+                    no value then gives the expiry of the creating token, and a
+                    later one is refused with 400 `invalid_request`.
+                  examples: [30d, 90d, 1y, never]
       responses:
         '201':
           description: Created.

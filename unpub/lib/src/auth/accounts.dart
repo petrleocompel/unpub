@@ -85,9 +85,10 @@ bool constantTimeEquals(String a, String b) {
   return difference == 0;
 }
 
-final _durationPattern = RegExp(r'^(\d{1,6})([smhdw])$');
+final _durationPattern = RegExp(r'^(\d{1,6})([smhdwy])$');
 
-/// Parses a duration such as `90s`, `12h`, `30d` or `8w`.
+/// Parses a duration such as `90s`, `12h`, `30d`, `8w` or `1y`, a year
+/// being 365 days.
 Duration? parseDuration(String text) {
   final match = _durationPattern.firstMatch(text.trim());
   if (match == null) return null;
@@ -98,7 +99,8 @@ Duration? parseDuration(String text) {
     'm' => Duration(minutes: amount),
     'h' => Duration(hours: amount),
     'd' => Duration(days: amount),
-    _ => Duration(days: amount * 7),
+    'w' => Duration(days: amount * 7),
+    _ => Duration(days: amount * 365),
   };
 }
 
