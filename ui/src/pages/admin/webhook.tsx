@@ -294,27 +294,29 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
   const deliveries = useDeliveries(webhook.id, page)
   const redeliver = useRedeliver()
   const settings = useSettings()
-  const [open, setOpen] = useState<string | null>(null)
+  // The open delivery, on the page it was opened on: the selection is
+  // derived from the current list, so a delivery that a refetch dropped,
+  // for example when newer ones pushed it off the page, closes its panel
+  // and cannot reopen it from another page.
+  const [open, setOpen] = useState<{ id: string; page: number } | null>(null)
   const retention = settingDays(settings.data, 'webhooks.retentionDays')
   const maxAttempts = settingNumber(settings.data, 'webhooks.maxAttempts')
-  const selected = deliveries.data?.items.find((delivery) => delivery.id === open)
+  const openId = open?.page === page ? open.id : null
+  const selected = deliveries.data?.items.find((delivery) => delivery.id === openId)
   const close = (id: string) => {
     setOpen(null)
     document.getElementById(`delivery-${id}`)?.focus()
   }
-  // A refetch can drop the open delivery, for example when newer ones push
-  // it off the page. Its panel goes with it, so the selection is cleared and
-  // the focus lands on the first delivery left, or on the Refresh button.
+  // When the panel left with its delivery, the focus went to the body: it
+  // lands on the first delivery left, or on the Refresh button.
+  const dropped = openId !== null && deliveries.data !== undefined && selected === undefined
   useEffect(() => {
-    if (open === null || !deliveries.data) return
-    if (deliveries.data.items.some((delivery) => delivery.id === open)) return
-    setOpen(null)
-    if (document.activeElement !== document.body) return
+    if (!dropped || document.activeElement !== document.body) return
     const next =
       document.querySelector<HTMLElement>('button[id^="delivery-"]') ??
       document.getElementById('deliveries-refresh')
     next?.focus()
-  }, [open, deliveries.data])
+  }, [dropped])
 
   return (
     <>
@@ -383,7 +385,7 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
               </TableHeader>
               <TableBody>
                 {deliveries.data.items.map((delivery) => {
-                  const expanded = open === delivery.id
+                  const expanded = openId === delivery.id
                   return (
                     <TableRow key={delivery.id} data-expanded={expanded || undefined}>
                       <TableCell>
@@ -393,7 +395,7 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
                           aria-expanded={expanded}
                           aria-controls={`payload-${delivery.id}`}
                           title={formatDateTime(delivery.createdAt)}
-                          onClick={() => setOpen(expanded ? null : delivery.id)}
+                          onClick={() => setOpen(expanded ? null : { id: delivery.id, page })}
                           className="rounded-sm font-medium whitespace-nowrap text-primary hover:underline"
                         >
                           {formatRelative(delivery.createdAt)}
