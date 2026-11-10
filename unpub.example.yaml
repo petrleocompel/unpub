@@ -98,8 +98,9 @@ auth:
   #   email: you@example.com
   #   password: at-least-8-characters
   # public: anyone can read. authenticated: every route except /healthz,
-  # /readyz and login needs a token or session. The embedded web UI cannot
-  # send tokens, so it does not work when authenticated.
+  # /readyz, /login, /static/* and POST /webapi/login needs a token or
+  # session. Browsers are sent to /login and read with the session once
+  # logged in. API clients still get a 401, and badges need a token too.
   readAccess: public
   # Deprecated, use personal tokens from `unpub admin create-token`.
   # A static Bearer token that acts as an administrator with bootstrapEmail.

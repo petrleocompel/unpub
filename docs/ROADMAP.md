@@ -79,7 +79,7 @@ Goal: replace the AngularDart bundle with HTML rendered by the server.
 - Pages: home, package list with full-text search (name + description, Mongo text index), filters (Flutter/Dart, discontinued hidden by default), sorting (downloads, updated, name), pagination.
 - Package detail: README and CHANGELOG rendered with `package:markdown` and sanitized, install snippet (`dart pub add <name> --hosted-url ...`), pubspec snippet with copy button, versions tab with date, uploader and retracted badge, dependencies with links, SDK constraints, platform tags, uploaders, pub.dev link for proxied packages.
 - Account: login/logout, change password, token list with create (shown once) and revoke, expiry.
-- Admin panel: users (create, role, disable, reset password), packages (discontinue, delete version, uploaders), settings overview (read only).
+- Admin panel: users (create, role, disable, reset password), packages (discontinue, retract, uploaders), settings overview (read only).
 - Security: CSRF tokens on forms, `Content-Security-Policy`, `HttpOnly`/`SameSite` cookies, rate limit on login.
 - Badges endpoints stay.
 
