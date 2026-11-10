@@ -260,14 +260,14 @@ abstract class MetaStore {
           if (await queryPackage(name) != null) name,
       };
 
-  /// How many packages and versions this store holds.
-  Future<({int packages, int versions})> counts() async {
-    final all = await queryPackages(size: 1 << 20, page: 0, sort: 'name');
-    return (
-      packages: all.count,
-      versions: all.packages.fold<int>(0, (sum, p) => sum + p.versions.length),
-    );
-  }
+  /// How many packages and versions this store holds, for the
+  /// `unpub_packages` and `unpub_versions` gauges of `/metrics`, or null if
+  /// the store cannot count them cheaply.
+  ///
+  /// This default answers null, which leaves those gauges out, because
+  /// reading every package on each scrape would be too slow for a big store.
+  /// A store that can count, as [MongoStore] does, overrides it.
+  Future<({int packages, int versions})?> counts() async => null;
 
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}

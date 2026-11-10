@@ -691,7 +691,7 @@ class MongoStore extends MetaStore {
   }
 
   @override
-  Future<({int packages, int versions})> counts() async {
+  Future<({int packages, int versions})?> counts() async {
     final reply = await db.runCommand({
       'aggregate': packageCollection,
       'pipeline': [

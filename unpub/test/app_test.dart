@@ -156,6 +156,16 @@ void main() {
       expect(body, contains('mongodb://***@db:27017/pub'));
     });
 
+    test('metrics leave the package counts out by default', () async {
+      expect(await metaStore.counts(), isNull);
+      final response = await createApp().handler(get('/metrics'));
+      expect(response.statusCode, HttpStatus.ok);
+      final body = await response.readAsString();
+      expect(body, isNot(contains('unpub_packages')));
+      expect(body, isNot(contains('unpub_versions')));
+      expect(body, contains('unpub_mongo_up 1'));
+    });
+
     test('readyz reports a failing package store', () async {
       packageStore.healthError = 'read only';
       var response = await createApp().handler(get('/readyz'));
