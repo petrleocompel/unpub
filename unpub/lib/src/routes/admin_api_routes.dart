@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:logging/logging.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf_router/shelf_router.dart';
 
@@ -7,12 +8,18 @@ import '../app.dart';
 import '../auth/auth_middleware.dart';
 import '../auth/authenticator.dart';
 import '../auth/accounts.dart';
+import '../config/config.dart';
 import '../store/audit_store.dart';
+import '../web/settings.dart';
 import '../webhooks/webhook_service.dart';
+import 'health_routes.dart';
 import 'responses.dart';
 import 'route_support.dart';
 
-/// The JSON endpoints of the administration: the audit log and webhooks.
+final _log = Logger('unpub.admin');
+
+/// The JSON endpoints of the administration: the dashboard, the settings,
+/// the audit log and webhooks.
 class AdminApiRoutes {
   final App app;
 
@@ -20,6 +27,8 @@ class AdminApiRoutes {
 
   void addRoutes(Router router) {
     router
+      ..get('/webapi/settings', getSettings)
+      ..get('/webapi/admin/overview', getOverview)
       ..get('/webapi/audit', getAudit)
       ..get('/webapi/webhooks', _hooks(listWebhooks))
       ..post('/webapi/webhooks', _hooks(createWebhook))
@@ -78,8 +87,12 @@ class AdminApiRoutes {
 
   Future<shelf.Response> listWebhooks(
       shelf.Request req, WebhookService hooks, Principal principal) async {
+    final all = await hooks.store.list();
+    final (:page, :size) = pageParameters(req.url.queryParameters);
     return okWithJson({
-      'webhooks': [for (final hook in await hooks.store.list()) hook.toJson()],
+      ...pageJson([
+        for (final hook in pageOf(all, page: page, size: size)) hook.toJson(),
+      ], page: page, size: size, total: all.length),
       'enabled': hooks.config.enabled,
     }, headers: _noStore);
   }
@@ -133,12 +146,15 @@ class AdminApiRoutes {
   Future<shelf.Response> listDeliveries(shelf.Request req, WebhookService hooks,
       Principal principal, String id) async {
     await hooks.require(id);
-    return okWithJson({
-      'deliveries': [
-        for (final delivery in await hooks.store.deliveries(id))
-          delivery.toJson(),
-      ],
-    }, headers: _noStore);
+    final (:page, :size) = pageParameters(req.url.queryParameters);
+    final deliveries =
+        await hooks.store.deliveries(id, skip: (page - 1) * size, limit: size);
+    return okWithJson(
+        pageJson([for (final delivery in deliveries) delivery.toJson()],
+            page: page,
+            size: size,
+            total: await hooks.store.countDeliveries(id)),
+        headers: _noStore);
   }
 
   Future<shelf.Response> redeliver(shelf.Request req, WebhookService hooks,
@@ -172,13 +188,80 @@ class AdminApiRoutes {
       return badRequest(error.message);
     }
     final page = await app.auditStore.query(query);
+    return okWithJson(
+        pageJson([for (final event in page.events) event.toJson()],
+            page: query.page, size: query.limit, total: page.count),
+        headers: _noStore);
+  }
+
+  /// The effective configuration by section, as the settings page shows it,
+  /// with the environment variable of each key.
+  Future<shelf.Response> getSettings(shelf.Request req) async {
+    final (_, refused) = administrator(req, reading: true);
+    if (refused != null) return refused;
+    final config = app.config;
     return okWithJson({
-      'events': [for (final event in page.events) event.toJson()],
-      'count': page.count,
-      'page': query.page,
-      'size': query.limit,
-    }, headers: const {
-      'cache-control': 'no-store'
-    });
+      'configured': config != null,
+      'sections': [
+        if (config != null)
+          for (final MapEntry(key: section, value: values)
+              in settingsOverview(config).entries)
+            {
+              'name': section,
+              'settings': [
+                for (final MapEntry(:key, :value) in values.entries)
+                  {
+                    'key': '$section.$key',
+                    'value': value,
+                    'env': environmentVariableFor('$section.$key'),
+                  },
+              ],
+            },
+      ],
+    }, headers: _noStore);
+  }
+
+  /// What the dashboard shows: counts, recent publishes, failed deliveries
+  /// and the readiness checks.
+  Future<shelf.Response> getOverview(shelf.Request req) async {
+    final (_, refused) = administrator(req, reading: true);
+    if (refused != null) return refused;
+    final since = DateTime.now().toUtc().subtract(const Duration(days: 1));
+    final hooks = app.webhooks;
+    final storage = app.metricsSources.storage.current;
+    final counts = await _optional(app.metaStore.counts);
+    final recent = await app.auditStore
+        .query(const AuditQuery(action: 'package.published', size: 10));
+    final lastDay = await app.auditStore
+        .query(AuditQuery(action: 'package.published', from: since, size: 1));
+    return okWithJson({
+      'packages': counts?.packages,
+      'versions': counts?.versions,
+      'users': await _optional(
+          () async => await app.accountApi?.accounts.store.countUsers()),
+      'webhooks': hooks == null
+          ? null
+          : await _optional(() async => (await hooks.store.list()).length),
+      'storageBytes': storage?.value,
+      'storageMeasuredAt':
+          storage?.value == null ? null : storage!.at.toUtc().toIso8601String(),
+      'publishesLast24h': lastDay.count,
+      'failedDeliveriesLast24h': hooks == null
+          ? 0
+          : await _optional(() => hooks.store.countFailedSince(since)) ?? 0,
+      'recentPublishes': [for (final event in recent.events) event.toJson()],
+      'readiness': await HealthRoutes(app).readiness(),
+    }, headers: _noStore);
+  }
+
+  /// The value of [read], or null if it fails, so that one broken source
+  /// does not take the dashboard down.
+  static Future<T?> _optional<T>(Future<T?> Function() read) async {
+    try {
+      return await read();
+    } catch (error) {
+      _log.warning('a source of the admin overview failed: $error');
+      return null;
+    }
   }
 }

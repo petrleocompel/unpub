@@ -1179,8 +1179,8 @@ void main() {
       expect(stored.values, isNot(contains(secret)));
 
       final list = await send('GET', '/webapi/tokens', browser: browser);
-      expect(list.body['tokens'], hasLength(1));
-      expect(list.body['tokens'][0].containsKey('hash'), isFalse);
+      expect(list.body['items'], hasLength(1));
+      expect(list.body['items'][0].containsKey('hash'), isFalse);
       expect(jsonEncode(list.body), isNot(contains(secret)));
     });
 
@@ -1215,7 +1215,7 @@ void main() {
       await token(other);
       await token(owner);
       final list = await send('GET', '/webapi/tokens', browser: browser);
-      expect(list.body['tokens'], hasLength(1));
+      expect(list.body['items'], hasLength(1));
     });
 
     test('can revoke an own token, repeatedly', () async {
@@ -1575,8 +1575,8 @@ void main() {
 
     test('lists users without their hashes', () async {
       final reply = await send('GET', '/webapi/users', browser: browser);
-      expect(reply.body['users'], hasLength(1));
-      expect(reply.body['users'][0]['hasPassword'], isTrue);
+      expect(reply.body['items'], hasLength(1));
+      expect(reply.body['items'][0]['hasPassword'], isTrue);
       expect(jsonEncode(reply.body), isNot(contains('argon2')));
     });
 

@@ -106,3 +106,30 @@ Future<shelf.Response> moderationResponse(
     return badRequest(error.message, status: error.statusCode);
   }
 }
+
+/// The largest `size` of a page of a list route.
+const maxPageSize = 100;
+
+/// The one-based `page` and the `size` asked for in [query], read leniently:
+/// anything that is not a positive number falls back to the first page and
+/// [defaultSize], and a size is at most [maxSize].
+({int page, int size}) pageParameters(Map<String, String> query,
+    {int defaultSize = 20, int maxSize = maxPageSize}) {
+  final page = int.tryParse(query['page'] ?? '') ?? 1;
+  final size = int.tryParse(query['size'] ?? '') ?? defaultSize;
+  return (page: page < 1 ? 1 : page, size: size.clamp(1, maxSize));
+}
+
+/// A page of a list route: `{items, page, size, total}`.
+Map<String, Object?> pageJson(Iterable<Object?> items,
+        {required int page, required int size, required int total}) =>
+    {
+      'items': items.toList(),
+      'page': page,
+      'size': size,
+      'total': total,
+    };
+
+/// The items of [all] on [page] of [size].
+List<T> pageOf<T>(List<T> all, {required int page, required int size}) =>
+    all.skip((page - 1) * size).take(size).toList();

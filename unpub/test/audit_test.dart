@@ -90,8 +90,8 @@ void main() {
     test('lists newest first, with the creation of the token', () async {
       final reply = await audit('');
       expect(reply.status, HttpStatus.ok);
-      final events = reply.json['events'] as List;
-      expect(reply.json['count'], 12);
+      final events = reply.json['items'] as List;
+      expect(reply.json['total'], 12);
       expect(events.first['action'], 'token.created');
       final times = [for (final e in events) DateTime.parse(e['at'] as String)];
       for (var i = 1; i < times.length; i++) {
@@ -104,7 +104,7 @@ void main() {
         final reply = await audit(query);
         expect(reply.status, HttpStatus.ok, reason: reply.body);
         return [
-          for (final event in reply.json['events'] as List)
+          for (final event in reply.json['items'] as List)
             (event['at'] as String).substring(0, 10),
         ];
       }
@@ -125,15 +125,15 @@ void main() {
     test('filters the events of a token', () async {
       final reply = await audit('?actor=token:${adminToken.substring(0, 8)}');
       // The listing was not recorded, so nothing was done with the token.
-      expect(reply.json['count'], 0);
+      expect(reply.json['total'], 0);
     });
 
     test('pages', () async {
       final first = await audit('?size=5');
       final third = await audit('?size=5&page=3');
-      expect((first.json['events'] as List), hasLength(5));
-      expect((third.json['events'] as List), hasLength(2));
-      expect(third.json['count'], 12);
+      expect((first.json['items'] as List), hasLength(5));
+      expect((third.json['items'] as List), hasLength(2));
+      expect(third.json['total'], 12);
       expect(third.json['page'], 3);
       expect((await audit('?size=201')).status, HttpStatus.badRequest);
       expect((await audit('?size=200')).status, HttpStatus.ok);

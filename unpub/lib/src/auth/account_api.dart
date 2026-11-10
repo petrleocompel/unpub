@@ -10,6 +10,7 @@ import 'accounts.dart';
 import 'auth_middleware.dart';
 import 'authenticator.dart';
 import 'rate_limiter.dart';
+import '../routes/responses.dart' show pageJson, pageOf, pageParameters;
 
 /// Largest JSON body accepted, far above any legitimate request.
 const _maxJsonBytes = 64 * 1024;
@@ -275,10 +276,15 @@ class AccountApi {
     final principal = _principal(request);
     requireReadScope(principal);
     final user = await _account(principal);
-    final tokens = await accounts.store.listTokens(user.id);
-    return _json(HttpStatus.ok, {
-      'tokens': [for (final token in tokens) token.toJson()],
-    });
+    final tokens = await accounts.store.listTokens(user.id)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final (:page, :size) = pageParameters(request.url.queryParameters);
+    return _json(
+        HttpStatus.ok,
+        pageJson([
+          for (final token in pageOf(tokens, page: page, size: size))
+            token.toJson(),
+        ], page: page, size: size, total: tokens.length));
   }
 
   Future<shelf.Response> _createToken(shelf.Request request) async {
@@ -318,10 +324,14 @@ class AccountApi {
 
   Future<shelf.Response> _listUsers(shelf.Request request) async {
     requireReadScope(_admin(request));
-    final users = await accounts.store.listUsers();
-    return _json(HttpStatus.ok, {
-      'users': [for (final user in users) user.toJson()],
-    });
+    final query = request.url.queryParameters;
+    final (:page, :size) = pageParameters(query);
+    final (:users, :total) = await accounts.store
+        .searchUsers(text: query['q'], skip: (page - 1) * size, limit: size);
+    return _json(
+        HttpStatus.ok,
+        pageJson([for (final user in users) user.toJson()],
+            page: page, size: size, total: total));
   }
 
   Future<shelf.Response> _createUser(shelf.Request request) async {

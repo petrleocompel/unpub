@@ -340,15 +340,29 @@ class WebhookStore {
     }
   }
 
-  /// The newest deliveries of [webhookId].
-  Future<List<Delivery>> deliveries(String webhookId, {int limit = 50}) async =>
+  /// The newest deliveries of [webhookId], [limit] of them after [skip].
+  Future<List<Delivery>> deliveries(String webhookId,
+          {int limit = 50, int skip = 0}) async =>
       [
         await for (final document in _deliveries.modernFind(
             filter: {'webhookId': webhookId},
             sort: {'createdAt': -1, '_id': -1},
+            skip: skip > 0 ? skip : null,
             limit: limit))
           Delivery.fromDocument(document),
       ];
+
+  /// How many deliveries [webhookId] has.
+  Future<int> countDeliveries(String webhookId) async =>
+      (await _deliveries.modernCount(filter: {'webhookId': webhookId})).count;
+
+  /// How many deliveries of any webhook were given up since [since].
+  Future<int> countFailedSince(DateTime since) async =>
+      (await _deliveries.modernCount(filter: {
+        'status': DeliveryStatus.failed,
+        'finishedAt': {r'$gte': since},
+      }))
+          .count;
 
   Future<Delivery?> delivery(String webhookId, String id) async {
     final objectId = parseObjectId(id);

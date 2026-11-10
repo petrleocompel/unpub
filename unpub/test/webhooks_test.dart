@@ -567,7 +567,7 @@ void main() {
       final list = await h.send('GET', '/webapi/webhooks', bearer: adminToken);
       expect(list.status, HttpStatus.ok);
       expect(list.body, isNot(contains(secret)));
-      expect(list.json['webhooks'].single['id'], hook.id);
+      expect(list.json['items'].single['id'], hook.id);
       final one = await h.send('GET', '/webapi/webhooks/${hook.id}',
           bearer: adminToken);
       expect(one.body, isNot(contains(secret)));
@@ -600,7 +600,7 @@ void main() {
       final listed = await h.send(
           'GET', '/webapi/webhooks/${hook.id}/deliveries',
           bearer: adminToken);
-      final delivery = listed.json['deliveries'].single;
+      final delivery = listed.json['items'].single;
       expect(delivery['status'], 'succeeded');
       expect(delivery['response']['status'], 200);
       expect(listed.body, isNot(contains(newSecret)));

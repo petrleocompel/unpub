@@ -220,6 +220,36 @@ class AccountStore {
   Future<List<User>> listUsers() =>
       _users.find(where.sortBy('email')).map(_userFromDocument).toList();
 
+  /// The users whose email or display name contains [text], ignoring case,
+  /// by email, [limit] of them after [skip], and how many match in all.
+  Future<({List<User> users, int total})> searchUsers(
+      {String? text, int skip = 0, int limit = 50}) async {
+    final query = text?.trim() ?? '';
+    final filter = query.isEmpty
+        ? <String, Object>{}
+        : {
+            r'$or': [
+              for (final field in ['email', 'displayName'])
+                {
+                  field: {r'$regex': RegExp.escape(query), r'$options': 'i'},
+                },
+            ],
+          };
+    final total = (await _users.modernCount(filter: filter)).count;
+    final users = [
+      await for (final document in _users.modernFind(
+          filter: filter,
+          sort: {'email': 1},
+          skip: skip > 0 ? skip : null,
+          limit: limit))
+        _userFromDocument(document),
+    ];
+    return (users: users, total: total);
+  }
+
+  /// How many users there are.
+  Future<int> countUsers() async => (await _users.modernCount()).count;
+
   SelectorBuilder get _enabledAdmins =>
       where.eq('role', Role.admin.name).ne('disabled', true);
 
