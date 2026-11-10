@@ -53,7 +53,7 @@ Dart clients only send tokens over HTTPS, except to localhost, so deploy behind 
 
 | Role | May |
 | --- | --- |
-| `admin` | Everything: manage users, publish to any package, manage the uploaders of any package, retract or discontinue any package. |
+| `admin` | Everything: manage users, publish to any package, manage the uploaders of any package, retract or discontinue any package, delete versions and packages, transfer ownership, manage webhooks and read the audit log. |
 | `publisher` | Publish new packages, publish to packages where their email is in `uploaders`, and manage the uploaders, retraction and discontinued state of those packages. |
 | `reader` | Read only, and look after their own account: log out, change their password, manage their own `read` tokens. This matters when `auth.readAccess` is `authenticated`. |
 
@@ -108,10 +108,12 @@ JSON endpoints under `/webapi`, for scripts. The web UI does not use them. Error
 | `GET`, `POST /webapi/users` | Administrators: list users, or with a session create one from `{email, role, displayName?, password?}`. |
 | `PATCH /webapi/users/<id>` | Administrators, session only: change `role`, `disabled` or `displayName`. Answers 503 if another change to an administrator stays in progress. |
 | `POST /webapi/users/<id>/password` | Administrators, session only: `{password}`. |
+| `GET /webapi/audit` | Administrators with the `read` scope: the audit log, see [Audit log](#audit-log). |
+| `GET`, `POST /webapi/webhooks`, and `/webapi/webhooks/<id>...` | Administrators: manage webhooks, see [Webhooks](#webhooks). |
 
 After 10 failed attempts within 15 minutes, for one email or one client address, login answers 429 with `Retry-After`. The count is kept per process, so several instances each allow their own attempts. Each process tracks up to 50 000 addresses and emails. When that is full it forgets only expired counters and those below half the limit, and if that frees nothing it answers 429 to addresses and emails it does not know yet and logs a warning. Sessions last 24 hours.
 
-Logins, token and user changes, publishes, uploader changes, retractions and discontinuations are recorded in the `audit` collection.
+Logins, token and user changes, publishes, deletions, uploader changes, retractions, discontinuations and webhook changes are recorded in the `audit` collection, see [Audit log](#audit-log).
 
 ## Pub API compatibility
 
@@ -138,7 +140,7 @@ Responses can be cached:
 | Listing | Weak, changes with the package | `public, max-age=60` | `private, no-store` |
 | Archive | Strong, from the SHA-256, when known | `public, max-age=31536000, immutable`, or `public, max-age=60` with `publish.requireVersionBump: false`, because the archive can then be replaced | `private, no-store` |
 
-A matching `If-None-Match` answers 304. Downloads are counted only for `dart pub` and `flutter pub`, and a 304 or `HEAD` is not a download. Besides the package total and the daily `stats`, each version has its own count in the `version_stats` collection. `/webapi/package/<name>/<version>` reports them as `downloads: {"version": n, "package": n}`, and each entry of its `versions` has `downloads` and `uploader`. `/webapi/packages` reports `downloads` per package.
+A matching `If-None-Match` answers 304. Downloads are counted only for `dart pub` and `flutter pub`, and a 304 or `HEAD` is not a download. Besides the package total and the daily `stats`, shown on `/packages/<name>/stats`, each version has its own count in the `version_stats` collection. `/webapi/package/<name>/<version>` reports them as `downloads: {"version": n, "package": n}`, and each entry of its `versions` has `downloads` and `uploader`. `/webapi/packages` reports `downloads` per package.
 
 ## Retraction and discontinued
 
@@ -153,6 +155,26 @@ Uploaders of a package and administrators can change these, with a credential th
 A retracted version stays downloadable, so a project with it in its lockfile still resolves, but new resolutions avoid it and it is left out of `latest`. If every version of a package is retracted, `latest` is the highest version anyway, the same as pub.dev, because a listing has to name one. The only version of a package can be retracted too, and then stays `latest`. A non-administrator can retract only within `publish.retractionWindow` of publishing, 7 days by default, and is answered 403 after that. The window does not limit `unretract`.
 
 A discontinued package keeps serving everything, with the flag set. `/webapi/packages` leaves discontinued packages out unless called with `?discontinued=true`. `/webapi/packages` and `/webapi/package/<name>/<version>` include the flags, and the latter `discontinuedAt`.
+
+## Package management
+
+Administrators can delete versions and packages and transfer a package to another user. Uploaders keep adding and removing uploaders as before.
+
+| Endpoint | Who | Description |
+| --- | --- | --- |
+| `POST /api/packages/<name>/uploaders` | uploader or admin | Form field `email`: add an uploader. |
+| `DELETE /api/packages/<name>/uploaders/<email>` | uploader or admin | Remove an uploader. |
+| `PUT /api/packages/<name>/owner` | admin | `{"email": "<address>"}`: make that user the only uploader. With user accounts the email must belong to an existing user, otherwise 404. |
+| `DELETE /api/packages/<name>/versions/<version>` | admin | Delete one version, its download counts and its archive. Encode `+` as `%2B`. |
+| `DELETE /api/packages/<name>` | admin | Delete the package with every version, archive and download count. |
+
+They need a credential with the `publish` scope: an anonymous request gets 401, a reader, a `read` token or an uploader who is not an administrator gets 403. The admin page `/admin/packages/<name>` offers the same: a confirmation page before deleting a version, a form that needs the package name typed before deleting the package, and a transfer form. Both go through the same code, so they apply the same rules and are audited alike (`version.deleted`, `package.deleted`, `uploader.transferred`).
+
+- The last version of a package cannot be deleted, which answers 409 with a hint to delete the package. `latest` is computed from what is left.
+- A package mirrored from the upstream (`private: false`) cannot be deleted or transferred here (409). An unknown package or version is a 404.
+- A deleted version can be published again, as a new upload with a new hash. Clients that locked the old hash then fail to verify it, so prefer retracting.
+- **Archives.** An archive named by its digest is deleted under the lock of that digest in `object_locks`, and only if no other version and no `upstream_archives` record names the same digest. An archive that cannot be deleted at once, for example because its lock stays busy for 30 seconds, is left to the hourly reclamation, which removes it as an orphan. An archive at the legacy path is deleted with its version.
+- **Racing a publish.** A deletion reserves each version it deletes in `upload_reservations`, as `dart pub publish` does, so a publish of that version and the deletion cannot overlap: whichever comes second gets 409, or the retryable publish error. A package document is deleted only while it still holds exactly the reserved versions. A version published in the meantime makes the deletion start over and take that version with the rest, up to three times. A publish that starts after the package document is gone creates a new package of that name, owned by its uploader, as it would after the deletion. Stale reservations of the package go with it.
 
 ## Publishing policies
 
@@ -172,6 +194,112 @@ Set under `publish`. A violation goes back through `dart pub publish`, with a me
 While one version is being published, another upload of that version is refused with "version is being published by another request", also from another server instance on the same MongoDB. The claim lives in the `upload_reservations` collection for as long as the archive is written. If a server dies while holding one, the version stays blocked until the claim expires, 15 to 16 minutes later.
 
 The claim is renewed once halfway through `publish.uploadTimeout` if the write is still running. A publish writes its archive first, as an immutable object, and only then the metadata, so a publish that stalled past its claim can neither overwrite another one's archive nor leave a version without one. See [Storage layout](#storage-layout).
+
+## Audit log
+
+Every change is recorded in the `audit` collection with the same fields:
+
+| Field | Description |
+| --- | --- |
+| `at` | When, UTC. |
+| `action` | What happened, see below. |
+| `actor` | The email of whoever acted, `system` for the server and `unpub admin`, or the email a failed login tried. |
+| `actorKind` | How the actor proved who it is: `session`, `apiToken`, `staticToken`, `password` (a login), `anonymous` (a failed login) or `system`. |
+| `token` | The prefix of the API token that acted, when one did. |
+| `ip` | The client address, from `X-Forwarded-For` with `server.trustForwardedFor`. |
+| `package`, `version` | What a package event is about. |
+| `target` | The user (email), token (`token:<prefix>`) or webhook (`webhook:<id>`) acted on. |
+| `details` | What changed, such as the old and new role, the removed uploader or the deleted versions. Never a password or secret. |
+
+Actions: `package.published`, `version.retracted`, `version.unretracted`, `version.deleted`, `package.discontinued`, `package.continued`, `package.deleted`, `uploader.added`, `uploader.removed`, `uploader.transferred`, `user.created`, `user.updated` (display name), `user.role_changed`, `user.disabled`, `user.enabled`, `user.password_set`, `user.login`, `user.login_failed`, `token.created`, `token.revoked`, `webhook.created`, `webhook.updated`, `webhook.secret_rotated`, `webhook.deleted` and `webhook.redelivered`. Events written by earlier 3.0.0 development builds have `target: "<name>@<version>"` for package events, an `actor` of `token:<prefix>` for token requests and `user.updated` for role and state changes; they are kept as they are.
+
+`GET /webapi/audit` lists events newest first, for an administrator with the `read` scope:
+
+| Parameter | Description |
+| --- | --- |
+| `action` | One action. |
+| `actor` | An email, or `token:<prefix>` for everything one token did. |
+| `package` | One package. |
+| `from`, `to` | ISO 8601 dates or times, `from` included and `to` excluded. A date without a time means that day in UTC, and `to` then includes the whole day. |
+| `page`, `size` | One-based page, and up to 200 events per page, 50 by default. |
+
+```json
+{"events": [{"at": "2026-11-10T09:12:00.000Z", "action": "version.deleted", "actor": "admin@example.com", "actorKind": "session", "token": null, "package": "my_package", "version": "1.2.0", "target": null, "ip": "203.0.113.9", "details": {"sha256": "…", "archiveDeleted": true}}], "count": 1, "page": 1, "size": 50}
+```
+
+The admin page `/admin/audit` shows the same with a filter form and pages, and the admin page of each package links to its events. The queries use indexes on `at` and on `package`, `actor` and `action` with `at`.
+
+`audit.retentionDays` keeps events for that many days through a TTL index on `at`, which MongoDB applies about once a minute. The server creates, changes or drops the index at every start to match the setting, and `0`, the default, keeps every event.
+
+## Webhooks
+
+Webhooks tell other systems, such as CI or a chat bot, when a package changes. Administrators manage them on `/admin/webhooks` or through the API, and each change is audited. Delivery is switched off for the whole server with `webhooks.enabled: false`.
+
+| Event | When |
+| --- | --- |
+| `package.published` | A version was published, `data` has `uploader` and `sha256`. |
+| `version.retracted`, `version.unretracted` | A version was retracted or restored. |
+| `package.discontinued`, `package.continued` | The discontinued flag was set, with `data.replacedBy` when given, or cleared. Repeating the same state is not an event. |
+| `version.deleted` | A version was deleted, `data` has its `sha256`. |
+| `package.deleted` | A package was deleted, `data.versions` lists its versions. |
+
+Each delivery is a `POST` of a JSON body:
+
+```json
+{
+  "id": "673071c9a1b2c3d4e5f60718",
+  "event": "package.published",
+  "at": "2026-11-10T09:12:00.000Z",
+  "package": "my_package",
+  "version": "1.2.0",
+  "actor": "dev@example.com",
+  "data": {"uploader": "dev@example.com", "sha256": "…"}
+}
+```
+
+`version` is absent for package events. `id` names the event and stays the same when a delivery is sent again, so a receiver can drop duplicates. The headers are `Content-Type: application/json`, `User-Agent: unpub/<version>`, `X-Unpub-Event` (the event), `X-Unpub-Delivery` (the id of this delivery, new for every redelivery) and `X-Unpub-Signature: sha256=<hex>`, the HMAC-SHA256 of the exact body with the secret of the webhook.
+
+**The secret** is 32 random bytes in base64url, made by the server and shown once, when the webhook is created or the secret is rotated. It is stored as it is in MongoDB, because signing needs it, so treat the `webhooks` collection and its backups as secret. It never appears in logs, the audit log, listings or deliveries.
+
+**Verifying** a delivery, in Dart, comparing in constant time:
+
+```dart
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+
+bool verify(String secret, List<int> body, String? header) {
+  final expected = 'sha256=${Hmac(sha256, utf8.encode(secret)).convert(body)}';
+  if (header == null || header.length != expected.length) return false;
+  var difference = 0;
+  for (var i = 0; i < expected.length; i++) {
+    difference |= expected.codeUnitAt(i) ^ header.codeUnitAt(i);
+  }
+  return difference == 0;
+}
+```
+
+or in a shell, with the body saved to `body.json`:
+
+```sh
+printf 'sha256=%s\n' "$(openssl dgst -sha256 -hmac "$SECRET" -hex < body.json | sed 's/^.* //')"
+```
+
+**Retries.** A 2xx answer is a success. Anything else, including a redirect, which is never followed, a timeout after `webhooks.timeout` or a connection error, is tried again after about 30 seconds, 2 minutes, 10 minutes and then every hour, each with 10 % jitter, until `webhooks.maxAttempts` attempts (5 by default) have failed and the delivery is marked `failed`. The status code, the first 1 KiB of the answer and the error of the last attempt are kept with the delivery. The admin page of a webhook lists its recent deliveries and sends a finished one again with **Redeliver**. Deliveries live in the `webhook_deliveries` collection. Instances sharing a database share the queue: each claims one due delivery at a time with an atomic `findAndModify` and a lease longer than an attempt, on the clock of the database, so no attempt is sent twice. A worker in each instance looks for due deliveries every 5 seconds and right after an event. `webhooks.retentionDays` (30 by default, `0` keeps them) removes finished deliveries through a TTL index.
+
+**Allowed targets.** Only `https` URLs are accepted, plain `http` too with `webhooks.allowHttp: true`, and URLs with credentials or a fragment are refused. Unless `webhooks.allowPrivateNetworks: true`, the host is resolved when each delivery is sent, every address it resolves to must be public, and the connection goes to the address that was checked, with TLS still verifying the host name. Refused are loopback, unspecified, link-local (including `169.254.169.254`), private (RFC 1918), shared (`100.64.0.0/10`), unique local (`fc00::/7`), site-local, multicast, broadcast and reserved addresses, also when written as IPv4-mapped or NAT64 IPv6 addresses. A refused address fails the delivery at once, without retries. Proxies from the environment are not used.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /webapi/webhooks` | List webhooks, without secrets. |
+| `POST /webapi/webhooks` | `{url, events, description?}`. Returns 201 with the `webhook` and its `secret`. |
+| `GET /webapi/webhooks/<id>` | The webhook and its delivery counts by status. |
+| `PATCH /webapi/webhooks/<id>` | Change `url`, `events`, `description` or `enabled`. |
+| `POST /webapi/webhooks/<id>/secret` | Replace the secret, and return the new one. |
+| `DELETE /webapi/webhooks/<id>` | Delete the webhook and its deliveries. |
+| `GET /webapi/webhooks/<id>/deliveries` | The last 50 deliveries. |
+| `POST /webapi/webhooks/<id>/deliveries/<delivery>/redeliver` | Queue a delivery again, as a new delivery with the same body. |
+
+They are for administrators, reading with the `read` scope and changing with the `publish` scope, from a token or a session with its CSRF token.
 
 ## Storage layout
 
@@ -274,10 +402,19 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `publish.*` | `UNPUB_PUBLISH_*` | | See [Publishing policies](#publishing-policies). |
 | `auth.admin.email` | `UNPUB_AUTH_ADMIN_EMAIL` | | First administrator, created when there are no users. Set together with the password. |
 | `auth.admin.password` | `UNPUB_AUTH_ADMIN_PASSWORD` | | Password of that administrator, at least 8 characters. Prefer the environment. |
-| `auth.readAccess` | `UNPUB_AUTH_READ_ACCESS` | `public` | `public`, or `authenticated` to require a token or session on every route except `/healthz`, `/readyz` and login. |
+| `auth.readAccess` | `UNPUB_AUTH_READ_ACCESS` | `public` | `public`, or `authenticated` to require a token or session on every route except `/healthz`, `/readyz`, login and `/metrics`, which has its own rule. |
 | `auth.bootstrapToken` | `UNPUB_AUTH_BOOTSTRAP_TOKEN` | | Deprecated. Static Bearer token that acts as an administrator. |
 | `auth.bootstrapEmail` | `UNPUB_AUTH_BOOTSTRAP_EMAIL` | `admin@localhost` | Email of the `auth.bootstrapToken` identity, and the uploader recorded for its publishes. |
 | `auth.readTokens` | `UNPUB_AUTH_READ_TOKENS` | | Deprecated. Static Bearer tokens that act as readers. A YAML list, or comma separated in the environment. |
+| `audit.retentionDays` | `UNPUB_AUDIT_RETENTION_DAYS` | `0` | Days events are kept, through a TTL index. `0` keeps them for good. |
+| `webhooks.enabled` | `UNPUB_WEBHOOKS_ENABLED` | `true` | Queue and deliver webhook events. |
+| `webhooks.timeout` | `UNPUB_WEBHOOKS_TIMEOUT` | `10s` | How long one attempt may take, at most `5m`. |
+| `webhooks.maxAttempts` | `UNPUB_WEBHOOKS_MAX_ATTEMPTS` | `5` | Attempts before a delivery is given up, 1 to 20. |
+| `webhooks.allowHttp` | `UNPUB_WEBHOOKS_ALLOW_HTTP` | `false` | Accept plain `http` webhook URLs. |
+| `webhooks.allowPrivateNetworks` | `UNPUB_WEBHOOKS_ALLOW_PRIVATE_NETWORKS` | `false` | Let webhooks reach loopback, link-local, private and unique local addresses. |
+| `webhooks.retentionDays` | `UNPUB_WEBHOOKS_RETENTION_DAYS` | `30` | Days finished deliveries are kept. `0` keeps them. |
+| `metrics.enabled` | `UNPUB_METRICS_ENABLED` | `true` | Serve `/metrics`. |
+| `metrics.token` | `UNPUB_METRICS_TOKEN` | | Bearer token for scrapers. When set, `/metrics` needs it or an administrator, also in `public` mode. |
 | `logging.level` | `UNPUB_LOGGING_LEVEL` | `info` | `fine`, `info`, `warning`, `severe` and other `package:logging` levels, or `off`. |
 | `logging.format` | `UNPUB_LOGGING_FORMAT` | `text` | `text` or `json`. |
 
@@ -303,7 +440,7 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
 - Package names must now match `[a-z_][a-z0-9_]*` and be at most 64 characters long. A stored package with any other name is no longer reachable.
 - Archive hashes: `unpub migrate` step `0002_version_sha256` records the SHA-256 of every stored archive, so that existing versions get `archive_sha256`. Check first with `unpub migrate --dry-run`. An archive missing from storage is skipped with a warning, and that version keeps being served without a hash. Once the archive is back, `unpub migrate --rerun 0002` hashes the versions still missing one. Run it with the same `storage` settings as the server.
 - The `latest` field of a listing now skips retracted versions, and the `/webapi` views use the same rule. Listings have new fields, and existing clients ignore what they do not know.
-- MongoDB documents and the archive layout are unchanged apart from new optional fields. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`. Phase 3 adds `version_stats`, `upstream_cache`, `upstream_archives` and `upload_reservations`.
+- MongoDB documents and the archive layout are unchanged apart from new optional fields. Archives stay in `unpub-packages` by default. Accounts live in the new collections `users`, `tokens`, `sessions`, `audit`, `admin_set` and `migrations`. Phase 3 adds `version_stats`, `upstream_cache`, `upstream_archives` and `upload_reservations`, and phase 5 `webhooks` and `webhook_deliveries`.
 
 ### Behind a reverse proxy
 
@@ -329,7 +466,70 @@ The web UI sends its own `Content-Security-Policy` and other security headers, s
 
 The server logs one line per request to stdout, in text or JSON. On SIGINT or SIGTERM it stops accepting connections, drains requests for up to 30 seconds and closes MongoDB. A second signal exits immediately.
 
+`GET /metrics` serves Prometheus metrics, see [Metrics](#metrics).
+
 The server does not reconnect after losing its MongoDB connection. `/readyz` then keeps returning 503 until the process is restarted, so restart it when that happens.
+
+### Metrics
+
+`/metrics` answers in the Prometheus text format 0.0.4. Counters are kept per process and start at zero with it.
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `unpub_http_requests_total{route,method,status}` | counter | Requests answered. `route` is the pattern of the route, such as `/api/packages/<name>`, never the path, or `unmatched`, so the number of series stays bounded. |
+| `unpub_http_request_duration_seconds{route}` | histogram | Time to answer, with buckets at 5 ms, 25 ms, 100 ms, 500 ms, 2.5 s and 10 s. |
+| `unpub_downloads_total` | counter | Archive downloads counted, as for the download statistics. Not labelled by package, to keep the series bounded. |
+| `unpub_publishes_total` | counter | Versions published. |
+| `unpub_upstream_fetches_total{result}` | counter | Requests to the upstream in proxy mode: `ok`, `not_modified`, `not_found` or `error`. |
+| `unpub_webhook_deliveries_total{result}` | counter | Webhook attempts: `success`, `retry`, `failed` (given up) or `refused` (address or URL not allowed). |
+| `unpub_packages`, `unpub_versions` | gauge | Packages and versions in MongoDB, read at most every 30 seconds. |
+| `unpub_storage_bytes` | gauge | Bytes in the package store, temporary files left out, measured by listing it at most every 10 minutes. |
+| `unpub_mongo_up` | gauge | 1 if MongoDB answered a ping during the scrape. |
+| `unpub_build_info{version}` | gauge | Always 1. |
+| `process_start_time_seconds` | gauge | When the process started. |
+
+With `auth.readAccess: public` and no `metrics.token`, anyone can read `/metrics`. Setting `metrics.token` makes it the Bearer token a scraper sends, and then, as always in `authenticated` mode, only that token or the token or session of an administrator with the `read` scope opens it. The metrics token opens nothing else. `metrics.enabled: false` turns the endpoint into a 404.
+
+```yaml
+scrape_configs:
+  - job_name: unpub
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/unpub-metrics-token
+    static_configs:
+      - targets: ['pub.example.com']
+```
+
+## Backup
+
+Back up MongoDB and the package store together, MongoDB first: an archive without its version is only an orphan that reclamation removes, while a version without its archive answers 404.
+
+| Collection | Back up | Why |
+| --- | --- | --- |
+| `packages` | yes | Versions, pubspecs, READMEs, uploaders, flags. Not derivable. |
+| `users`, `tokens` | yes | Accounts and token hashes. Not derivable. |
+| `audit` | yes, if you need the trail | Not derivable. |
+| `webhooks` | yes | Webhooks with their secrets: protect the dump. |
+| `stats`, `version_stats` | yes | Download counts, per package and day and per version. Not derivable. |
+| `migrations` | yes | Which `unpub migrate` steps ran. |
+| `admin_set` | optional | Rebuilt from `users` at every start. |
+| `webhook_deliveries` | optional | The delivery log and queue. Without it, queued deliveries are lost. |
+| `upstream_cache`, `upstream_archives` | no | Proxy mode only. Can be dropped: metadata and archives are fetched again. Drop both together with the `upstream/` part of the store. |
+| `sessions`, `upload_reservations`, `object_locks` | no | Short lived. Users log in again. |
+
+```sh
+for c in packages users tokens audit webhooks stats version_stats migrations; do
+  mongodump --uri "$UNPUB_MONGO_URI" --collection "$c" --out backup/
+done
+# File storage: copy the directory, leaving out .unpub-tmp/ and, if you want, upstream/.
+rsync -a --exclude .unpub-tmp/ unpub-packages/ backup/unpub-packages/
+# S3: copy the bucket, for example with versioning or replication, or
+aws s3 sync s3://my-packages backup/s3/ --exclude '.unpub-tmp/*' --exclude '.unpub/*'
+```
+
+To restore, stop every instance, restore the package store, then `mongorestore` the collections, then start the server, which recreates the indexes and the admin set. Run `unpub migrate --dry-run` to confirm nothing is pending. Archives the restored database no longer names are removed by reclamation an hour after start; restore the store before the database so that it never finds a version without its archive.
 
 ## Using unpub as a library
 
@@ -365,7 +565,7 @@ Future<void> main() async {
 }
 ```
 
-`PublishPolicy` applies the `publish` settings, and `UpstreamProxy` turns on proxy mode. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints, and the login, account and admin pages of the web UI, are added by passing an `AccountApi`. The web UI is always part of `App.handler`; pass `config` to fill the admin settings page. `S3Store` and `FileStore` are included.
+`PublishPolicy` applies the `publish` settings, `UpstreamProxy` turns on proxy mode, and `WebhookService` (with a `WebhookStore` and its `start()` and `stop()`) adds webhooks. `App.metrics` holds the counters of `/metrics`. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints, and the login, account and admin pages of the web UI, are added by passing an `AccountApi`. The web UI is always part of `App.handler`; pass `config` to fill the admin settings page. `S3Store` and `FileStore` are included.
 
 `ensureIndexes` creates the unique indexes that concurrent publishes rely on, and throws if `packages` already holds a name twice. To get reclamation as `unpub serve` does it, start a `TemporaryReclaimer` with `MongoArchiveReferences` too, which shares the `object_locks` of `MongoStore`.
 
@@ -376,10 +576,11 @@ The server renders every page itself. There is no frontend build and no third-pa
 | Page | Description |
 | --- | --- |
 | `/`, `/packages` | The package list. `q` searches names and descriptions, `sdk=dart` or `sdk=flutter` filters, `discontinued=1` includes discontinued packages, `sort` is `relevance` (the default with `q`), `downloads` (the default otherwise), `updated` or `name`, and `page` and `size` (20 by default, at most 100) page through it. With JavaScript, the list updates while typing. |
-| `/packages/<name>` | The latest version, with the tabs `?tab=readme`, `changelog`, `versions` and `install`, and a sidebar with the SDK constraints, platforms, links, dependencies, uploaders and, for a package from the upstream, a link to it. |
+| `/packages/<name>` | The latest version, with the tabs `?tab=readme`, `changelog`, `versions`, `install` and the statistics, and a sidebar with the SDK constraints, platforms, links, dependencies, uploaders and, for a package from the upstream, a link to it. |
 | `/packages/<name>/versions/<version>` | The same for one version. |
+| `/packages/<name>/stats` | Download statistics: the total, the last 30 days as a table and a bar chart, and the most downloaded versions. |
 | `/login`, `/account` | Log in and out, change the password, and list, create and revoke personal tokens. |
-| `/admin/users`, `/admin/packages`, `/admin/settings` | Administrators only, see below. |
+| `/admin/users`, `/admin/packages`, `/admin/webhooks`, `/admin/audit`, `/admin/settings` | Administrators only, see below. |
 
 Search finds the packages that have every word of the query, ignoring case, anywhere in the name or in a description, so `parser documents` does not find a package that only mentions one of them. The results are ordered by relevance with a MongoDB text index on names and descriptions, created by the server at startup with stemming for English, and packages it does not match, such as one found by part of a word, come after. Without the index, for example when another text index already exists on `packages`, the same packages are found, ordered by downloads, and a warning is logged at startup. A package counts as a Flutter package when any of its versions has a `flutter` section, an `environment.flutter` constraint or a dependency on `flutter`. An unknown package name sends the browser to the upstream in proxy mode, and shows a 404 page with a link to the upstream otherwise.
 
@@ -395,7 +596,7 @@ The files of a package are not served, so URLs relative to the document are rewr
 
 **Tokens.** `/account` lists the tokens of the user with their prefix, scopes, creation, last use and expiry, creates one with a name, scopes and a lifetime, and revokes them. A new token's secret is shown once, with the `dart pub token add` command to use it. A reader can only create `read` tokens.
 
-**Administration.** `/admin/users` lists the users and creates, promotes, demotes, disables, enables them and sets their passwords. `/admin/packages/<name>` discontinues a package, optionally with its replacement, retracts and restores versions, and adds and removes uploaders. These apply the same rules as the API and are audited in the same way. Deleting versions and packages is not available yet. `/admin/settings` shows the effective configuration, with the MongoDB credentials, S3 keys, `auth.bootstrapToken`, `auth.readTokens` and the administrator password replaced by `<redacted>`. `/admin/packages` pages through every package with `q`, `page` and `size` (100 by default). Only administrators logged in with a password open these pages: an API token or a static token gets a 403 page whatever its scopes, and so does everyone else.
+**Administration.** `/admin/users` lists the users and creates, promotes, demotes, disables, enables them and sets their passwords. `/admin/packages/<name>` discontinues a package, optionally with its replacement, retracts and restores versions, and adds and removes uploaders. It also deletes versions and the package and transfers the ownership, see [Package management](#package-management). These apply the same rules as the API and are audited in the same way. `/admin/webhooks` manages webhooks and shows their deliveries, see [Webhooks](#webhooks), and `/admin/audit` the audit log, see [Audit log](#audit-log). `/admin/settings` shows the effective configuration, with the MongoDB credentials, S3 keys, `auth.bootstrapToken`, `auth.readTokens`, `metrics.token` and the administrator password replaced by `<redacted>`. `/admin/packages` pages through every package with `q`, `page` and `size` (100 by default). Only administrators logged in with a password open these pages: an API token or a static token gets a 403 page whatever its scopes, and so does everyone else.
 
 **Security.** Every form that changes something carries the CSRF token of the session, and a missing or wrong one answers a 403 page. Changing credentials, roles or packages from the UI needs a password login, as on the JSON API. The session cookie is `HttpOnly` and `SameSite=Lax`, and `Secure` when `server.publicUrl` is `https`. Pages are sent with:
 
@@ -409,6 +610,8 @@ X-Frame-Options: DENY
 `connect-src 'self'` lets the script fetch the list while typing. Pages are `Cache-Control: no-store` once logged in and `private, max-age=0` otherwise. The stylesheet and script are cached for a year, with an `ETag`, and linked with a hash of their content.
 
 **`auth.readAccess: authenticated`.** A browser asking for any page without a session is sent to `/login`, and back afterwards. The login page, `/static/` and the health probes stay open. API clients, and any request that does not accept `text/html`, still get the 401 challenge. Badges need a token in this mode.
+
+**Download statistics.** `/packages/<name>/stats` reads the daily counters that every counted download increments in the `stats` collection, `d<yyyyMMdd>` fields of the document of the package, by day in the local time of the server. Existing counts back to the first 3.x release show up. The chart is SVG drawn by the server, with classes for the stylesheet and no `style` attribute or script, so the Content-Security-Policy stays as it is. The page is public in `public` mode and needs a session in `authenticated` mode, like the other pages.
 
 **Errors.** A browser gets small HTML pages for 403, 404 and 500. Every API path (`/api/`, `/webapi/`, archives, `.json`, badges, the probes) answers JSON or plain text as before.
 

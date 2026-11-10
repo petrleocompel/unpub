@@ -1,3 +1,18 @@
+## 3.0.0-dev.5
+
+Adds what is needed to run the registry in production: package management, an audit log, webhooks, Prometheus metrics, download statistics and backup notes. See "Package management", "Audit log", "Webhooks", "Operations", "Backup" and "Web UI" in the README.
+
+- Adds `DELETE /api/packages/<name>/versions/<version>`, `DELETE /api/packages/<name>` and `PUT /api/packages/<name>/owner` (`{"email": ...}`), for administrators, and the same on `/admin/packages/<name>`: a confirmation page before deleting a version, a form that needs the package name typed before deleting the package, and a transfer form. The last version cannot be deleted (409). Archives go under the per-digest lock, and only once nothing else names their digest. A deletion reserves every version it deletes as a publish does, and deletes the package document only while it holds exactly those versions, so a racing publish never leaves a version without its package or an archive behind.
+- Audit events have the same fields everywhere: `at`, `action`, `actor`, `actorKind`, `token`, `ip`, `package`, `version`, `target` and `details`. Adds `version.deleted`, `package.deleted`, `uploader.transferred`, `user.role_changed`, `user.disabled`, `user.enabled` and the `webhook.*` actions. Adds indexes on `package`, `actor` and `action` with `at`.
+- Adds `GET /webapi/audit`, filtered by `action`, `actor` (or `token:<prefix>`), `package`, `from` and `to`, paged by `page` and `size` (at most 200), and the admin page `/admin/audit`.
+- Adds `audit.retentionDays`, 0 by default, applied as a TTL index that every start creates, changes or drops.
+- Adds webhooks in the new `webhooks` collection, managed on `/admin/webhooks` and `/webapi/webhooks`, for `package.published`, `version.retracted`, `version.unretracted`, `package.discontinued`, `package.continued`, `version.deleted` and `package.deleted`. Deliveries are signed with `X-Unpub-Signature: sha256=<HMAC-SHA256>`, queued in the new `webhook_deliveries` collection shared by every instance, and retried with backoff up to `webhooks.maxAttempts`. https only and no private addresses unless configured, checked after DNS resolution, no redirects followed. Adds the `webhooks` config section.
+- Adds `GET /metrics` in the Prometheus text format, with request counts and durations by route pattern, downloads, publishes, upstream fetches, webhook deliveries, packages, versions, storage size, MongoDB health and the build. Adds the `metrics` config section, with `metrics.token` for scrapers.
+- Adds `/packages/<name>/stats` and a Stats tab: the last 30 days of downloads as a table and an SVG chart drawn by the server, from the daily counters `stats` already holds, and the most downloaded versions.
+- `/admin/settings` shows the new sections, with `metrics.token` redacted.
+- **Breaking:** `AuditEvent` takes `actorKind`, `token`, `package` and `version`, and `target` is optional. `AuditContext` takes `token`, and `AuditContext.of(principal)` builds one. `AuditStore` gains `query`, with an empty default. `MongoAuditStore.ensureIndexes` takes the retention and drops the TTL index without one.
+- **Breaking:** `MetaStore` gains `removeVersion`, `deletePackage` and `setUploaders`, which throw `UnsupportedError` by default, and `archiveReferences`, `counts` and `dailyDownloads` with defaults. `PackageStore` gains `deleteLegacy` and `totalSize`. `App` gains `webhooks` and `metrics`, and `App.router` is a `PatternRouter`.
+
 ## 3.0.0-dev.4
 
 Replaces the AngularDart UI with HTML rendered by the server. See "Web UI" in the README.

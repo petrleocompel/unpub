@@ -112,6 +112,37 @@ auth:
   # readTokens:
   #   - replace-with-a-long-random-token
 
+audit:
+  # Days audit events are kept, through a TTL index the server creates,
+  # changes or drops at every start. 0 keeps every event.
+  # retentionDays: 0
+
+webhooks:
+  # Queue and deliver webhook events. Webhooks themselves are managed on
+  # /admin/webhooks or through /webapi/webhooks.
+  # enabled: true
+  # How long one delivery attempt may take, at most 5m.
+  # timeout: 10s
+  # Attempts before a delivery is marked failed, 1 to 20. Retries come after
+  # about 30s, 2m, 10m and then every hour.
+  # maxAttempts: 5
+  # Accept plain http URLs. Signatures do not hide the body from the network.
+  # allowHttp: false
+  # Let webhooks reach loopback, link-local, private and unique local
+  # addresses, such as a CI server on the same network. Checked after DNS
+  # resolution at every delivery.
+  # allowPrivateNetworks: false
+  # Days finished deliveries are kept. 0 keeps them.
+  # retentionDays: 30
+
+metrics:
+  # Serve Prometheus metrics on /metrics.
+  # enabled: true
+  # Bearer token for the scraper. When set, /metrics needs it or an
+  # administrator token, also when reads are public. Prefer
+  # UNPUB_METRICS_TOKEN.
+  # token: replace-with-a-long-random-token
+
 logging:
   # finest, finer, fine (debug), config, info, warning, severe (error), shout, off
   level: info
