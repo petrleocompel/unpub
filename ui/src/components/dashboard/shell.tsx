@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
 import { ExternalLink, Menu, type LucideIcon } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router'
+import { NavLink, useLocation, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
@@ -154,6 +154,7 @@ export function DashboardShell({
 function SectionsDrawer() {
   const shell = useContext(ShellContext)
   const navigate = useNavigate()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
   const picked = useRef<DashboardSection | null>(null)
   if (!shell) return null
@@ -176,7 +177,8 @@ function SectionsDrawer() {
           // After a section is picked the focus goes to its page instead.
           event.preventDefault()
           if (section.hash) {
-            navigate({ hash: section.hash })
+            // Keep the query, such as the page of tokens shown.
+            navigate({ pathname: location.pathname, search: location.search, hash: section.hash })
             document.getElementById(section.hash)?.scrollIntoView()
           }
           document.getElementById('main')?.focus({ preventScroll: true })
