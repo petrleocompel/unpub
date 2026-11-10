@@ -236,6 +236,87 @@ void main() {
       expect(delivery.error, contains('no answer'));
     });
 
+    test('ends at one deadline for resolving, sending and the answer',
+        () async {
+      final slow = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => slow.close(force: true));
+      var requests = 0;
+      slow.listen((request) => requests++);
+      const config = WebhooksConfig(
+          allowHttp: true,
+          allowPrivateNetworks: true,
+          timeout: Duration(milliseconds: 800));
+      WebhookService worker() => WebhookService(WebhookStore(h.db),
+              config: config,
+              retryDelays: const [Duration(minutes: 1)],
+              // Far shorter than the attempt, so only renewing keeps the claim.
+              lease: const Duration(milliseconds: 150), lookup: (host) async {
+            await Future<void>.delayed(const Duration(milliseconds: 600));
+            return [InternetAddress.loopbackIPv4];
+          });
+      final first = worker();
+      final other = worker();
+      final (hook, _) = await addHook(
+          url: Uri.parse('http://slow.example.test:${slow.port}/'));
+      await h.publish('alpha', '1.0.0', bearer: ownerToken);
+
+      final watch = Stopwatch()..start();
+      var done = false;
+      final attempt = first.deliverDue().whenComplete(() => done = true);
+      var stolen = 0;
+      while (!done) {
+        if (await other.deliverDue()) stolen++;
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }
+      expect(await attempt, isTrue);
+      // Each step used to get the whole timeout: 600 ms + 800 ms.
+      expect(watch.elapsed, lessThan(const Duration(milliseconds: 1300)));
+      expect(stolen, 0);
+      expect(requests, 1);
+      final delivery = (await deliveries(hook)).single;
+      expect(delivery.status, DeliveryStatus.pending);
+      expect(delivery.attempt, 1);
+      expect(delivery.error, contains('no answer within 0.8 seconds'));
+    });
+
+    test('an attempt whose claim was taken over records nothing', () async {
+      final (hook, _) = await addHook();
+      await h.publish('alpha', '1.0.0', bearer: ownerToken);
+      final stale = (await store.claim('a', const Duration(milliseconds: 1)))!;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final current = (await store.claim('b', const Duration(minutes: 1)))!;
+      expect(current.id, stale.id);
+      expect(current.claimId, isNot(stale.claimId));
+
+      expect(
+          await store.renewClaim(stale, const Duration(minutes: 1)), isFalse);
+      expect(
+          await store.finishAttempt(stale,
+              status: DeliveryStatus.succeeded,
+              attempt: 1,
+              responseStatus: 200),
+          isFalse);
+      var delivery = (await deliveries(hook)).single;
+      expect(delivery.status, DeliveryStatus.pending);
+      expect(delivery.attempt, 0);
+
+      expect(
+          await store.renewClaim(current, const Duration(minutes: 1)), isTrue);
+      expect(
+          await store.finishAttempt(current,
+              status: DeliveryStatus.failed, attempt: 1, error: 'gone'),
+          isTrue);
+      delivery = (await deliveries(hook)).single;
+      expect(delivery.status, DeliveryStatus.failed);
+      expect(delivery.error, 'gone');
+      // Recording twice is refused too.
+      expect(
+          await store.finishAttempt(current,
+              status: DeliveryStatus.succeeded, attempt: 2),
+          isFalse);
+      expect((await deliveries(hook)).single.status, DeliveryStatus.failed);
+    });
+
     test('is sent once although two instances share the queue', () async {
       final (hook, _) = await addHook();
       await h.publish('alpha', '1.0.0', bearer: ownerToken);

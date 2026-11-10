@@ -114,6 +114,10 @@ class Delivery {
   /// The delivery this one sends again.
   final String? redeliveryOf;
 
+  /// The id of the claim of the attempt under way, set on a delivery that
+  /// [WebhookStore.claim] returned. Only that attempt can record its outcome.
+  final String? claimId;
+
   const Delivery({
     required this.id,
     required this.webhookId,
@@ -132,6 +136,7 @@ class Delivery {
     this.responseBody,
     this.error,
     this.redeliveryOf,
+    this.claimId,
   });
 
   factory Delivery.fromDocument(Map<String, dynamic> document) {
@@ -154,6 +159,7 @@ class Delivery {
       responseBody: response?['body'] as String?,
       error: document['error'] as String?,
       redeliveryOf: document['redeliveryOf'] as String?,
+      claimId: document['claimId'] as String?,
     );
   }
 
@@ -354,7 +360,11 @@ class WebhookStore {
 
   /// Claims the delivery that has been due the longest for [owner], for
   /// [lease], or returns null if none is due. A claim that ran out, because
-  /// its holder stopped, can be taken over.
+  /// its holder stopped or stalled, can be taken over.
+  ///
+  /// Each claim has its own [Delivery.claimId], which [renewClaim] and
+  /// [finishAttempt] need, so that an attempt whose claim was taken over can
+  /// neither extend nor overwrite the newer one.
   Future<Delivery?> claim(String owner, Duration lease) async {
     final now = await this.now();
     final result = await _deliveries.modernFindAndModify(
@@ -370,7 +380,11 @@ class WebhookStore {
       },
       sort: {'nextAt': 1},
       update: {
-        r'$set': {'claimedBy': owner, 'claimedUntil': now.add(lease)},
+        r'$set': {
+          'claimedBy': owner,
+          'claimId': ObjectId().oid,
+          'claimedUntil': now.add(lease),
+        },
       },
       returnNew: true,
     );
@@ -381,11 +395,27 @@ class WebhookStore {
     return document == null ? null : Delivery.fromDocument(document);
   }
 
-  /// Records the outcome of an attempt of [owner], which has to still hold
-  /// the claim. Returns whether it did.
+  /// Extends the claim of [delivery] by [lease] from now, and returns whether
+  /// it was still held.
+  Future<bool> renewClaim(Delivery delivery, Duration lease) async {
+    final claimId = delivery.claimId;
+    if (claimId == null) return false;
+    final now = await this.now();
+    final result = await _deliveries.updateOne({
+      '_id': parseObjectId(delivery.id),
+      'claimId': claimId,
+      'status': DeliveryStatus.pending,
+    }, {
+      r'$set': {'claimedUntil': now.add(lease)},
+    });
+    _check(result, 'renew a webhook delivery claim');
+    return result.nMatched == 1;
+  }
+
+  /// Records the outcome of the attempt that claimed [delivery], which has to
+  /// still hold that claim. Returns whether it did.
   Future<bool> finishAttempt(
-    Delivery delivery,
-    String owner, {
+    Delivery delivery, {
     required String status,
     required int attempt,
     DateTime? nextAt,
@@ -393,10 +423,12 @@ class WebhookStore {
     String? responseBody,
     String? error,
   }) async {
+    final claimId = delivery.claimId;
+    if (claimId == null) return false;
     final now = await this.now();
     final result = await _deliveries.updateOne({
       '_id': parseObjectId(delivery.id),
-      'claimedBy': owner,
+      'claimId': claimId,
     }, {
       r'$set': {
         'status': status,
@@ -409,7 +441,7 @@ class WebhookStore {
             : {'status': responseStatus, 'body': responseBody},
         'error': error,
       },
-      r'$unset': {'claimedBy': '', 'claimedUntil': ''},
+      r'$unset': {'claimedBy': '', 'claimId': '', 'claimedUntil': ''},
     });
     _check(result, 'record a webhook delivery');
     return result.nMatched == 1;

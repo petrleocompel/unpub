@@ -85,8 +85,10 @@ enum DeliveryResult {
 /// delivering those from the `webhook_deliveries` queue.
 ///
 /// The queue is shared by every instance. An instance claims one delivery at
-/// a time, for longer than an attempt can take, so that two instances never
-/// send the same attempt.
+/// a time, for longer than an attempt can take, and renews the claim while
+/// the attempt runs, so that two instances never send the same attempt. An
+/// attempt, from resolving the host to reading the answer, ends after
+/// [WebhooksConfig.timeout].
 class WebhookService {
   final WebhookStore store;
   final WebhooksConfig config;
@@ -108,6 +110,11 @@ class WebhookService {
   /// Resolves host names, [InternetAddress.lookup] unless a test replaces it.
   final Future<List<InternetAddress>> Function(String host)? lookup;
 
+  /// How long a claim lasts without being renewed: an attempt plus room to
+  /// record its outcome, unless a test needs a shorter one. It is renewed
+  /// every third of that while the attempt runs.
+  final Duration lease;
+
   final String _owner = ObjectId().oid;
   final _random = Random();
   Timer? _timer;
@@ -125,10 +132,8 @@ class WebhookService {
     this.concurrency = 4,
     this.onAttempt,
     this.lookup,
-  });
-
-  /// How long a claim lasts: an attempt plus room to record its outcome.
-  Duration get _lease => config.timeout + const Duration(seconds: 30);
+    Duration? lease,
+  }) : lease = lease ?? config.timeout + const Duration(seconds: 30);
 
   // Management.
 
@@ -364,7 +369,7 @@ class WebhookService {
 
   /// Claims and attempts one due delivery, and returns whether there was one.
   Future<bool> deliverDue() async {
-    final delivery = await store.claim(_owner, _lease);
+    final delivery = await store.claim(_owner, lease);
     if (delivery == null) return false;
     await attempt(delivery);
     return true;
@@ -376,8 +381,34 @@ class WebhookService {
     return base * jitter;
   }
 
-  /// Attempts a claimed [delivery] and records the outcome.
+  /// Attempts a claimed [delivery] and records the outcome, renewing the
+  /// claim meanwhile.
   Future<void> attempt(Delivery delivery) async {
+    final renewal =
+        Timer.periodic(lease ~/ 3, (_) => unawaited(_renew(delivery)));
+    try {
+      await _attempt(delivery);
+    } finally {
+      renewal.cancel();
+    }
+  }
+
+  Future<void> _renew(Delivery delivery) async {
+    try {
+      if (!await store.renewClaim(delivery, lease)) {
+        _log.warning(LogEvent(
+            'lost the claim of a webhook delivery', {'delivery': delivery.id}));
+      }
+    } catch (error, stackTrace) {
+      _log.warning(
+          LogEvent('failed to renew the claim of a webhook delivery',
+              {'delivery': delivery.id}),
+          error,
+          stackTrace);
+    }
+  }
+
+  Future<void> _attempt(Delivery delivery) async {
     final number = delivery.attempt + 1;
     final hook = await store.find(delivery.webhookId);
     _Outcome outcome;
@@ -405,7 +436,7 @@ class WebhookService {
       result = DeliveryResult.retry;
       nextAt = (await store.now()).add(_retryDelay(number));
     }
-    final recorded = await store.finishAttempt(delivery, _owner,
+    final recorded = await store.finishAttempt(delivery,
         status: status,
         attempt: number,
         nextAt: nextAt,
@@ -427,19 +458,31 @@ class WebhookService {
     }));
   }
 
+  static String _seconds(Duration duration) =>
+      duration.inMilliseconds % 1000 == 0
+          ? '${duration.inSeconds} seconds'
+          : '${(duration.inMilliseconds / 1000).toStringAsFixed(1)} seconds';
+
   /// The signature header value of [body] with [secret].
   static String signature(String secret, List<int> body) =>
       'sha256=${Hmac(sha256, utf8.encode(secret)).convert(body)}';
 
+  /// Sends [delivery] to [hook], all of it within [WebhooksConfig.timeout].
   Future<_Outcome> _send(Webhook hook, Delivery delivery) async {
     final url = hook.url;
     final problem = webhookUrlProblem(url, allowHttp: config.allowHttp);
     if (problem != null) return _Outcome.refused(problem);
+    final clock = Stopwatch()..start();
+    Duration left() {
+      final rest = config.timeout - clock.elapsed;
+      return rest > Duration.zero ? rest : Duration.zero;
+    }
+
     final InternetAddress address;
     try {
       address = await resolveWebhookHost(url.host,
               allowPrivate: config.allowPrivateNetworks, lookup: lookup)
-          .timeout(config.timeout);
+          .timeout(left());
     } on RefusedAddressException catch (error) {
       return _Outcome.refused(error.message);
     } on TimeoutException {
@@ -449,7 +492,7 @@ class WebhookService {
     }
 
     final client = HttpClient()
-      ..connectionTimeout = config.timeout
+      ..connectionTimeout = left()
       ..idleTimeout = Duration.zero
       ..autoUncompress = false
       ..userAgent = null
@@ -465,10 +508,9 @@ class WebhookService {
       };
     final body = utf8.encode(delivery.payload);
     try {
-      return await _post(client, hook, delivery, body).timeout(config.timeout);
+      return await _post(client, hook, delivery, body).timeout(left());
     } on TimeoutException {
-      return _Outcome.error(
-          'no answer within ${config.timeout.inSeconds} seconds');
+      return _Outcome.error('no answer within ${_seconds(config.timeout)}');
     } on SocketException catch (error) {
       return _Outcome.error('connection failed: ${error.message}');
     } on HandshakeException catch (error) {
