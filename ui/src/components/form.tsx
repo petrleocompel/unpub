@@ -13,7 +13,7 @@ export function FormError({ message, id }: { message: string | null | undefined;
     <p
       id={id}
       role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
+      className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-[color-mix(in_oklab,var(--destructive)_7%,var(--card))] px-3.5 py-3 text-[0.84375rem] leading-[1.3125rem]"
     >
       <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
       <span>{message}</span>
@@ -49,11 +49,11 @@ export function Field({
   className?: string
 }) {
   return (
-    <div className={cn('grid gap-2', className)}>
+    <div className={cn('grid content-start gap-1.5', className)}>
       <Label htmlFor={id}>{label}</Label>
       {children}
       {hint && (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        <p id={`${id}-hint`} className="text-xs leading-4 text-muted-foreground">
           {hint}
         </p>
       )}

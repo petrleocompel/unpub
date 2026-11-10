@@ -140,8 +140,9 @@ export function Root() {
         >
           Skip to content
         </a>
-        <Header />
+        {/* Above the header, as board 02 draws it. */}
         <OfflineBanner />
+        <Header />
         <div className="flex flex-1 flex-col">
           <Suspense
             fallback={

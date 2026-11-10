@@ -1,6 +1,7 @@
 import {
   Archive,
   Ban,
+  ChevronRight,
   CircleAlert,
   CloudDownload,
   FlaskConical,
@@ -14,7 +15,7 @@ import { cn } from '@/lib/utils'
 
 export function SdkBadge({ flutter }: { flutter: boolean }) {
   return (
-    <Badge variant="secondary" className="rounded-[5px] font-semibold">
+    <Badge variant="secondary" className="gap-[5px] rounded-[5px] font-semibold">
       <span
         aria-hidden
         className={cn(
@@ -31,8 +32,8 @@ export function SdkBadge({ flutter }: { flutter: boolean }) {
 
 export function DiscontinuedBadge() {
   return (
-    <Badge variant="outline" className="border-warning/40 bg-warning/13 text-foreground">
-      <Archive aria-hidden className="text-warning" />
+    <Badge variant="warning">
+      <Archive aria-hidden />
       Discontinued
     </Badge>
   )
@@ -40,8 +41,8 @@ export function DiscontinuedBadge() {
 
 export function RetractedBadge() {
   return (
-    <Badge variant="outline" className="border-destructive/35 bg-destructive/10 text-foreground">
-      <Ban aria-hidden className="text-destructive" />
+    <Badge variant="danger">
+      <Ban aria-hidden />
       Retracted
     </Badge>
   )
@@ -58,8 +59,8 @@ export function PrereleaseBadge() {
 
 export function LatestBadge() {
   return (
-    <Badge variant="outline" className="border-primary/30 bg-primary/12">
-      <Star aria-hidden className="text-primary" />
+    <Badge variant="primary">
+      <Star aria-hidden />
       Latest
     </Badge>
   )
@@ -77,15 +78,18 @@ export function ProxiedBadge() {
 export function ReplacedByBadge({ name }: { name: string }) {
   return (
     <Badge variant="outline" asChild>
-      <Link to={`/packages/${encodeURIComponent(name)}`}>Replaced by {name}</Link>
+      <Link to={`/packages/${encodeURIComponent(name)}`}>
+        Replaced by <span className="font-mono font-medium">{name}</span>
+        <ChevronRight aria-hidden />
+      </Link>
     </Badge>
   )
 }
 
 export function DisabledBadge() {
   return (
-    <Badge variant="outline" className="border-destructive/35 bg-destructive/10">
-      <CircleAlert aria-hidden className="text-destructive" />
+    <Badge variant="danger">
+      <CircleAlert aria-hidden />
       Disabled
     </Badge>
   )
@@ -117,17 +121,20 @@ const statusLabels: Record<string, string> = {
 export function DeliveryStatusBadge({ status }: { status: string }) {
   return (
     <Badge
-      variant="outline"
-      className={cn(
-        status === 'succeeded' && 'border-success/35 bg-success/12',
-        status === 'failed' && 'border-destructive/35 bg-destructive/10',
-        status === 'pending' && 'border-warning/40 bg-warning/13',
-      )}
+      variant={
+        status === 'succeeded'
+          ? 'success'
+          : status === 'failed'
+            ? 'danger'
+            : status === 'pending'
+              ? 'warning'
+              : 'outline'
+      }
     >
       <span
         aria-hidden
         className={cn(
-          'size-2 rounded-full',
+          'size-[7px] rounded-full',
           status === 'succeeded' && 'bg-success',
           status === 'failed' && 'bg-destructive',
           status === 'pending' && 'bg-warning',

@@ -154,6 +154,6 @@ describe('package list', () => {
     )
     renderApp('/')
     expect(await screen.findByRole('alert')).toHaveTextContent('MongoDB is down.')
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 })

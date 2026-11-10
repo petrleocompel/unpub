@@ -45,6 +45,8 @@
   --chart-bar: oklch(0.56 0.15 255);
   --chart-grid: oklch(0.92 0.006 258);
   --code: oklch(0.972 0.005 258);
+  /* Behind dialogs and sheets. */
+  --scrim: oklch(0.15 0.02 258 / 0.45);
 
   --elevation-xs: 0 1px 2px oklch(0.2 0.02 258 / 0.06);
   --elevation-sm: 0 1px 3px oklch(0.2 0.02 258 / 0.08), 0 1px 2px oklch(0.2 0.02 258 / 0.04);
@@ -81,6 +83,7 @@
   --chart-bar: oklch(0.7 0.13 252);
   --chart-grid: oklch(0.3 0.016 258);
   --code: oklch(0.205 0.016 258);
+  --scrim: oklch(0 0 0 / 0.6);
 
   --elevation-xs: 0 1px 2px oklch(0 0 0 / 0.3);
   --elevation-sm: 0 1px 3px oklch(0 0 0 / 0.35);
@@ -125,6 +128,7 @@
   --color-chart-bar: var(--chart-bar);
   --color-chart-grid: var(--chart-grid);
   --color-code: var(--code);
+  --color-scrim: var(--scrim);
 }
 
 @layer base {
@@ -168,6 +172,9 @@
     z-index: 1;
     background-color: var(--sticky-bg);
   }
+  [data-sticky-first] thead tr > :first-child:not([colspan]) {
+    background-color: var(--color-surface);
+  }
   [data-sticky-first]
     tr:is(:hover, [data-current], :has([aria-expanded='true']))
     > :first-child:not([colspan]) {
@@ -178,6 +185,7 @@
       box-shadow: inset -1px 0 0 var(--color-border);
     }
   }
+  /* docs/design board 04: 15 px text on 26 px lines, 22 px h2 with a rule. */
   .markdown {
     @apply max-w-none text-[0.9375rem] leading-[1.625rem] break-words;
   }
@@ -185,13 +193,13 @@
     @apply mt-0;
   }
   .markdown h1 {
-    @apply mt-8 mb-4 scroll-mt-20 border-b pb-2 text-2xl font-semibold;
+    @apply mt-8 mb-3.5 scroll-mt-20 border-b pb-2 text-2xl font-semibold tracking-tight;
   }
   .markdown h2 {
     @apply mt-8 mb-3.5 scroll-mt-20 border-b pb-2 text-[1.375rem] leading-[1.875rem] font-semibold tracking-tight;
   }
   .markdown h3 {
-    @apply mt-6 mb-2 scroll-mt-20 text-lg font-semibold;
+    @apply mt-6 mb-2 scroll-mt-20 text-[1.0625rem] leading-6 font-semibold;
   }
   .markdown h4,
   .markdown h5,
@@ -204,34 +212,34 @@
   .markdown pre,
   .markdown blockquote,
   .markdown table {
-    @apply my-4;
+    @apply mt-0 mb-3.5;
   }
   .markdown ul {
-    @apply list-disc pl-6;
+    @apply list-disc pl-5.5;
   }
   .markdown ol {
-    @apply list-decimal pl-6;
+    @apply list-decimal pl-5.5;
   }
   .markdown li + li {
     @apply mt-1;
   }
   .markdown a {
-    @apply font-medium text-primary underline underline-offset-4;
+    @apply text-primary underline underline-offset-3;
   }
   .markdown code {
-    @apply rounded bg-code px-1.5 py-0.5 font-mono text-[0.85em];
+    @apply rounded border bg-code px-[5px] py-px font-mono text-[0.88em];
   }
   .markdown pre {
-    @apply overflow-x-auto rounded-lg border bg-code p-4 text-sm leading-6;
+    @apply overflow-x-auto rounded-lg border bg-code px-3.5 py-3 font-mono text-[0.8125rem] leading-[1.3125rem];
   }
   .markdown pre code {
-    @apply bg-transparent p-0;
+    @apply border-0 bg-transparent p-0 text-[1em];
   }
   .markdown blockquote {
     @apply border-l-4 pl-4 text-muted-foreground;
   }
   .markdown table {
-    @apply block w-full overflow-x-auto text-sm;
+    @apply block w-fit max-w-full overflow-x-auto text-[0.84375rem] leading-5;
   }
   .markdown th,
   .markdown td {

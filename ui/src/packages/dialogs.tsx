@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react'
-import { Loader2, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeftRight, Loader2, Trash2, UserPlus } from 'lucide-react'
+import { Initials } from '@/components/avatar'
 import { errorMessage } from '@/api/client'
 import {
   useAddUploader,
@@ -175,13 +176,16 @@ export function UploadersEditor({ pkg }: { pkg: Package }) {
           No uploaders: only administrators can change this package.
         </p>
       ) : (
-        <ul className="divide-y rounded-md border" aria-label="Uploaders">
+        <ul className="divide-y rounded-lg border" aria-label="Uploaders">
           {pkg.uploaders.map((uploader) => (
             <li
               key={uploader}
-              className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-2 py-1.5 pr-1.5 pl-3 text-[0.8125rem]"
             >
-              <span className="truncate">{uploader}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <Initials email={uploader} />
+                <span className="truncate">{uploader}</span>
+              </span>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -251,9 +255,9 @@ export function TransferDialog({ pkg, ...open }: Open & { pkg: Package }) {
     <ConfirmDialog
       {...open}
       title={`Transfer ${pkg.name}`}
-      description="The user becomes the only uploader. Every other uploader loses access."
+      description="The new owner becomes the only uploader. Every other uploader loses upload rights."
       confirmLabel="Transfer ownership"
-      destructive
+      confirmIcon={ArrowLeftRight}
       checkbox={`I understand that ${pkg.uploaders.length || 'the'} current uploader${pkg.uploaders.length === 1 ? '' : 's'} will be removed.`}
       onConfirm={async () => {
         await transfer.mutateAsync({ name: pkg.name, email: email.trim() })

@@ -1,19 +1,26 @@
 import type { ComponentProps } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { fieldClasses } from '@/components/ui/input'
 
 /**
  * A native <select> styled like the inputs. Radix Select is not used: it
  * renders an inline <style> element that the Content-Security-Policy refuses.
+ * [small] is the 32 px toolbar size; the width comes from [className].
  */
-export function NativeSelect({ className, children, ...props }: ComponentProps<'select'>) {
+export function NativeSelect({
+  className,
+  children,
+  small = false,
+  ...props
+}: ComponentProps<'select'> & { small?: boolean }) {
   return (
-    <span className={cn('relative inline-flex h-9', className)}>
+    <span className={cn('relative inline-flex', small ? 'h-8' : 'h-9', className)}>
       <select
         className={cn(
-          'h-full w-full appearance-none rounded-md border border-input bg-background py-1 pr-8 pl-3 text-sm shadow-xs',
-          'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-          'disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive dark:bg-input/30',
+          fieldClasses,
+          'h-full appearance-none pr-7.5 pl-[11px]',
+          small && 'text-[0.8125rem]',
         )}
         {...props}
       >
@@ -21,7 +28,7 @@ export function NativeSelect({ className, children, ...props }: ComponentProps<'
       </select>
       <ChevronDown
         aria-hidden
-        className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 opacity-60"
+        className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
       />
     </span>
   )

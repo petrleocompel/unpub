@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, TriangleAlert, type LucideIcon } from 'lucide-react'
 import { errorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -27,6 +27,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   destructive = false,
+  confirmIcon,
   typeToConfirm,
   checkbox,
   onConfirm,
@@ -38,6 +39,8 @@ export function ConfirmDialog({
   description?: ReactNode
   confirmLabel: string
   destructive?: boolean
+  /** An icon before [confirmLabel]. */
+  confirmIcon?: LucideIcon
   typeToConfirm?: string
   checkbox?: string
   onConfirm: () => Promise<unknown>
@@ -53,6 +56,7 @@ export function ConfirmDialog({
             description={description}
             confirmLabel={confirmLabel}
             destructive={destructive}
+            confirmIcon={confirmIcon}
             typeToConfirm={typeToConfirm}
             checkbox={checkbox}
             onConfirm={onConfirm}
@@ -71,6 +75,7 @@ function ConfirmForm({
   description,
   confirmLabel,
   destructive,
+  confirmIcon: ConfirmIcon,
   typeToConfirm,
   checkbox,
   onConfirm,
@@ -81,6 +86,7 @@ function ConfirmForm({
   description?: ReactNode
   confirmLabel: string
   destructive: boolean
+  confirmIcon?: LucideIcon
   typeToConfirm?: string
   checkbox?: string
   onConfirm: () => Promise<unknown>
@@ -113,7 +119,12 @@ function ConfirmForm({
   return (
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
+        <DialogTitle className="flex items-center gap-2">
+          {destructive && (
+            <TriangleAlert aria-hidden className="size-4.5 shrink-0 text-destructive" />
+          )}
+          {title}
+        </DialogTitle>
         {description && (
           <DialogDescription asChild>
             <div>{description}</div>
@@ -122,9 +133,11 @@ function ConfirmForm({
       </DialogHeader>
       {children}
       {typeToConfirm !== undefined && (
-        <div className="grid gap-2">
-          <Label htmlFor={`${id}-confirm`}>
-            Type <code className="rounded bg-muted px-1 font-mono">{typeToConfirm}</code> to confirm
+        <div className="grid gap-1.5">
+          <Label htmlFor={`${id}-confirm`} className="leading-5">
+            <span>
+              Type <code className="font-mono">{typeToConfirm}</code> to confirm
+            </span>
           </Label>
           <Input
             id={`${id}-confirm`}
@@ -132,18 +145,19 @@ function ConfirmForm({
             onChange={(event) => setTyped(event.target.value)}
             autoComplete="off"
             spellCheck={false}
+            className="font-mono"
             autoFocus
           />
         </div>
       )}
       {checkbox !== undefined && (
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2 text-[0.8125rem]">
           <Checkbox
             id={`${id}-check`}
             checked={ticked}
             onCheckedChange={(value) => setTicked(value === true)}
           />
-          <Label htmlFor={`${id}-check`} className="leading-snug font-normal">
+          <Label htmlFor={`${id}-check`} className="leading-4 font-normal">
             {checkbox}
           </Label>
         </div>
@@ -158,7 +172,11 @@ function ConfirmForm({
           variant={destructive ? 'destructive' : 'default'}
           disabled={!ready || pending}
         >
-          {pending && <Loader2 aria-hidden className="animate-spin" />}
+          {pending ? (
+            <Loader2 aria-hidden className="animate-spin" />
+          ) : (
+            ConfirmIcon && <ConfirmIcon aria-hidden />
+          )}
           {confirmLabel}
         </Button>
       </DialogFooter>
