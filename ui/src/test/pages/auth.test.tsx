@@ -85,6 +85,85 @@ describe('login', () => {
   })
 })
 
+describe('logout', () => {
+  function packages() {
+    server.use(http.get(url('/webapi/v2/packages'), () => HttpResponse.json(f.page([]))))
+  }
+
+  async function logOut(user: ReturnType<typeof renderApp>['user']) {
+    await user.click(
+      await screen.findByRole('button', { name: 'Account menu for admin@company.example' }),
+    )
+    await user.click(await screen.findByRole('menuitem', { name: 'Log out' }))
+  }
+
+  it('ends the session', async () => {
+    packages()
+    const logouts = capture('post', '/webapi/logout', { done: true })
+    const { user } = renderApp('/', { me: f.me() })
+    await logOut(user)
+    expect(await screen.findByText('Logged out')).toBeInTheDocument()
+    expect(logouts).toHaveLength(1)
+    expect(await screen.findByRole('link', { name: 'Log in' })).toBeInTheDocument()
+  })
+
+  it('reads the CSRF token again and retries once when it is refused', async () => {
+    packages()
+    const tokens: (string | null)[] = []
+    server.use(
+      http.post(url('/webapi/logout'), ({ request }) => {
+        const token = request.headers.get('X-CSRF-Token')
+        tokens.push(token)
+        return token === 'csrf-new'
+          ? HttpResponse.json({ done: true })
+          : error(403, 'csrf_failed', 'CSRF token mismatch.')
+      }),
+    )
+    const { user } = renderApp('/', { me: f.me(f.admin, 'csrf-old') })
+    await screen.findByRole('button', { name: 'Account menu for admin@company.example' })
+    server.use(http.get(url('/webapi/me'), () => HttpResponse.json(f.me(f.admin, 'csrf-new'))))
+    await logOut(user)
+    expect(await screen.findByText('Logged out')).toBeInTheDocument()
+    expect(tokens).toEqual(['csrf-old', 'csrf-new'])
+  })
+
+  it('keeps the session when the logout fails', async () => {
+    packages()
+    const logouts = capture('post', '/webapi/logout', () =>
+      error(403, 'csrf_failed', 'CSRF token mismatch.'),
+    )
+    const { user } = renderApp('/', { me: f.me() })
+    await logOut(user)
+    expect(await screen.findByText('Logging out failed')).toBeInTheDocument()
+    // One retry with a fresh token, then the error.
+    expect(logouts).toHaveLength(2)
+    expect(
+      screen.getByRole('button', { name: 'Account menu for admin@company.example' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Log in' })).toBeNull()
+  })
+
+  it('keeps the session when the server cannot be reached', async () => {
+    packages()
+    server.use(http.post(url('/webapi/logout'), () => HttpResponse.error()))
+    const { user } = renderApp('/', { me: f.me(f.admin, 'csrf-xyz') })
+    await logOut(user)
+    expect(await screen.findByText('Logging out failed')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Account menu for admin@company.example' }),
+    ).toBeInTheDocument()
+    // The token still goes with the next change.
+    const revoked = capture('delete', '/webapi/tokens/t1', { token: f.token() })
+    server.use(http.get(url('/webapi/tokens'), () => HttpResponse.json(f.page([f.token()]))))
+    await user.click(screen.getByRole('button', { name: 'Account menu for admin@company.example' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Account' }))
+    await user.click(await screen.findByRole('button', { name: 'Revoke laptop' }))
+    await user.click(await screen.findByRole('button', { name: 'Revoke token' }))
+    await waitFor(() => expect(revoked).toHaveLength(1))
+    expect(revoked[0]!.headers.get('X-CSRF-Token')).toBe('csrf-xyz')
+  })
+})
+
 describe('CSRF', () => {
   it('sends the token of the session with every change', async () => {
     server.use(http.get(url('/webapi/tokens'), () => HttpResponse.json(f.page([f.token()]))))

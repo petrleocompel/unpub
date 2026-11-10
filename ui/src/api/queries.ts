@@ -51,11 +51,32 @@ export function useLogin() {
   })
 }
 
+/** Posts the logout; a 401 means there is no session left to end. */
+async function postLogout() {
+  try {
+    await unwrap(api.POST('/webapi/logout'))
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 401)) throw error
+  }
+}
+
+/**
+ * Ends the session. A refused CSRF token is read again and the logout retried
+ * once; any other failure keeps the session, for the caller to report.
+ */
 export function useLogout() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => unwrap(api.POST('/webapi/logout')),
-    onSettled: () => {
+    mutationFn: async () => {
+      try {
+        await postLogout()
+      } catch (error) {
+        if (!(error instanceof ApiError && error.code === 'csrf_failed')) throw error
+        const me = await client.fetchQuery({ ...meQuery, staleTime: 0 })
+        if (me) await postLogout()
+      }
+    },
+    onSuccess: () => {
       setCsrfToken(null)
       client.setQueryData(['me'], null)
       client.removeQueries({ predicate: (q) => !['config', 'me'].includes(String(q.queryKey[0])) })
