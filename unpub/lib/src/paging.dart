@@ -23,6 +23,14 @@ int? parsePageNumber(String? text) {
 /// The largest `int` on every platform, including JavaScript.
 const _largest = 9007199254740991;
 
+/// The `size` of a page given as [text], read leniently: one that is not a
+/// positive integer is [defaultSize], one above [maxSize] is [maxSize].
+int pageSize(String? text, {required int defaultSize, required int maxSize}) {
+  final size = parsePageNumber(text);
+  if (size == null || size < 1) return defaultSize;
+  return size > maxSize ? maxSize : size;
+}
+
 /// [page], one-based, within 1 and [maxPage].
 int boundedPage(int page) => page.clamp(1, maxPage);
 
@@ -38,8 +46,10 @@ int pageOffset(int page, int size) =>
 ({int page, int size}) pageParameters(Map<String, String> query,
     {int defaultSize = 20, int maxSize = maxPageSize}) {
   final page = parsePageNumber(query['page']) ?? 1;
-  final size = parsePageNumber(query['size']) ?? defaultSize;
-  return (page: boundedPage(page), size: size.clamp(1, maxSize));
+  return (
+    page: boundedPage(page),
+    size: pageSize(query['size'], defaultSize: defaultSize, maxSize: maxSize),
+  );
 }
 
 /// A page of a list route: `{items, page, size, total}`.

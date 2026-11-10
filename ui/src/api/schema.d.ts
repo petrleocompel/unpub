@@ -1881,6 +1881,7 @@ export interface operations {
       query?: {
         q?: string
         page?: number
+        /** @description Read leniently: a value that is not a positive integer is the default, one above 1000 is 1000. */
         size?: number
         sort?: string
         discontinued?: 'true' | 'false'

@@ -166,7 +166,8 @@ class WebapiRoutes {
   Future<shelf.Response> getPackages(shelf.Request req) async {
     var params = req.requestedUri.queryParameters;
     // Zero-based, as the former web UI sent it.
-    var size = (parsePageNumber(params['size']) ?? 10).clamp(1, maxSearchSize);
+    var size =
+        pageSize(params['size'], defaultSize: 10, maxSize: maxSearchSize);
     var page = (parsePageNumber(params['page']) ?? 0).clamp(0, maxSearchPage);
     var sort = params['sort'] ?? 'download';
     var q = params['q'];

@@ -34,7 +34,6 @@ class PackageListRequest {
   /// default rather than failing the page.
   factory PackageListRequest.fromQuery(Map<String, String> query) {
     final text = query['q']?.trim();
-    final size = parsePageNumber(query['size']) ?? defaultPageSize;
     final page = parsePageNumber(query['page']) ?? 1;
     final search = text == null || text.isEmpty ? null : text;
     final sort = PackageSort.values.asNameMap()[query['sort']];
@@ -48,7 +47,8 @@ class PackageListRequest {
               : sort)
           : sort ?? PackageSort.relevance,
       page: boundedPage(page),
-      size: size.clamp(1, maxPageSize),
+      size: pageSize(query['size'],
+          defaultSize: defaultPageSize, maxSize: maxPageSize),
     );
   }
 

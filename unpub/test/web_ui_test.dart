@@ -489,7 +489,11 @@ void _pages(String base) {
       expect(listed(await fetch('GET', '/packages?size=5&page=5&sort=name')),
           ['pkg_20', 'pkg_21', 'pkg_22', 'pkg_23', 'pkg_24']);
       expect(listed(await fetch('GET', '/packages?size=1000')), hasLength(25));
-      expect(listed(await fetch('GET', '/packages?size=0')), hasLength(1));
+      for (final size in ['0', '-1', 'abc']) {
+        expect(
+            listed(await fetch('GET', '/packages?size=$size')), hasLength(20),
+            reason: size);
+      }
     });
 
     test('page links keep the search and the filters', () async {

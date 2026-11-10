@@ -409,6 +409,32 @@ metrics:
     expect(legacy.json['data']['packages'], isEmpty);
   });
 
+  test('a size that is not a positive integer is the default size', () async {
+    await harness.user('admin@example.com', Role.admin);
+    final browser = await harness.apiLogIn('admin@example.com');
+    final created = await send('POST', '/webapi/webhooks', as: browser, json: {
+      'url': 'http://127.0.0.1:9/hook',
+      'events': ['package.published'],
+    });
+    final id = created.json['webhook']['id'] as String;
+    for (final path in [
+      '/webapi/users',
+      '/webapi/tokens',
+      '/webapi/webhooks',
+      '/webapi/webhooks/$id/deliveries',
+      '/webapi/v2/packages',
+    ]) {
+      final plain = await send('GET', path, as: browser);
+      expect(plain.status, HttpStatus.ok, reason: path);
+      expect(plain.json['size'], 20, reason: path);
+      for (final size in ['0', '-1', 'abc', '']) {
+        final reply = await send('GET', '$path?size=$size', as: browser);
+        expect(reply.status, HttpStatus.ok, reason: '$path?size=$size');
+        expect(reply.json['size'], 20, reason: '$path?size=$size');
+      }
+    }
+  });
+
   group('every change of the client', () {
     test('accepts a session with X-CSRF-Token and refuses one without',
         () async {

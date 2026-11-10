@@ -229,6 +229,9 @@ auth:
       expect(lenient['size'], 20);
       expect(lenient['page'], 1);
       expect(names(lenient), ['alpha']);
+      for (final size in ['0', '-1', 'abc']) {
+        expect((await list('?size=$size'))['size'], 20, reason: size);
+      }
     });
 
     test('the legacy list keeps its shape', () async {
@@ -236,6 +239,19 @@ auth:
       final reply = await get('/webapi/packages');
       expect(reply.json['data']['count'], 1);
       expect(reply.json['data']['packages'].single['name'], 'alpha');
+    });
+
+    test('the legacy list takes the default size for a size not positive',
+        () async {
+      for (var i = 0; i < 12; i++) {
+        await addVersion('pkg_$i', '1.0.0');
+      }
+      for (final size in ['0', '-1', 'abc']) {
+        final reply = await get('/webapi/packages?size=$size');
+        expect(reply.json['data']['packages'], hasLength(10), reason: size);
+      }
+      expect((await get('/webapi/packages?size=3')).json['data']['packages'],
+          hasLength(3));
     });
   });
 

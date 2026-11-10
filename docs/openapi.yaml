@@ -540,8 +540,13 @@ paths:
             default: 0
         - name: size
           in: query
+          description: >-
+            Read leniently: a value that is not a positive integer is the
+            default, one above 1000 is 1000.
           schema:
             type: integer
+            minimum: 1
+            maximum: 1000
             default: 10
         - name: sort
           in: query
