@@ -192,6 +192,13 @@ dl.facts dt { font-weight: 600; }
 dl.facts dd { margin: 0; }
 div.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
 fieldset { border: 1px solid var(--border); border-radius: 4px; }
+svg.chart { display: block; width: 100%; max-width: 40rem; height: auto; margin: 1rem 0; }
+svg.chart .bar { fill: var(--accent); }
+svg.chart .bar.empty { fill: var(--border); }
+svg.chart .axis { stroke: var(--border); }
+svg.chart .chart-label { fill: var(--muted); font-size: 11px; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 2rem; }
+td.number { text-align: right; font-variant-numeric: tabular-nums; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
 th { background: var(--subtle); font-weight: 600; }

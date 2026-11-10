@@ -282,6 +282,9 @@ Html adminPackagePage(
                 }).query}'
           },
           'Audit log of ${package.name}'),
+      ' · ',
+      el('a', {'href': '${packageHref(package.name)}/stats'},
+          'Download statistics'),
     ]),
     el('h3', const {}, 'Discontinued'),
     postForm(

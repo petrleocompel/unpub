@@ -1,4 +1,5 @@
 import '../../models.dart';
+import '../download_stats.dart';
 import '../html.dart';
 import '../layout.dart';
 import '../markdown.dart';
@@ -9,7 +10,8 @@ enum PackageTab {
   readme('README'),
   changelog('Changelog'),
   versions('Versions'),
-  install('Install');
+  install('Install'),
+  stats('Stats');
 
   final String label;
 
@@ -48,6 +50,9 @@ class PackageView {
   /// Whether reading needs a token, which the install steps then mention.
   final bool authenticatedReads;
 
+  /// The download statistics, read for the stats tab only.
+  final DownloadStats? stats;
+
   const PackageView({
     required this.package,
     required this.version,
@@ -59,6 +64,7 @@ class PackageView {
     required this.hostedUrl,
     required this.upstream,
     required this.authenticatedReads,
+    this.stats,
   });
 
   String get name => package.name;
@@ -66,8 +72,12 @@ class PackageView {
   String get basePath =>
       versionPage ? versionHref(name, version.version) : packageHref(name);
 
-  String tabHref(PackageTab tab) =>
-      tab == PackageTab.readme ? basePath : '$basePath?tab=${tab.name}';
+  /// The statistics are of the package, not of a version.
+  String tabHref(PackageTab tab) => switch (tab) {
+        PackageTab.readme => basePath,
+        PackageTab.stats => '${packageHref(name)}/stats',
+        _ => '$basePath?tab=${tab.name}',
+      };
 
   String get upstreamHost =>
       upstream.host.isEmpty ? '$upstream' : upstream.host;
@@ -156,6 +166,9 @@ Html packagePage(PageContext context, PackageView view) {
                 _markdown(version.changelog, 'CHANGELOG', version.pubspec),
               PackageTab.versions => _versions(view),
               PackageTab.install => _install(view),
+              PackageTab.stats => view.stats == null
+                  ? Html.empty
+                  : downloadStatsSection(view.name, view.stats!),
             }),
       ]),
       el('aside', {'class': 'sidebar', 'aria-label': 'Package details'},

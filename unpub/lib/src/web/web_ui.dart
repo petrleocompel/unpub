@@ -27,6 +27,7 @@ import '../store/meta_store.dart';
 import '../validation.dart';
 import '../webhooks/webhook_service.dart';
 import 'assets.dart';
+import 'download_stats.dart';
 import 'html.dart';
 import 'layout.dart';
 import 'pages/account_pages.dart';
@@ -133,6 +134,7 @@ class WebUi {
       ..get('/packages', _guard(listPage))
       ..get('/packages/<name>', _guard1(showPackage))
       ..get('/packages/<name>/versions/<version>', _guard2(showVersion))
+      ..get('/packages/<name>/stats', _guard1(showStats))
       ..get('/static/<file>', staticAsset)
       ..get('/login', _guard(loginForm))
       ..post('/login', _guard(login))
@@ -391,6 +393,9 @@ class WebUi {
   Future<shelf.Response> showPackage(shelf.Request req, String name) =>
       _packagePage(req, name, null);
 
+  Future<shelf.Response> showStats(shelf.Request req, String name) =>
+      _packagePage(req, name, null, tab: PackageTab.stats);
+
   Future<shelf.Response> showVersion(
       shelf.Request req, String name, String version) async {
     final decoded = parseVersionSegment(version);
@@ -399,7 +404,8 @@ class WebUi {
   }
 
   Future<shelf.Response> _packagePage(
-      shelf.Request req, String name, String? versionName) async {
+      shelf.Request req, String name, String? versionName,
+      {PackageTab? tab}) async {
     if (!isValidPackageName(name)) return _notFoundPage(req);
     final package = await app.metaStore.queryPackage(name);
     if (package == null) return _unknownPackage(req, name);
@@ -416,7 +422,10 @@ class WebUi {
       version = found;
     }
 
-    final tab = PackageTab.parse(req.url.queryParameters['tab']);
+    tab ??= PackageTab.parse(req.url.queryParameters['tab']);
+    if (tab == PackageTab.stats && versionName != null) {
+      return _redirect('${packageHref(name)}/stats');
+    }
     final versions = [...package.versions]
       ..sort((a, b) => _compareVersions(b.version, a.version));
     final dependencies = [
@@ -438,6 +447,11 @@ class WebUi {
       hostedUrl: _hostedUrl(req),
       upstream: _upstream,
       authenticatedReads: app.readAccess == ReadAccess.authenticated,
+      stats: tab == PackageTab.stats
+          ? await DownloadStats.load(app.metaStore, name,
+              total: package.download ?? 0,
+              versions: versions.map((item) => item.version))
+          : null,
     );
     return _html(req, packagePage(_context(req), view));
   }

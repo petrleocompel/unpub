@@ -193,6 +193,13 @@ abstract class MetaStore {
           String name, Iterable<String> versions) async =>
       {for (final v in versions) v: await versionDownloads(name, v)};
 
+  /// How many downloads of [name] were counted on each of [days], given as
+  /// `yyyyMMdd` in the local time of the server, as [increaseDownloads] counts
+  /// them. A day without downloads is left out.
+  Future<Map<String, int>> dailyDownloads(
+          String name, Iterable<String> days) async =>
+      const {};
+
   /// Marks a version as retracted, or restores it when [retracted] is false.
   ///
   /// Returns false if the version was already in that state.

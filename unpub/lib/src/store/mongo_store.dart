@@ -391,6 +391,23 @@ class MongoStore extends MetaStore {
     _checkWrite(result, 'count version download');
   }
 
+  /// Reads the `d<yyyyMMdd>` counters of the `stats` document of [name],
+  /// which every counted download increments.
+  @override
+  Future<Map<String, int>> dailyDownloads(
+      String name, Iterable<String> days) async {
+    final fields = [for (final day in days) 'd$day'];
+    if (fields.isEmpty) return const {};
+    final stats = await db
+        .collection(statsCollection)
+        .findOne(where.eq('name', name).fields(fields));
+    if (stats == null) return const {};
+    return {
+      for (final day in days)
+        if (stats['d$day'] case final num count) day: count.toInt(),
+    };
+  }
+
   @override
   Future<int> versionDownloads(String name, String version) async {
     final stats = await db
