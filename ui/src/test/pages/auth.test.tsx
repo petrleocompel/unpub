@@ -73,12 +73,18 @@ describe('login', () => {
       await user.type(screen.getByLabelText('Password'), 'whatever1')
       await user.click(screen.getByRole('button', { name: 'Log in' }))
       const alert = await screen.findByRole('alert')
-      expect(within(alert).getByText(/^Try again in 1:0[45]\.$/)).toBeInTheDocument()
+      // Real time passes while typing (shouldAdvanceTime), so read what is
+      // left instead of assuming the full 65 seconds are still on the clock.
+      const shown = within(alert).getByText(/^Try again in \d:\d\d\.$/)
+      const [, minutes, seconds] = /(\d):(\d\d)/.exec(shown.textContent ?? '')!
+      const left = Number(minutes) * 60 + Number(seconds)
+      expect(left).toBeGreaterThan(30)
+      expect(left).toBeLessThanOrEqual(65)
       expect(within(alert).getByText('Try again in 2 minutes.')).toHaveClass('sr-only')
       const button = screen.getByRole('button', { name: 'Log in' })
       expect(button).toBeDisabled()
 
-      act(() => vi.advanceTimersByTime(60_000))
+      act(() => vi.advanceTimersByTime((left - 5) * 1000))
       expect(within(alert).getByText(/^Try again in 0:0[45]\.$/)).toBeInTheDocument()
       expect(button).toBeDisabled()
 
