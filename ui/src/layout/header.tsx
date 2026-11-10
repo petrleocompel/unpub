@@ -1,15 +1,15 @@
-import { Boxes, LogIn, LogOut, Shield, User } from 'lucide-react'
+import { ChevronDown, LogIn, LogOut, Package, Shield, User } from 'lucide-react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { errorMessage } from '@/api/client'
 import { useLogout } from '@/api/queries'
 import { useSession } from '@/auth/session'
+import { Initials } from '@/components/avatar'
 import { RoleBadge } from '@/components/badges'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -39,17 +39,19 @@ export function Wordmark() {
   return (
     <Link
       to="/"
-      className="flex items-center gap-2 rounded-md text-[1.1875rem] font-[650] tracking-[-0.03em]"
+      className="flex shrink-0 items-center gap-2 rounded-md text-[1.1875rem] font-[650] tracking-[-0.03em] text-foreground"
       aria-label="unpub home"
     >
       <Mark />
-      <span aria-hidden className="hidden min-[400px]:inline">
-        unpub
-      </span>
+      <span aria-hidden>unpub</span>
     </Link>
   )
 }
 
+/**
+ * The header of docs/design (board 01): mark, navigation, search, theme and
+ * the user. Below sm the search takes a row of its own under the rest.
+ */
 export function Header() {
   const { me, isAdmin, config } = useSession()
   const location = useLocation()
@@ -60,8 +62,8 @@ export function Header() {
   const locked = config.readAccess === 'authenticated' && !me
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-15 max-w-7xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
+    <header className="sticky top-0 z-40 border-b bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 gap-y-2.5 px-4 py-2.5 sm:h-15 sm:flex-nowrap sm:gap-6 sm:px-6 sm:py-0">
         <Wordmark />
         {!locked && (
           <nav aria-label="Main" className="shrink-0">
@@ -69,33 +71,43 @@ export function Header() {
               to="/packages"
               className={({ isActive }) =>
                 cn(
-                  'flex h-8 items-center rounded-md px-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground',
+                  'flex h-8 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground sm:px-2.5',
                   isActive && 'bg-accent text-foreground',
                 )
               }
             >
               {/* An icon below sm, where the search needs the room. */}
-              <Boxes aria-hidden className="size-4 sm:hidden" />
+              <Package aria-hidden className="size-4 sm:hidden" />
               <span className="sr-only sm:not-sr-only">Packages</span>
             </NavLink>
           </nav>
         )}
-        {!locked && <SearchBox className="max-w-md min-w-0 flex-1" />}
+        {!locked && (
+          <SearchBox className="order-last basis-full sm:order-none sm:max-w-[520px] sm:min-w-0 sm:flex-1 sm:basis-auto" />
+        )}
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           {me ? (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" aria-label={`Account menu for ${me.user.email}`}>
-                  <User aria-hidden />
-                  <span className="hidden max-w-48 truncate md:inline">{me.user.email}</span>
-                </Button>
+                <button
+                  type="button"
+                  aria-label={`Account menu for ${me.user.email}`}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg pr-1 pl-1 text-[0.8125rem] text-foreground hover:bg-accent md:pr-2"
+                >
+                  <Initials email={me.user.email} size="md" />
+                  <span className="hidden max-w-56 truncate md:inline">{me.user.email}</span>
+                  <ChevronDown
+                    aria-hidden
+                    className="hidden size-3.5 text-muted-foreground md:block"
+                  />
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="grid gap-1.5">
-                  <span className="truncate font-normal">{me.user.email}</span>
+                <div className="grid justify-items-start gap-1.5 px-2.5 pt-2 pb-2.5">
+                  <span className="w-full truncate text-[0.8125rem]">{me.user.email}</span>
                   <RoleBadge role={me.user.role} />
-                </DropdownMenuLabel>
+                </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/account">
@@ -136,7 +148,7 @@ export function Header() {
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
                 <LogIn aria-hidden />
-                <span className="sr-only sm:not-sr-only">Log in</span>
+                Log in
               </Link>
             )
           )}

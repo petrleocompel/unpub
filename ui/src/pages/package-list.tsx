@@ -1,9 +1,9 @@
-import { Download, RotateCcw, SearchX } from 'lucide-react'
+import { Download, Package, RotateCcw, SearchX } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { usePackages, type PackageListParams } from '@/api/queries'
 import type { PackageSummary } from '@/api/types'
 import { hostedUrl, useSession } from '@/auth/session'
-import { DiscontinuedBadge, ReplacedByBadge, SdkBadge } from '@/components/badges'
+import { DiscontinuedBadge, ProxiedBadge, ReplacedByBadge, SdkBadge } from '@/components/badges'
 import { CodeBlock } from '@/components/copy-button'
 import { NativeSelect } from '@/components/native-select'
 import { intParam, Pager } from '@/components/pager'
@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { RelativeTime } from '@/components/time'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { SegmentedControl } from '@/components/ui/segmented'
 import { Switch } from '@/components/ui/switch'
 import { Page } from '@/layout/root'
 import { formatNumber } from '@/lib/format'
@@ -49,6 +50,13 @@ export function listParams(
   }
 }
 
+const sdkOptions: { value: '' | 'dart' | 'flutter'; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'dart', label: 'Dart' },
+  { value: 'flutter', label: 'Flutter' },
+]
+const sdkNames = { dart: 'Dart', flutter: 'Flutter' }
+
 export function PackageListPage() {
   const [params, setParams] = useSearchParams()
   const query = listParams(params)
@@ -65,37 +73,42 @@ export function PackageListPage() {
     setParams(next)
   }
   const filtered = !!(query.q || query.sdk || query.discontinued)
+  const host = new URL(hostedUrl(config)).host
 
   return (
     <Page wide>
       <div className="grid gap-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <h1 className="text-2xl font-semibold">
-            {query.q ? (
-              <>
-                Results for <q className="font-mono">{query.q}</q>
-              </>
-            ) : (
-              'Packages'
+          <div className="grid gap-1">
+            <h1 className="text-[1.375rem] leading-[1.875rem] font-semibold tracking-[-0.015em] sm:text-2xl sm:leading-8">
+              {query.q ? (
+                <>
+                  Results for <q className="font-mono">{query.q}</q>
+                </>
+              ) : (
+                'Packages'
+              )}
+            </h1>
+            {packages.data && (
+              <p className="text-[0.8125rem] text-muted-foreground">
+                {query.q || query.sdk
+                  ? `${formatNumber(packages.data.total)} ${packages.data.total === 1 ? 'result' : 'results'}`
+                  : `${formatNumber(packages.data.total)} ${packages.data.total === 1 ? 'package' : 'packages'}`}{' '}
+                on <span className="font-mono">{host}</span>
+              </p>
             )}
-          </h1>
+          </div>
           <div
-            className="flex flex-wrap items-center gap-4"
+            className="flex flex-wrap items-center gap-x-4 gap-y-3"
             role="group"
             aria-label="Filters and sorting"
           >
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">SDK</span>
-              <NativeSelect
-                value={query.sdk ?? ''}
-                onChange={(event) => set('sdk', event.target.value)}
-                className="w-28"
-              >
-                <option value="">All</option>
-                <option value="dart">Dart</option>
-                <option value="flutter">Flutter</option>
-              </NativeSelect>
-            </label>
+            <SegmentedControl
+              label="SDK"
+              value={query.sdk ?? ''}
+              options={sdkOptions}
+              onValueChange={(value) => set('sdk', value)}
+            />
             <div className="flex items-center gap-2">
               <Switch
                 id="show-discontinued"
@@ -106,12 +119,13 @@ export function PackageListPage() {
                 Show discontinued
               </Label>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Sort</span>
+            <label className="flex items-center gap-2">
+              <span className="text-[0.8125rem] text-muted-foreground">Sort</span>
               <NativeSelect
+                small
                 value={query.sort}
                 onChange={(event) => set('sort', event.target.value)}
-                className="w-44"
+                className="w-42"
               >
                 {sorts
                   .filter((sort) => sort !== 'relevance' || query.q)
@@ -128,41 +142,65 @@ export function PackageListPage() {
         {packages.isPending ? (
           <ListSkeleton rows={6} label="Loading packages" />
         ) : packages.isError ? (
-          <ErrorState error={packages.error} onRetry={() => void packages.refetch()} />
+          <ErrorState
+            title="Could not load the packages"
+            error={packages.error}
+            onRetry={() => void packages.refetch()}
+          />
         ) : packages.data.total === 0 ? (
           filtered ? (
-            <EmptyState icon={SearchX} title="No packages match">
-              <p>
-                {query.q ? (
+            <EmptyState
+              icon={SearchX}
+              title={
+                query.q ? (
                   <>
-                    Nothing matches <q className="font-mono">{query.q}</q>
-                    {query.sdk || query.discontinued ? ' with these filters' : ''}.
+                    Nothing matches “<span className="font-mono">{query.q}</span>”
                   </>
                 ) : (
-                  'No package matches these filters.'
-                )}
+                  'No packages match'
+                )
+              }
+            >
+              <p>
+                {query.sdk ? `With the filter SDK: ${sdkNames[query.sdk]}. ` : ''}
+                {query.q
+                  ? query.sdk
+                    ? 'Check the spelling, or search all SDKs.'
+                    : 'Check the spelling, or try a shorter part of the name.'
+                  : 'No package matches these filters.'}
               </p>
-              <Button variant="outline" className="mt-3" onClick={() => setParams({})}>
-                <RotateCcw aria-hidden />
-                Reset the search
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setParams({})}>
+                  <RotateCcw aria-hidden />
+                  Reset the search
+                </Button>
+                {query.q && query.sdk && (
+                  <Button variant="ghost" size="sm" onClick={() => set('sdk', null)}>
+                    Search all SDKs
+                  </Button>
+                )}
+              </div>
             </EmptyState>
           ) : (
-            <EmptyState title="No packages yet">
-              <p>Publish the first one from its directory:</p>
+            <EmptyState icon={Package} title="No packages yet">
+              <p>Publish the first one from its directory. Add your token once, then publish:</p>
               <CodeBlock
-                className="mt-3 text-left"
-                label="the publish command"
+                className="w-full"
+                prompt
+                label="the publish commands"
                 code={`dart pub token add ${hostedUrl(config)}\ndart pub publish --server ${hostedUrl(config)}`}
               />
-              <p className="mt-3">
-                Or set <code className="font-mono">publish_to: {hostedUrl(config)}</code> in its
-                pubspec.yaml.
+              <p className="text-xs">
+                Or set{' '}
+                <code className="rounded border bg-code px-[5px] py-px font-mono text-[0.88em]">
+                  publish_to: {hostedUrl(config)}
+                </code>{' '}
+                in pubspec.yaml.
               </p>
             </EmptyState>
           )
         ) : (
-          <div className="grid gap-4" aria-busy={packages.isPlaceholderData}>
+          <div className="grid gap-5" aria-busy={packages.isPlaceholderData}>
             <ul className="divide-y rounded-lg border bg-card" aria-label="Packages">
               {packages.data.items.map((item) => (
                 <PackageRow key={item.name} item={item} />
@@ -184,40 +222,39 @@ export function PackageListPage() {
 
 function PackageRow({ item }: { item: PackageSummary }) {
   return (
-    <li className="grid gap-2 px-4 py-3.5 hover:bg-muted/60 sm:grid-cols-[1fr_auto] sm:items-start sm:gap-x-6 sm:px-5 sm:py-4">
+    <li className="grid gap-x-6 gap-y-2 px-4 py-3.5 first:rounded-t-lg last:rounded-b-lg hover:bg-muted/60 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-5 sm:py-4">
       <div className="grid min-w-0 gap-1.5">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <Link
             to={`/packages/${encodeURIComponent(item.name)}`}
-            className="truncate text-[1.0625rem] font-semibold tracking-tight text-primary hover:underline"
+            className="min-w-0 truncate text-[1.0625rem] leading-6 font-semibold tracking-[-0.01em] text-primary hover:underline hover:underline-offset-3"
           >
             {item.name}
           </Link>
-          <span className="font-mono text-sm text-muted-foreground">{item.latest}</span>
+          <span className="font-mono text-[0.8125rem] text-muted-foreground">{item.latest}</span>
         </div>
-        <p className="line-clamp-2 text-sm text-muted-foreground">
+        <p className="line-clamp-2 text-[0.8125rem] leading-5 text-muted-foreground">
           {item.description || <span className="italic">No description</span>}
         </p>
         <div className="flex flex-wrap gap-1.5">
           <SdkBadge flutter={item.isFlutter} />
           {item.isDiscontinued && <DiscontinuedBadge />}
           {item.replacedBy && <ReplacedByBadge name={item.replacedBy} />}
+          {!item.private && <ProxiedBadge />}
         </div>
       </div>
-      <dl className="flex gap-4 text-sm text-muted-foreground sm:grid sm:justify-items-end sm:gap-1">
-        <div className="flex items-center gap-1">
-          <dt className="sr-only">Updated</dt>
-          <dd>
-            <RelativeTime value={item.updatedAt} />
-          </dd>
-        </div>
+      <dl className="flex items-center gap-4 text-[0.8125rem] text-muted-foreground tabular-nums sm:grid sm:content-start sm:justify-items-end sm:gap-1">
         <div className="flex items-center gap-1">
           <dt>
             <Download aria-hidden className="size-3.5" />
             <span className="sr-only">Downloads</span>
           </dt>
-          <dd className="font-medium text-foreground tabular-nums">
-            {formatNumber(item.downloads)}
+          <dd className="font-medium text-foreground">{formatNumber(item.downloads)}</dd>
+        </div>
+        <div>
+          <dt className="sr-only">Updated</dt>
+          <dd>
+            <RelativeTime value={item.updatedAt} />
           </dd>
         </div>
       </dl>
