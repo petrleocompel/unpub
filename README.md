@@ -668,7 +668,7 @@ dart test
 
 Set `UNPUB_TEST_MONGO_URI` to use another database. The S3 tests run when `UNPUB_TEST_S3_ENDPOINT` points to an S3 compatible service. Run `make generate` after changing the JSON models. Commits follow [Conventional Commits](https://www.conventionalcommits.org).
 
-`docs/openapi.yaml` is served from a copy in `lib/src/routes/openapi_document.dart`: run `dart run tool/embed_openapi.dart` in `unpub/` after changing it, a test checks both and that every documented route exists and every `/webapi` route is documented. CI lints it with `npx @redocly/cli lint docs/openapi.yaml`, configured by `redocly.yaml`.
+`docs/openapi.yaml` is served from a copy in `lib/src/routes/openapi_document.dart`: run `dart run tool/embed_openapi.dart` in `unpub/` after changing it, a test checks both and that every documented route exists and every `/webapi` route is documented. CI lints it with `npx --yes @redocly/cli@2.77.0 lint docs/openapi.yaml`, configured by `redocly.yaml`; use the same pinned version locally, and raise it in `.github/workflows/ci.yml` and here together.
 
 The server-rendered web UI needs no build step. Routes are registered by hand in `lib/src/routes/` and `lib/src/web/web_ui.dart`. Pages are plain Dart functions in `lib/src/web/pages/` built with the `el` helper of `lib/src/web/html.dart`, which escapes all text and attribute values; unescaped markup only goes through `Html.trusted`, used for the sanitized markdown. The stylesheet and script are string constants in `lib/src/web/assets.dart`.
 
