@@ -3,7 +3,11 @@ import { CircleAlert } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
-export function FormError({ message, id }: { message: string | null | undefined; id?: string }) {
+/**
+ * The error of a form, announced when it appears. Fields it is about point to
+ * its [id] with [invalidField].
+ */
+export function FormError({ message, id }: { message: string | null | undefined; id: string }) {
   if (!message) return null
   return (
     <p
@@ -15,6 +19,19 @@ export function FormError({ message, id }: { message: string | null | undefined;
       <span>{message}</span>
     </p>
   )
+}
+
+/**
+ * The attributes of a field the error [errorId] is about while [invalid],
+ * keeping its hint ([describedBy]) described as well.
+ */
+export function invalidField(errorId: string, invalid: boolean, describedBy?: string) {
+  const ids = [describedBy, invalid ? errorId : undefined].filter(Boolean).join(' ')
+  return {
+    'aria-invalid': invalid || undefined,
+    'aria-errormessage': invalid ? errorId : undefined,
+    'aria-describedby': ids || undefined,
+  }
 }
 
 /** A label, a control and an optional hint, connected for screen readers. */

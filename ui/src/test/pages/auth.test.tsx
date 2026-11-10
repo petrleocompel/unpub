@@ -29,10 +29,14 @@ describe('login', () => {
     await user.type(await screen.findByLabelText('Email'), 'admin@company.example')
     await user.type(screen.getByLabelText('Password'), 'wrong')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The email or the password is wrong.',
-    )
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('The email or the password is wrong.')
     expect(screen.getByLabelText('Password')).toHaveValue('')
+    for (const field of [screen.getByLabelText('Email'), screen.getByLabelText('Password')]) {
+      expect(field).toHaveAttribute('aria-invalid', 'true')
+      expect(field).toHaveAttribute('aria-errormessage', alert.id)
+      expect(field).toHaveAccessibleDescription('The email or the password is wrong.')
+    }
 
     await user.type(screen.getByLabelText('Password'), 'right-password')
     await user.click(screen.getByRole('button', { name: 'Log in' }))

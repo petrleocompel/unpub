@@ -4,7 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router'
 import { ApiError, errorMessage, formatWait } from '@/api/client'
 import { useLogin } from '@/api/queries'
 import { useSession } from '@/auth/session'
-import { Field, FormError } from '@/components/form'
+import { Field, FormError, invalidField } from '@/components/form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -80,7 +80,7 @@ export function LoginPage() {
                     autoFocus
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    aria-invalid={login.isError || undefined}
+                    {...invalidField(`${id}-error`, login.isError)}
                   />
                 </Field>
                 <Field id={`${id}-password`} label="Password">
@@ -91,10 +91,13 @@ export function LoginPage() {
                     required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    aria-invalid={login.isError || undefined}
+                    {...invalidField(`${id}-error`, login.isError)}
                   />
                 </Field>
-                <FormError message={login.isError ? loginError(login.error) : null} />
+                <FormError
+                  id={`${id}-error`}
+                  message={login.isError ? loginError(login.error) : null}
+                />
                 <Button type="submit" disabled={login.isPending}>
                   {login.isPending ? (
                     <Loader2 aria-hidden className="animate-spin" />

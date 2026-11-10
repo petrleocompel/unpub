@@ -340,7 +340,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           onChange={(event) => setPassword(event.target.value)}
         />
       </Field>
-      <FormError message={create.error ? errorMessage(create.error) : null} />
+      <FormError id={`${id}-error`} message={create.error ? errorMessage(create.error) : null} />
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel
@@ -403,7 +403,7 @@ function SetPasswordForm({ user, onDone }: { user: User; onDone: () => void }) {
           onChange={(event) => setPassword(event.target.value)}
         />
       </Field>
-      <FormError message={set.error ? errorMessage(set.error) : null} />
+      <FormError id={`${id}-error`} message={set.error ? errorMessage(set.error) : null} />
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel

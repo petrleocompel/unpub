@@ -316,7 +316,7 @@ function CreateWebhookForm({ onDone }: { onDone: (created?: WebhookCreated) => v
         description={description}
         setDescription={setDescription}
       />
-      <FormError message={create.error ? errorMessage(create.error) : null} />
+      <FormError id={`${id}-error`} message={create.error ? errorMessage(create.error) : null} />
       <DialogFooter>
         <Button type="button" variant="outline" onClick={() => onDone()}>
           Cancel

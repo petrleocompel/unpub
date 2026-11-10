@@ -148,7 +148,7 @@ function ConfirmForm({
           </Label>
         </div>
       )}
-      <FormError message={error} />
+      <FormError id={`${id}-error`} message={error} />
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel

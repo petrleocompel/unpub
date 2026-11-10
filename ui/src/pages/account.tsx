@@ -8,7 +8,7 @@ import { hostedUrl, useSession } from '@/auth/session'
 import { RoleBadge, ScopeBadge } from '@/components/badges'
 import { CodeBlock } from '@/components/copy-button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { Field, FormError } from '@/components/form'
+import { Field, FormError, invalidField } from '@/components/form'
 import { NativeSelect } from '@/components/native-select'
 import { intParam, Pager } from '@/components/pager'
 import { SecretBox } from '@/components/secret-box'
@@ -115,9 +115,11 @@ function PasswordForm() {
     )
   }
 
+  const wrongCurrent =
+    !mismatch && change.error instanceof ApiError && change.error.code === 'invalid_credentials'
   const error = mismatch
     ? 'The new passwords do not match.'
-    : change.error instanceof ApiError && change.error.code === 'invalid_credentials'
+    : wrongCurrent
       ? 'The current password is wrong.'
       : change.error
         ? errorMessage(change.error)
@@ -145,6 +147,7 @@ function PasswordForm() {
                 autoComplete="current-password"
                 required
                 value={current}
+                {...invalidField(`${id}-error`, wrongCurrent)}
                 onChange={(event) => setCurrent(event.target.value)}
               />
             </Field>
@@ -168,11 +171,11 @@ function PasswordForm() {
                 minLength={8}
                 required
                 value={confirm}
-                aria-invalid={mismatch || undefined}
+                {...invalidField(`${id}-error`, mismatch)}
                 onChange={(event) => setConfirm(event.target.value)}
               />
             </Field>
-            <FormError message={error} />
+            <FormError id={`${id}-error`} message={error} />
             <div>
               <Button type="submit" disabled={change.isPending}>
                 {change.isPending && <Loader2 aria-hidden className="animate-spin" />}
@@ -418,7 +421,7 @@ function CreateTokenForm({ onCreated }: { onCreated: (created: TokenCreated) => 
           As a reader you can create read tokens only.
         </p>
       )}
-      <FormError message={create.error ? errorMessage(create.error) : null} />
+      <FormError id={`${id}-error`} message={create.error ? errorMessage(create.error) : null} />
       <div>
         <Button type="submit" disabled={create.isPending || chosen.length === 0}>
           {create.isPending ? (

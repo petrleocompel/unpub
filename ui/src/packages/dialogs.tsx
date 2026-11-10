@@ -121,7 +121,10 @@ export function DiscontinueForm({ pkg, onDone }: { pkg: Package; onDone?: () => 
           spellCheck={false}
         />
       </Field>
-      <FormError message={discontinue.error ? errorMessage(discontinue.error) : null} />
+      <FormError
+        id={`${id}-error`}
+        message={discontinue.error ? errorMessage(discontinue.error) : null}
+      />
       <div className="flex justify-end gap-2">
         {inDialog && (
           <Button type="button" variant="outline" onClick={onDone}>
@@ -222,7 +225,7 @@ export function UploadersEditor({ pkg }: { pkg: Package }) {
           Add
         </Button>
       </form>
-      <FormError message={add.error ? errorMessage(add.error) : null} />
+      <FormError id={`${id}-error`} message={add.error ? errorMessage(add.error) : null} />
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}

@@ -60,6 +60,10 @@ describe('account', () => {
     await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-2')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('The new passwords do not match.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Confirm the new password')).toHaveAccessibleErrorMessage(
+      'The new passwords do not match.',
+    )
+    expect(screen.getByLabelText('Current password')).not.toHaveAttribute('aria-invalid')
     expect(changed).toHaveLength(0)
 
     await user.clear(screen.getByLabelText('Confirm the new password'))
@@ -85,5 +89,8 @@ describe('account', () => {
     await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-1')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('The current password is wrong.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Current password')).toHaveAccessibleErrorMessage(
+      'The current password is wrong.',
+    )
   })
 })

@@ -206,7 +206,10 @@ function EditWebhook({ webhook }: { webhook: Webhook }) {
               Enabled: send deliveries for these events
             </Label>
           </div>
-          <FormError message={update.error ? errorMessage(update.error) : null} />
+          <FormError
+            id={`${id}-error`}
+            message={update.error ? errorMessage(update.error) : null}
+          />
           <div>
             <Button type="submit" disabled={update.isPending || events.length === 0}>
               {update.isPending && <Loader2 aria-hidden className="animate-spin" />}
