@@ -32,6 +32,11 @@ export function SearchBox({ className }: { className?: string }) {
   const [value, setValue] = useState(urlQuery)
   const input = useRef<HTMLInputElement>(null)
   const timer = useRef<number | undefined>(undefined)
+  // The location when the debounced search commits, not when it was typed.
+  const current = useRef(location)
+  useEffect(() => {
+    current.current = location
+  })
 
   // Follow the URL (back and forward, links) unless the user is typing.
   useEffect(() => {
@@ -56,10 +61,13 @@ export function SearchBox({ className }: { className?: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  useEffect(() => () => window.clearTimeout(timer.current), [])
+  // Any navigation, and leaving, cancels a search still being typed.
+  useEffect(() => () => window.clearTimeout(timer.current), [location.key])
 
   const go = (query: string, replace: boolean) => {
-    const next = new URLSearchParams(onList ? params : undefined)
+    const { pathname, search: currentSearch } = current.current
+    const here = listPaths.has(pathname)
+    const next = new URLSearchParams(here ? currentSearch : undefined)
     if (query.trim()) next.set('q', query.trim())
     else next.delete('q')
     next.delete('page')
@@ -67,7 +75,7 @@ export function SearchBox({ className }: { className?: string }) {
     if (!query.trim() && next.get('sort') === 'relevance') next.delete('sort')
     const search = next.toString()
     navigate(
-      { pathname: onList ? location.pathname : '/packages', search: search ? `?${search}` : '' },
+      { pathname: here ? pathname : '/packages', search: search ? `?${search}` : '' },
       { replace },
     )
   }
@@ -104,7 +112,9 @@ export function SearchBox({ className }: { className?: string }) {
           setValue(next)
           if (onList) {
             window.clearTimeout(timer.current)
-            timer.current = window.setTimeout(() => go(next, true), searchDebounceMs)
+            timer.current = window.setTimeout(() => {
+              if (listPaths.has(current.current.pathname)) go(next, true)
+            }, searchDebounceMs)
           }
         }}
         onKeyDown={(event) => {
