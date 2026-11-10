@@ -171,6 +171,10 @@ class S3Store extends PackageStore {
       _minio.removeObject(bucketName, _getDigestKey(name, version, digest));
 
   @override
+  Future<void> deleteLegacy(String name, String version) =>
+      _minio.removeObject(bucketName, _getObjectKey(name, version));
+
+  @override
   Future<bool> exists(String name, String version) =>
       _objectExists(_getObjectKey(name, version));
 

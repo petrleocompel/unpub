@@ -1,6 +1,7 @@
 import 'package:unpub/src/models.dart';
 
 import '../utils.dart';
+import 'archive_references.dart';
 import 'object_locks.dart';
 
 /// How a package search is ordered.
@@ -152,6 +153,31 @@ abstract class MetaStore {
   /// Gives up a claim made by [reserveUpload].
   Future<void> releaseUpload(
       String name, String version, String reservation) async {}
+
+  /// Says which archive objects are still referenced, so that deleting a
+  /// version can tell whether its object can go. Null for a store that cannot
+  /// tell, whose objects deletion then leaves alone.
+  ArchiveReferences? get archiveReferences => null;
+
+  /// Removes [version] from the package [name], with its download counts,
+  /// unless it is the only version left.
+  ///
+  /// Returns false, changing nothing, if the package no longer has that
+  /// version or has no other one.
+  Future<bool> removeVersion(String name, String version) =>
+      throw UnsupportedError('this store cannot delete versions');
+
+  /// Deletes the package [name] with its download counts, if its versions are
+  /// still exactly [versions].
+  ///
+  /// Returns false, changing nothing, if they are not, so that a version
+  /// published meanwhile is never deleted without its archive.
+  Future<bool> deletePackage(String name, Set<String> versions) =>
+      throw UnsupportedError('this store cannot delete packages');
+
+  /// Replaces the uploaders of [name].
+  Future<void> setUploaders(String name, List<String> uploaders) =>
+      throw UnsupportedError('this store cannot change uploaders');
 
   Future<void> addUploader(String name, String email);
 

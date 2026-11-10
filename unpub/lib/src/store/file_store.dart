@@ -130,6 +130,10 @@ class FileStore extends PackageStore {
   Future<void> deleteObject(String name, String version, String digest) =>
       _deleteIfPresent(_getObjectFile(name, version, digest));
 
+  @override
+  Future<void> deleteLegacy(String name, String version) =>
+      _deleteIfPresent(_getTarballFile(name, version));
+
   static Future<void> _deleteIfPresent(File file) async {
     try {
       await file.delete();

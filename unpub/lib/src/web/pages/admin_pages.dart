@@ -21,11 +21,10 @@ Html _adminNav(PageContext context) => el('nav', {
                 'a',
                 {
                   'href': href,
-                  'aria-current': context.path == href ||
-                          (href == '/admin/packages' &&
-                              context.path.startsWith('/admin/packages/'))
-                      ? 'page'
-                      : null,
+                  'aria-current':
+                      context.path == href || context.path.startsWith('$href/')
+                          ? 'page'
+                          : null,
                 },
                 label),
           ]),
@@ -197,9 +196,9 @@ String _adminPackagesHref(String? query, int page, int size) {
 
 Html adminPackagesPage(
     PageContext context, String? query, UnpubQueryResult result,
-    {int page = 1, int size = maxPageSize}) {
+    {int page = 1, int size = maxPageSize, String? notice}) {
   final first = (page - 1) * size + 1;
-  return adminLayout(context, 'Packages', [
+  return adminLayout(context, 'Packages', notice: notice, [
     el('h2', const {}, 'Packages'),
     el('form', {
       'class': 'filters',
@@ -354,6 +353,27 @@ Html adminPackagePage(
       ],
       className: 'inline-form',
     ),
+    el('h3', const {}, 'Transfer ownership'),
+    el('p', {'class': 'muted'},
+        'Replaces every uploader with one user, who must have an account.'),
+    postForm(
+      context,
+      '$base/owner',
+      [
+        el('label', {'for': 'owner-email', 'class': 'visually-hidden'},
+            'Email of the new owner'),
+        el('input', {
+          'type': 'email',
+          'id': 'owner-email',
+          'name': 'email',
+          'required': true,
+          'placeholder': 'owner@example.com',
+        }),
+        el('button', {'type': 'submit', 'class': 'danger'}, 'Transfer'),
+      ],
+      className: 'inline-form',
+      confirm: 'Make this user the only uploader of ${package.name}?',
+    ),
     el('h3', const {}, 'Versions'),
     el('div', {
       'class': 'table-scroll'
@@ -402,11 +422,71 @@ Html adminPackagePage(
                       ? null
                       : 'Retract ${package.name} ${version.version}?',
                 ),
+                if (versions.length > 1)
+                  el('a', {
+                    'class': 'button danger',
+                    'href': '$base/versions/${segment(version.version)}/delete',
+                  }, [
+                    'Delete',
+                    el('span', {'class': 'visually-hidden'},
+                        ' ${version.version}'),
+                  ]),
               ]),
             ]),
         ]),
       ]),
     ]),
+    el('h3', const {}, 'Delete the package'),
+    el('p', {
+      'class': 'muted'
+    }, [
+      'Deletes every version, archive and download count of ${package.name}. '
+          'Clients that depend on it can no longer resolve it. This cannot be '
+          'undone.',
+    ]),
+    postForm(
+      context,
+      '$base/delete',
+      [
+        el('label', {'for': 'confirm-name'}, 'Type ${package.name} to confirm'),
+        el('input', {
+          'type': 'text',
+          'id': 'confirm-name',
+          'name': 'confirm_name',
+          'required': true,
+          'autocomplete': 'off',
+          'pattern': RegExp.escape(package.name),
+        }),
+        el('button', {'type': 'submit', 'class': 'danger'}, 'Delete package'),
+      ],
+      className: 'inline-form',
+    ),
+  ]);
+}
+
+/// Asks to confirm deleting [version] of [package].
+Html adminDeleteVersionPage(
+    PageContext context, UnpubPackage package, UnpubVersion version) {
+  final base = '/admin/packages/${segment(package.name)}';
+  final path = '$base/versions/${segment(version.version)}/delete';
+  return adminLayout(context, 'Delete ${package.name} ${version.version}', [
+    el('h2', const {}, 'Delete ${package.name} ${version.version}?'),
+    el('p', const {}, [
+      'The version, its archive and its download counts are deleted. Clients '
+          'that locked this version can no longer download it. Retracting '
+          'keeps it available to them instead. This cannot be undone.',
+    ]),
+    postForm(
+      context,
+      path,
+      [
+        el('button', {'type': 'submit', 'class': 'danger'},
+            'Delete ${version.version}'),
+        ' ',
+        el('a', {'href': base}, 'Cancel'),
+      ],
+      className: 'inline-form',
+    ),
   ]);
 }
 

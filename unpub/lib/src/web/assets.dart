@@ -110,7 +110,7 @@ button, .button {
   background: var(--subtle); color: var(--fg); padding: .35rem .8rem;
 }
 button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-button.danger { color: var(--danger); }
+button.danger, .button.danger { color: var(--danger); }
 button.link { border: 0; background: none; color: var(--accent); padding: 0; }
 .form { display: grid; gap: .75rem; max-width: 26rem; }
 .form label { display: grid; gap: .25rem; font-weight: 500; }

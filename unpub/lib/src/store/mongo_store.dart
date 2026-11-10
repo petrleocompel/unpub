@@ -4,6 +4,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'package:unpub/src/models.dart';
 
 import '../config/config.dart' show uploadReservationTtl;
+import 'archive_references.dart';
 import 'meta_store.dart';
 import 'mongo_indexes.dart';
 import 'object_locks.dart';
@@ -288,6 +289,61 @@ class MongoStore extends MetaStore {
         .eq('name', name)
         .eq('version', version)
         .eq('reservation', reservation));
+  }
+
+  @override
+  ArchiveReferences get archiveReferences => MongoArchiveReferences(db);
+
+  @override
+  Future<bool> removeVersion(String name, String version) async {
+    final result = await db.collection(packageCollection).updateOne({
+      'name': name,
+      'versions.version': version,
+      // Never the last one: a package document without versions is invalid.
+      'versions.1': {r'$exists': true},
+    }, {
+      r'$pull': {
+        'versions': {'version': version},
+      },
+    });
+    _checkWrite(result, 'delete version');
+    if (result.nModified != 1) return false;
+    await db
+        .collection(versionStatsCollection)
+        .deleteOne(where.eq('name', name).eq('version', version));
+    return true;
+  }
+
+  @override
+  Future<bool> deletePackage(String name, Set<String> versions) async {
+    final result = await db.collection(packageCollection).deleteOne({
+      'name': name,
+      'versions': {r'$size': versions.length},
+      if (versions.isNotEmpty) 'versions.version': {r'$all': versions.toList()},
+    });
+    if (result.hasWriteErrors || !result.success) {
+      throw StateError('cannot delete package: ${result.writeError?.errmsg}');
+    }
+    if (result.nRemoved != 1) return false;
+    await db.collection(statsCollection).deleteMany(where.eq('name', name));
+    await db
+        .collection(versionStatsCollection)
+        .deleteMany(where.eq('name', name));
+    // A live reservation belongs to a publish still running, which then
+    // creates the package anew. Only those left by a crash go.
+    await db.collection(uploadReservationsCollection).deleteMany({
+      'name': name,
+      'expiresAt': {r'$lt': DateTime.now()},
+    });
+    return true;
+  }
+
+  @override
+  Future<void> setUploaders(String name, List<String> uploaders) async {
+    final result = await db
+        .collection(packageCollection)
+        .updateOne(_selectByName(name), modify.set('uploaders', uploaders));
+    _checkWrite(result, 'set uploaders');
   }
 
   @override

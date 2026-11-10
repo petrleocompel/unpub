@@ -81,6 +81,10 @@ abstract class PackageStore {
   /// Deletes the object with this [digest], if it is stored.
   Future<void> deleteObject(String name, String version, String digest) async {}
 
+  /// Deletes the archive at the mutable path of [name] [version], if it is
+  /// stored there.
+  Future<void> deleteLegacy(String name, String version) async {}
+
   /// Whether the archive of [name] [version] is stored.
   ///
   /// Stores that cannot tell cheaply may keep this default, and then fail when

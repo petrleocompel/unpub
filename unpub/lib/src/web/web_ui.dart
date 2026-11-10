@@ -75,6 +75,9 @@ const _doneMessages = {
   'version-restored': 'The version was restored.',
   'uploader-added': 'The uploader was added.',
   'uploader-removed': 'The uploader was removed.',
+  'owner-transferred': 'The ownership was transferred.',
+  'version-deleted': 'The version was deleted.',
+  'package-deleted': 'The package was deleted.',
 };
 
 /// Paths answered with JSON or files, never with a page.
@@ -839,7 +842,9 @@ class WebUi {
     return _html(
         req,
         adminPackagesPage(_context(req), list.query, result,
-            page: list.page, size: list.size));
+            page: list.page,
+            size: list.size,
+            notice: _doneMessages[req.url.queryParameters['done']]));
   }
 
   Future<shelf.Response> _adminPackagePage(shelf.Request req, String name,
