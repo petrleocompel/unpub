@@ -67,7 +67,7 @@ describe('webhooks', () => {
       201,
     )
     const { user } = renderApp('/admin/webhooks', { me: f.me() })
-    await user.click(await screen.findByRole('button', { name: 'Create webhook' }))
+    await user.click(await screen.findByRole('button', { name: 'New webhook' }))
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByLabelText(/Payload URL/), 'https://bot.company.example/x')
     await user.click(within(dialog).getByRole('checkbox', { name: 'version.retracted' }))
@@ -83,6 +83,25 @@ describe('webhooks', () => {
 
   it('rotates the secret only with the box ticked, and redelivers', async () => {
     webhookApi()
+    server.use(
+      http.get(url('/webapi/settings'), () =>
+        HttpResponse.json({
+          configured: true,
+          sections: [
+            {
+              name: 'webhooks',
+              settings: [
+                {
+                  key: 'webhooks.retentionDays',
+                  value: '30',
+                  env: 'UNPUB_WEBHOOKS_RETENTION_DAYS',
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    )
     const rotated = capture('post', '/webapi/webhooks/w1/secret', { secret: 'whsec_new' })
     const redelivered = capture('post', '/webapi/webhooks/w1/deliveries/d1/redeliver', {
       success: { message: 'Queued.' },
@@ -101,11 +120,12 @@ describe('webhooks', () => {
 
     expect(await screen.findByText('HTTP 500')).toBeInTheDocument()
     expect(screen.getByText('250 ms')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Show the payload' }))
+    await user.click(screen.getByRole('button', { name: /show the payload/ }))
     expect(document.getElementById('payload-d1')).toHaveTextContent('"package": "my_company_core"')
     expect(screen.getByText('oops')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Redeliver' }))
     await waitFor(() => expect(redelivered).toHaveLength(1))
-    expect(screen.getByText('X-Unpub-Signature')).toBeInTheDocument()
+    expect(screen.getByText('X-Unpub-Signature: sha256=<hex>')).toBeInTheDocument()
+    expect(screen.getByText('Kept 30 days')).toBeInTheDocument()
   })
 })
