@@ -61,6 +61,41 @@ describe('search box', () => {
     await waitFor(() => expect(where(router)).toBe('/packages?sort=name&sdk=flutter&q=core'))
   })
 
+  it('leaves / to an open dialog', async () => {
+    handlers()
+    const { user } = renderApp('/account', { me: f.me() })
+    const search = await screen.findByRole('searchbox', { name: 'Search packages' })
+    await user.click(await screen.findByRole('button', { name: 'Revoke laptop' }))
+    const dialog = await screen.findByRole('dialog')
+    // Not prevented: the key belongs to the dialog.
+    expect(fireEvent.keyDown(document.activeElement ?? dialog, { key: '/' })).toBe(true)
+    expect(search).not.toHaveFocus()
+  })
+
+  it('leaves / to the admin drawer', async () => {
+    server.use(http.get(url('/webapi/users'), () => HttpResponse.json(f.page([f.admin], 1, 50))))
+    const { user } = renderApp('/admin/users', { me: f.me() })
+    const search = await screen.findByRole('searchbox', { name: 'Search packages' })
+    await user.click(await screen.findByRole('button', { name: 'Admin sections' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Administration' })
+    expect(fireEvent.keyDown(document.activeElement ?? sheet, { key: '/' })).toBe(true)
+    expect(search).not.toHaveFocus()
+  })
+
+  it('leaves / to an editable element', async () => {
+    handlers()
+    renderApp('/packages')
+    await screen.findByRole('link', { name: 'my_company_core' })
+    const editor = document.createElement('div')
+    editor.setAttribute('contenteditable', 'true')
+    const inner = document.createElement('span')
+    editor.append(inner)
+    document.body.append(editor)
+    expect(fireEvent.keyDown(inner, { key: '/' })).toBe(true)
+    expect(screen.getByRole('searchbox', { name: 'Search packages' })).not.toHaveFocus()
+    editor.remove()
+  })
+
   it('focuses the search with / elsewhere', async () => {
     handlers()
     renderApp('/packages')

@@ -12,11 +12,16 @@ function typing(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
   return (
     target.isContentEditable ||
+    !!target.closest('[contenteditable]:not([contenteditable="false"])') ||
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   )
 }
+
+/** An open dialog, sheet or alert dialog: the shortcut stays inside it. */
+const openDialog =
+  '[aria-modal="true"], dialog[open], [role="dialog"]:not([data-state="closed"]), [role="alertdialog"]:not([data-state="closed"])'
 
 /**
  * The search box of the header. On the package list it searches as you type,
@@ -50,7 +55,9 @@ export function SearchBox({ className }: { className?: string }) {
         !event.metaKey &&
         !event.ctrlKey &&
         !event.altKey &&
-        !typing(event.target)
+        !typing(event.target) &&
+        !typing(document.activeElement) &&
+        !document.querySelector(openDialog)
       ) {
         event.preventDefault()
         input.current?.focus()
