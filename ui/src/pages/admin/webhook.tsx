@@ -1,5 +1,5 @@
-import { useId, useState, type FormEvent } from 'react'
-import { KeyRound, Loader2, RotateCw, Send, Trash2 } from 'lucide-react'
+import { Fragment, useId, useState, type FormEvent } from 'react'
+import { ChevronDown, ChevronRight, KeyRound, Loader2, RotateCw, Send, Trash2 } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { errorMessage } from '@/api/client'
 import {
@@ -224,6 +224,7 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
   const page = intParam(params, 'page', 1)
   const deliveries = useDeliveries(webhook.id, page)
   const redeliver = useRedeliver()
+  const [open, setOpen] = useState<string | null>(null)
 
   return (
     <Card>
@@ -260,6 +261,9 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
                 <caption className="sr-only">Deliveries, newest first</caption>
                 <TableHeader>
                   <TableRow>
+                    <TableHead scope="col">
+                      <span className="sr-only">Payload</span>
+                    </TableHead>
                     <TableHead scope="col">Time</TableHead>
                     <TableHead scope="col">Event</TableHead>
                     <TableHead scope="col">Status</TableHead>
@@ -276,58 +280,109 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
                 </TableHeader>
                 <TableBody>
                   {deliveries.data.items.map((delivery) => (
-                    <TableRow key={delivery.id}>
-                      <TableCell>
-                        <DateTime value={delivery.createdAt} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="grid">
-                          <span className="font-mono text-xs">{delivery.event}</span>
-                          {delivery.package && (
-                            <span className="text-xs text-muted-foreground">
-                              {delivery.package} {delivery.version}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DeliveryStatusBadge status={delivery.status} />
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{delivery.attempt}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {delivery.response?.status ?? '–'}
-                      </TableCell>
-                      <TableCell className="text-xs">{duration(delivery)}</TableCell>
-                      <TableCell
-                        className="max-w-64 truncate text-xs"
-                        title={delivery.error ?? undefined}
-                      >
-                        {delivery.error ?? '–'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={delivery.status === 'pending' || redeliver.isPending}
-                          onClick={() =>
-                            redeliver.mutate(
-                              { id: webhook.id, delivery: delivery.id },
-                              {
-                                onSuccess: () => {
-                                  toast.success('Delivery queued again')
-                                  void deliveries.refetch()
-                                },
-                                onError: (error) =>
-                                  toast.error('Redelivery failed', errorMessage(error)),
-                              },
-                            )
-                          }
+                    <Fragment key={delivery.id}>
+                      <TableRow>
+                        <TableCell className="w-10">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-expanded={open === delivery.id}
+                            aria-controls={`payload-${delivery.id}`}
+                            aria-label={
+                              open === delivery.id ? 'Hide the payload' : 'Show the payload'
+                            }
+                            onClick={() => setOpen(open === delivery.id ? null : delivery.id)}
+                          >
+                            {open === delivery.id ? (
+                              <ChevronDown aria-hidden />
+                            ) : (
+                              <ChevronRight aria-hidden />
+                            )}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <DateTime value={delivery.createdAt} />
+                        </TableCell>
+                        <TableCell>
+                          <div className="grid">
+                            <span className="font-mono text-xs">{delivery.event}</span>
+                            {delivery.package && (
+                              <span className="text-xs text-muted-foreground">
+                                {delivery.package} {delivery.version}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <DeliveryStatusBadge status={delivery.status} />
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {delivery.attempt}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {delivery.response?.status ?? '–'}
+                        </TableCell>
+                        <TableCell className="text-xs">{duration(delivery)}</TableCell>
+                        <TableCell
+                          className="max-w-64 truncate text-xs"
+                          title={delivery.error ?? undefined}
                         >
-                          <Send aria-hidden />
-                          Redeliver
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                          {delivery.error ?? '–'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={delivery.status === 'pending' || redeliver.isPending}
+                            onClick={() =>
+                              redeliver.mutate(
+                                { id: webhook.id, delivery: delivery.id },
+                                {
+                                  onSuccess: () => {
+                                    toast.success('Delivery queued again')
+                                    void deliveries.refetch()
+                                  },
+                                  onError: (error) =>
+                                    toast.error('Redelivery failed', errorMessage(error)),
+                                },
+                              )
+                            }
+                          >
+                            <Send aria-hidden />
+                            Redeliver
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      {open === delivery.id && (
+                        <TableRow id={`payload-${delivery.id}`}>
+                          <TableCell colSpan={9} className="bg-muted/40 whitespace-normal">
+                            <div className="grid gap-3 py-1">
+                              <CodeBlock code={pretty(delivery.payload)} label="the payload" />
+                              <p className="text-xs text-muted-foreground">
+                                The body as sent and signed is the compact form of this JSON.
+                                Delivery id <code className="font-mono">{delivery.id}</code>, event
+                                id <code className="font-mono">{delivery.eventId}</code>
+                                {delivery.redeliveryOf && (
+                                  <>
+                                    , a redelivery of{' '}
+                                    <code className="font-mono">{delivery.redeliveryOf}</code>
+                                  </>
+                                )}
+                                .
+                              </p>
+                              {delivery.response?.body && (
+                                <div className="grid gap-1">
+                                  <p className="text-xs font-medium">Response body (start)</p>
+                                  <pre className="max-h-40 overflow-auto rounded-md border bg-background p-2 font-mono text-xs">
+                                    {delivery.response.body}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -345,13 +400,20 @@ function Deliveries({ webhook }: { webhook: Webhook }) {
   )
 }
 
-/** The time from creation, or the last attempt, to the end. */
+/** How long the last attempt took. */
 function duration(delivery: Delivery) {
-  const start = delivery.lastAttemptAt ?? delivery.createdAt
-  if (!delivery.finishedAt || !start) return '–'
-  const ms = new Date(delivery.finishedAt).getTime() - new Date(start).getTime()
-  if (!Number.isFinite(ms) || ms < 0) return '–'
+  const ms = delivery.durationMs
+  if (ms === null || ms === undefined) return '–'
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
+}
+
+/** The payload, indented when it is JSON. */
+function pretty(payload: string) {
+  try {
+    return JSON.stringify(JSON.parse(payload), null, 2)
+  } catch {
+    return payload
+  }
 }
 
 function PayloadHelp({ events }: { events: WebhookEvent[] }) {

@@ -8,7 +8,10 @@ import { capture, server, url } from '../server'
 function webhookApi() {
   server.use(
     http.get(url('/webapi/webhooks'), () =>
-      HttpResponse.json({ ...f.page([f.webhook()], 1, 50), enabled: true }),
+      HttpResponse.json({
+        ...f.page([{ ...f.webhook(), deliveries: { succeeded: 3, pending: 1, failed: 2 } }], 1, 50),
+        enabled: true,
+      }),
     ),
     http.get(url('/webapi/webhooks/:id'), () =>
       HttpResponse.json({
@@ -26,12 +29,14 @@ function webhookApi() {
             eventId: 'e1',
             package: 'my_company_core',
             version: '1.4.0',
+            payload: '{"id":"e1","event":"package.published","package":"my_company_core"}',
             status: 'failed',
             attempt: 5,
             nextAt: null,
             createdAt: '2026-11-01T10:00:00.000Z',
             lastAttemptAt: '2026-11-01T11:00:00.000Z',
             finishedAt: '2026-11-01T11:00:00.250Z',
+            durationMs: 250,
             response: { status: 500, body: 'oops' },
             error: 'HTTP 500',
             redeliveryOf: null,
@@ -96,6 +101,9 @@ describe('webhooks', () => {
 
     expect(await screen.findByText('HTTP 500')).toBeInTheDocument()
     expect(screen.getByText('250 ms')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show the payload' }))
+    expect(document.getElementById('payload-d1')).toHaveTextContent('"package": "my_company_core"')
+    expect(screen.getByText('oops')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Redeliver' }))
     await waitFor(() => expect(redelivered).toHaveLength(1))
     expect(screen.getByText('X-Unpub-Signature')).toBeInTheDocument()

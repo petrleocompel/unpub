@@ -1,9 +1,8 @@
 import { useId, useState, type FormEvent } from 'react'
-import { useQueries } from '@tanstack/react-query'
 import { Loader2, Plus, Webhook as WebhookIcon } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { errorMessage } from '@/api/client'
-import { useCreateWebhook, useUpdateWebhook, useWebhooks, webhookQuery } from '@/api/queries'
+import { useCreateWebhook, useUpdateWebhook, useWebhooks } from '@/api/queries'
 import { webhookEvents, type WebhookCreated, type WebhookEvent } from '@/api/types'
 import { Field, FormError } from '@/components/form'
 import { intParam, Pager } from '@/components/pager'
@@ -33,6 +32,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { formatNumber } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useTitle } from '@/lib/use-title'
 import { AdminHeading } from './layout'
@@ -59,9 +59,6 @@ export function WebhooksPage() {
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<WebhookCreated | null>(null)
   const update = useUpdateWebhook()
-  const counts = useQueries({
-    queries: (webhooks.data?.items ?? []).map((webhook) => webhookQuery(webhook.id)),
-  })
 
   return (
     <>
@@ -134,8 +131,8 @@ export function WebhooksPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {webhooks.data.items.map((webhook, index) => {
-                    const deliveries = counts[index]?.data?.deliveries
+                  {webhooks.data.items.map((webhook) => {
+                    const deliveries = webhook.deliveries
                     return (
                       <TableRow key={webhook.id}>
                         <TableCell className="max-w-80">
@@ -155,23 +152,17 @@ export function WebhooksPage() {
                           <EventChips events={webhook.events} />
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
-                          {deliveries ? (
-                            <span>
-                              <span>{deliveries.succeeded ?? 0} delivered</span>
-                              {' · '}
-                              <span>{deliveries.pending ?? 0} pending</span>
-                              {' · '}
-                              <span
-                                className={
-                                  deliveries.failed ? 'font-medium text-destructive' : undefined
-                                }
-                              >
-                                {deliveries.failed ?? 0} failed
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">…</span>
-                          )}
+                          <span>{formatNumber(deliveries.succeeded)} delivered</span>
+                          {' · '}
+                          <span>{formatNumber(deliveries.pending)} pending</span>
+                          {' · '}
+                          <span
+                            className={
+                              deliveries.failed ? 'font-medium text-destructive' : undefined
+                            }
+                          >
+                            {formatNumber(deliveries.failed)} failed
+                          </span>
                         </TableCell>
                         <TableCell>
                           <Switch

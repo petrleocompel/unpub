@@ -230,7 +230,7 @@ export interface paths {
     /**
      * The package list of the former web UI.
      * @deprecated
-     * @description Kept for scripts. `page` is zero-based, `size` defaults to 10, `q` may be `email:<uploader>` or `dependency:<name>`, discontinued packages are left out unless `discontinued=true`. Use `/webapi/v2/packages`.
+     * @description Kept for scripts. `page` is zero-based and at most 99999, `size` defaults to 10 and is at most 1000, `q` may be `email:<uploader>` or `dependency:<name>`, discontinued packages are left out unless `discontinued=true`. Use `/webapi/v2/packages`.
      */
     get: operations['listPackagesLegacy']
     put?: never
@@ -695,6 +695,25 @@ export interface components {
         classicPath: string
       }
     }
+    /**
+     * @description A package of the list. Only packages published here are listed, never ones only proxied from the upstream.
+     * @example {
+     *       "name": "alpha_client",
+     *       "latest": "1.4.0",
+     *       "description": "A client for the Alpha service.",
+     *       "updatedAt": "2026-11-02T09:14:00.000Z",
+     *       "downloads": 1287,
+     *       "isDiscontinued": false,
+     *       "replacedBy": null,
+     *       "isFlutter": false,
+     *       "private": true,
+     *       "versionCount": 12,
+     *       "uploaders": [
+     *         "dev@example.com",
+     *         "lead@example.com"
+     *       ]
+     *     }
+     */
     PackageSummary: {
       name: string
       /** @description The latest version, see `Package.latest`. */
@@ -706,8 +725,12 @@ export interface components {
       replacedBy: string | null
       /** @description Any version has a `flutter` section, an `environment.flutter` constraint or depends on `flutter`. */
       isFlutter: boolean
-      /** @description Published here, rather than proxied from the upstream. */
+      /** @description Published here, rather than proxied from the upstream. Always true, since proxied packages are not listed. */
       private: boolean
+      /** @description How many versions the package has, retracted ones included. */
+      versionCount: number
+      /** @description The emails that may publish and manage the package, in their stored order. */
+      uploaders: string[]
     }
     PackagePage: components['schemas']['PageInfo'] & {
       items: components['schemas']['PackageSummary'][]
@@ -937,14 +960,52 @@ export interface components {
       secret: string
     }
     WebhookPage: components['schemas']['PageInfo'] & {
-      items: components['schemas']['Webhook'][]
+      items: (components['schemas']['Webhook'] & {
+        deliveries: components['schemas']['DeliveryCounts']
+      })[]
       /** @description `webhooks.enabled`: whether events are queued and delivered. */
       enabled: boolean
     }
-    /** @description How many deliveries have each status. */
+    /**
+     * @description How many deliveries have each status, zero included.
+     * @example {
+     *       "pending": 1,
+     *       "succeeded": 41,
+     *       "failed": 2
+     *     }
+     */
     DeliveryCounts: {
+      pending: number
+      succeeded: number
+      failed: number
+    } & {
       [key: string]: number
     }
+    /**
+     * @description One event sent to one webhook, with its attempts so far. Each attempt POSTs `payload` as the body, with `Content-Type: application/json`, `X-Unpub-Event`, `X-Unpub-Delivery` (the `id`) and `X-Unpub-Signature: sha256=<hex>`, the HMAC-SHA256 with the secret of the webhook as key over exactly the bytes of `payload` (UTF-8). Verify the signature over the raw body before parsing it. `status` `succeeded` means an answer in 2xx.
+     * @example {
+     *       "id": "6730c1f2a9d3e4b5c6d7e8f9",
+     *       "webhookId": "6730b0e1a9d3e4b5c6d7e8a1",
+     *       "event": "package.published",
+     *       "eventId": "0f8e4c2a-1b3d-4e5f-9a7b-6c5d4e3f2a1b",
+     *       "package": "alpha_client",
+     *       "version": "1.4.0",
+     *       "payload": "{\"id\":\"0f8e4c2a-1b3d-4e5f-9a7b-6c5d4e3f2a1b\",\"event\":\"package.published\",\"at\":\"2026-11-02T09:14:00.000Z\",\"package\":\"alpha_client\",\"version\":\"1.4.0\",\"actor\":\"dev@example.com\",\"data\":{}}",
+     *       "status": "succeeded",
+     *       "attempt": 1,
+     *       "nextAt": null,
+     *       "createdAt": "2026-11-02T09:14:00.120Z",
+     *       "lastAttemptAt": "2026-11-02T09:14:00.480Z",
+     *       "finishedAt": "2026-11-02T09:14:00.480Z",
+     *       "durationMs": 312,
+     *       "response": {
+     *         "status": 200,
+     *         "body": "ok"
+     *       },
+     *       "error": null,
+     *       "redeliveryOf": null
+     *     }
+     */
     Delivery: {
       id: string
       webhookId: string
@@ -953,6 +1014,8 @@ export interface components {
       eventId: string
       package: string | null
       version: string | null
+      /** @description The JSON body sent, as the exact string that was signed: the same on every attempt and redelivery of this delivery. */
+      payload: string
       /** @enum {string} */
       status: 'pending' | 'succeeded' | 'failed'
       /** @description Attempts made so far. */
@@ -962,6 +1025,8 @@ export interface components {
       createdAt: components['schemas']['DateTime']
       lastAttemptAt: components['schemas']['DateTime'] | null
       finishedAt: components['schemas']['DateTime'] | null
+      /** @description How long the last attempt took, from resolving the host to reading the answer or failing. Null before the first attempt, when the webhook was deleted or disabled at the last attempt, and for attempts recorded before the field was added. */
+      durationMs: number | null
       /** @description The status and the start, at most 1 KiB, of the last answer. */
       response: {
         status: number | null
@@ -1073,7 +1138,7 @@ export interface components {
         'application/json': components['schemas']['Error']
       }
     }
-    /** @description In conflict with the current state, code `conflict` or `last_admin`. */
+    /** @description In conflict with the current state, code `conflict`, `last_admin` or `admin_change_in_progress`. */
     Conflict: {
       headers: {
         [name: string]: unknown
@@ -1082,7 +1147,7 @@ export interface components {
         'application/json': components['schemas']['Error']
       }
     }
-    /** @description Too many failed attempts, code `rate_limited`. */
+    /** @description Too many failed attempts, code `rate_limited`. `Retry-After` gives the seconds to wait. */
     RateLimited: {
       headers: {
         'Retry-After'?: number
@@ -1094,8 +1159,9 @@ export interface components {
     }
   }
   parameters: {
-    /** @description One-based. */
+    /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
     Page: number
+    /** @description Read leniently: a value that is not a positive integer is the default, a larger one is 100. */
     Size: number
     /** @description A package name. */
     Name: string
@@ -1274,8 +1340,9 @@ export interface operations {
   listTokens: {
     parameters: {
       query?: {
-        /** @description One-based. */
+        /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
         page?: components['parameters']['Page']
+        /** @description Read leniently: a value that is not a positive integer is the default, a larger one is 100. */
         size?: components['parameters']['Size']
       }
       header?: never
@@ -1365,8 +1432,9 @@ export interface operations {
       query?: {
         /** @description Text the email or the display name contains, ignoring case. */
         q?: string
-        /** @description One-based. */
+        /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
         page?: components['parameters']['Page']
+        /** @description Read leniently: a value that is not a positive integer is the default, a larger one is 100. */
         size?: components['parameters']['Size']
       }
       header?: never
@@ -1546,8 +1614,9 @@ export interface operations {
         discontinued?: 'true' | 'false'
         /** @description `relevance` is the default, and only possible, with `q`; `downloads` without. */
         sort?: 'relevance' | 'downloads' | 'updated' | 'name'
-        /** @description One-based. */
+        /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
         page?: components['parameters']['Page']
+        /** @description Read leniently: a value that is not a positive integer is the default, a larger one is 100. */
         size?: components['parameters']['Size']
       }
       header?: never
@@ -1700,8 +1769,9 @@ export interface operations {
         from?: string
         /** @description Exclusive, a date includes that whole day. */
         to?: string
-        /** @description One-based. */
+        /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
         page?: components['parameters']['Page']
+        /** @description Unlike the other lists, a `size` or `page` that is not a positive integer, or a `size` above 200, is refused with 400 `invalid_request`. A `page` above 100000 is 100000. */
         size?: number
       }
       header?: never
@@ -1727,8 +1797,9 @@ export interface operations {
   listWebhooks: {
     parameters: {
       query?: {
-        /** @description One-based. */
+        /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
         page?: components['parameters']['Page']
+        /** @description Read leniently: a value that is not a positive integer is the default, a larger one is 100. */
         size?: components['parameters']['Size']
       }
       header?: never
@@ -1891,8 +1962,9 @@ export interface operations {
   listDeliveries: {
     parameters: {
       query?: {
-        /** @description One-based. */
+        /** @description One-based, at most 100000. Read leniently: a value that is not a positive integer is 1, a larger one is 100000, which is past the end of any list and so answers an empty page with `page: 100000`. */
         page?: components['parameters']['Page']
+        /** @description Read leniently: a value that is not a positive integer is the default, a larger one is 100. */
         size?: components['parameters']['Size']
       }
       header?: never

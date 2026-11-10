@@ -83,7 +83,7 @@ export function AdminPackagesPage() {
           />
         </div>
         {packages.isPending ? (
-          <TableSkeleton columns={5} />
+          <TableSkeleton columns={7} />
         ) : packages.isError ? (
           <ErrorState error={packages.error} onRetry={() => void packages.refetch()} />
         ) : packages.data.total === 0 ? (
@@ -99,6 +99,10 @@ export function AdminPackagesPage() {
                       Name
                     </TableHead>
                     <TableHead scope="col">Latest</TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Versions
+                    </TableHead>
+                    <TableHead scope="col">Uploaders</TableHead>
                     <TableHead scope="col">State</TableHead>
                     <TableHead scope="col">Updated</TableHead>
                     <TableHead scope="col" className="text-right">
@@ -118,6 +122,18 @@ export function AdminPackagesPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="font-mono">{item.latest}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatNumber(item.versionCount)}
+                      </TableCell>
+                      <TableCell className="max-w-64">
+                        {item.uploaders.length === 0 ? (
+                          <span className="text-muted-foreground">None</span>
+                        ) : (
+                          <span className="block truncate" title={item.uploaders.join(', ')}>
+                            {item.uploaders.join(', ')}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {item.isDiscontinued ? (
                           <DiscontinuedBadge />

@@ -67,6 +67,8 @@ export function summary(name: string, overrides: Partial<PackageSummary> = {}): 
     replacedBy: null,
     isFlutter: false,
     private: true,
+    versionCount: 3,
+    uploaders: ['jane.doe@company.example'],
     ...overrides,
   }
 }

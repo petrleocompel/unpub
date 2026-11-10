@@ -6,6 +6,29 @@ import { renderApp, where } from '../render'
 import { capture, server, url } from '../server'
 
 describe('package moderation', () => {
+  it('lists packages with their versions and uploaders', async () => {
+    server.use(
+      http.get(url('/webapi/v2/packages'), ({ request }) => {
+        const params = new URL(request.url).searchParams
+        expect(params.get('discontinued')).toBe('true')
+        return HttpResponse.json(
+          f.page([
+            f.summary('my_company_core', {
+              versionCount: 7,
+              uploaders: ['a@x.example', 'b@x.example'],
+            }),
+          ]),
+        )
+      }),
+    )
+    renderApp('/admin/packages', { me: f.me() })
+    const link = await screen.findByRole('link', { name: 'my_company_core' })
+    expect(link).toHaveAttribute('href', '/admin/packages/my_company_core')
+    const row = link.closest('tr')!
+    expect(within(row).getByText('7')).toBeInTheDocument()
+    expect(within(row).getByText('a@x.example, b@x.example')).toBeInTheDocument()
+  })
+
   it('deletes a package only after typing its name', async () => {
     server.use(
       http.get(url('/webapi/package/:name'), () => HttpResponse.json({ data: f.pkg() })),
