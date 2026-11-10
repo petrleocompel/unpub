@@ -1,0 +1,87 @@
+import { screen, waitFor, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
+import { describe, expect, it } from 'vitest'
+import * as f from '../fixtures'
+import { renderApp, where } from '../render'
+import { capture, server, url } from '../server'
+
+describe('package moderation', () => {
+  it('deletes a package only after typing its name', async () => {
+    server.use(
+      http.get(url('/webapi/package/:name'), () => HttpResponse.json({ data: f.pkg() })),
+      http.get(url('/webapi/v2/packages'), () => HttpResponse.json(f.page([]))),
+    )
+    const deleted = capture('delete', '/api/packages/my_company_core', {
+      success: { message: 'Deleted.' },
+    })
+    const { user, router } = renderApp('/admin/packages/my_company_core', { me: f.me() })
+
+    await user.click(await screen.findByRole('button', { name: 'Delete package…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete my_company_core?' })
+    const confirm = within(dialog).getByRole('button', { name: 'Delete package' })
+    expect(confirm).toBeDisabled()
+
+    await user.type(
+      within(dialog).getByLabelText(/Type my_company_core to confirm/),
+      'my_company_cor',
+    )
+    expect(confirm).toBeDisabled()
+    await user.type(within(dialog).getByLabelText(/Type my_company_core to confirm/), 'e')
+    expect(confirm).toBeEnabled()
+    await user.click(confirm)
+
+    await waitFor(() => expect(deleted).toHaveLength(1))
+    expect(deleted[0]!.headers.get('X-CSRF-Token')).toBe('csrf-123')
+    await waitFor(() => expect(where(router)).toBe('/admin/packages'))
+  })
+
+  it('transfers ownership only with the box ticked', async () => {
+    server.use(http.get(url('/webapi/package/:name'), () => HttpResponse.json({ data: f.pkg() })))
+    const transferred = capture('put', '/api/packages/my_company_core/owner', {
+      success: { message: 'Done.' },
+    })
+    const { user } = renderApp('/admin/packages/my_company_core', { me: f.me() })
+
+    await user.click(await screen.findByRole('button', { name: 'Transfer…' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('New owner'), 'new.owner@company.example')
+    const confirm = within(dialog).getByRole('button', { name: 'Transfer ownership' })
+    expect(confirm).toBeDisabled()
+    await user.click(within(dialog).getByRole('checkbox'))
+    await user.click(confirm)
+    await waitFor(() => expect(transferred).toHaveLength(1))
+    expect(await transferred[0]!.json()).toEqual({ email: 'new.owner@company.example' })
+  })
+
+  it('retracts a version from the package page menu', async () => {
+    server.use(http.get(url('/webapi/package/:name'), () => HttpResponse.json({ data: f.pkg() })))
+    const retracted = capture('post', '/api/packages/my_company_core/versions/1.4.0/retract', {
+      success: { message: 'Retracted.' },
+    })
+    const { user } = renderApp('/packages/my_company_core', { me: f.me(f.user()) })
+    await user.click(await screen.findByRole('button', { name: 'Actions' }))
+    // Uploaders who are not administrators get no delete actions.
+    expect(screen.queryByRole('menuitem', { name: /Delete/ })).toBeNull()
+    await user.click(screen.getByRole('menuitem', { name: 'Retract this version…' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Retract version' }))
+    await waitFor(() => expect(retracted).toHaveLength(1))
+    expect(await screen.findByText('Retracted 1.4.0')).toBeInTheDocument()
+  })
+
+  it('discontinues with a replacement', async () => {
+    server.use(http.get(url('/webapi/package/:name'), () => HttpResponse.json({ data: f.pkg() })))
+    const discontinued = capture('put', '/api/packages/my_company_core/discontinue', {
+      success: { message: 'Done.' },
+    })
+    const { user } = renderApp('/admin/packages/my_company_core', { me: f.me() })
+    await user.click(await screen.findByRole('checkbox', { name: 'Discontinued' }))
+    await user.type(screen.getByLabelText('Replaced by (optional)'), 'my_company_core2')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(discontinued).toHaveLength(1))
+    expect(await discontinued[0]!.json()).toEqual({
+      isDiscontinued: true,
+      replacedBy: 'my_company_core2',
+    })
+  })
+})

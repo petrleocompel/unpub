@@ -227,7 +227,12 @@ function Target({ event }: { event: AuditEvent }) {
         className="text-primary hover:underline"
       >
         {event.package}
-        {event.version && <span className="font-mono"> {event.version}</span>}
+        {event.version && (
+          <>
+            {' '}
+            <span className="font-mono">{event.version}</span>
+          </>
+        )}
       </Link>
     )
   }

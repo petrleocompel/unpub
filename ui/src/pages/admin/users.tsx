@@ -36,12 +36,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -75,20 +70,9 @@ export function UsersPage() {
   const [creating, setCreating] = useState(false)
   const [passwordFor, setPasswordFor] = useState<User | null>(null)
   const [toggling, setToggling] = useState<User | null>(null)
+  const [roleFor, setRoleFor] = useState<User | null>(null)
   const update = useUpdateUser()
   const { me } = useSession()
-
-  const changeRole = (user: User, role: Role) => {
-    if (role === user.role) return
-    update.mutate(
-      { id: user.id, role },
-      {
-        onSuccess: () =>
-          toast.success(`${user.email} is now ${role === 'admin' ? 'an' : 'a'} ${role}`),
-        onError: (error) => toast.error('The role was not changed', userChangeError(error)),
-      },
-    )
-  }
 
   return (
     <>
@@ -198,28 +182,10 @@ export function UsersPage() {
                             <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
                               {user.email}
                             </DropdownMenuLabel>
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger>
-                                <ShieldCheck aria-hidden className="size-4 text-muted-foreground" />
-                                Change role
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent>
-                                <DropdownMenuRadioGroup
-                                  value={user.role}
-                                  onValueChange={(role) => changeRole(user, role as Role)}
-                                >
-                                  {roles.map((role) => (
-                                    <DropdownMenuRadioItem
-                                      key={role}
-                                      value={role}
-                                      className="capitalize"
-                                    >
-                                      {role}
-                                    </DropdownMenuRadioItem>
-                                  ))}
-                                </DropdownMenuRadioGroup>
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
+                            <DropdownMenuItem onSelect={() => setRoleFor(user)}>
+                              <ShieldCheck aria-hidden />
+                              Change role…
+                            </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => setPasswordFor(user)}>
                               <KeyRound aria-hidden />
                               Set password…
@@ -251,6 +217,7 @@ export function UsersPage() {
       </div>
       <CreateUserDialog open={creating} onOpenChange={setCreating} />
       <SetPasswordDialog user={passwordFor} onClose={() => setPasswordFor(null)} />
+      <RoleDialog user={roleFor} onClose={() => setRoleFor(null)} />
       <ConfirmDialog
         open={toggling !== null}
         onOpenChange={(open) => !open && setToggling(null)}
@@ -451,5 +418,49 @@ function SetPasswordForm({ user, onDone }: { user: User; onDone: () => void }) {
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+function RoleDialog({ user, onClose }: { user: User | null; onClose: () => void }) {
+  const id = useId()
+  const [role, setRole] = useState<Role>(user?.role ?? 'publisher')
+  const [shown, setShown] = useState(user)
+  if (user !== shown) {
+    setShown(user)
+    if (user) setRole(user.role)
+  }
+  const update = useUpdateUser()
+  return (
+    <ConfirmDialog
+      open={user !== null}
+      onOpenChange={(open) => !open && onClose()}
+      title={`Change the role of ${user?.email ?? ''}`}
+      description="Administrators may do everything, publishers publish and manage their packages, readers only read."
+      confirmLabel="Change role"
+      onConfirm={async () => {
+        if (!user || role === user.role) return
+        try {
+          await update.mutateAsync({ id: user.id, role })
+        } catch (error) {
+          throw new Error(userChangeError(error))
+        }
+        toast.success(`${user.email} is now ${role === 'admin' ? 'an' : 'a'} ${role}`)
+      }}
+    >
+      <Field id={`${id}-role`} label="Role">
+        <NativeSelect
+          id={`${id}-role`}
+          value={role}
+          onChange={(event) => setRole(event.target.value as Role)}
+          className="w-full"
+        >
+          {roles.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </NativeSelect>
+      </Field>
+    </ConfirmDialog>
   )
 }

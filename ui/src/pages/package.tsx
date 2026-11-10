@@ -181,7 +181,7 @@ function PackageHeader({ pkg }: { pkg: Package }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-1">
           <h1 className="flex flex-wrap items-baseline gap-x-3 text-3xl font-semibold break-all">
-            {pkg.name}
+            {pkg.name}{' '}
             <span className="font-mono text-xl font-normal text-muted-foreground">
               {pkg.version}
             </span>
