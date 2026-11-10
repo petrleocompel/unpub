@@ -461,26 +461,24 @@ class MongoStore extends MetaStore {
     return _queryPackagesBySelector(selector);
   }
 
+  /// Every word must be in the name or a description, ignoring case, with
+  /// or without the text index. The index only orders the packages by
+  /// relevance.
   @override
   Future<UnpubQueryResult> searchPackages(PackageSearch search) async {
-    if (search.words.isEmpty) return _search(search, _filters(search));
-    try {
-      return await _search(
-          search,
-          [
-            _textClause(search),
-            ..._filters(search),
-          ],
-          textScore: true);
-    } catch (error) {
-      // An older server, or one where the index could not be created.
-      _log.fine('text search failed, matching patterns instead: $error');
-      return _search(search, [
-        ..._patternClauses(search),
-        ..._filters(search),
-      ]);
+    final filter = _and([..._patternClauses(search), ..._filters(search)]);
+    if (search.words.isEmpty || search.sort != PackageSort.relevance) {
+      return _search(search, filter);
     }
+    return _searchByRelevance(search, filter);
   }
+
+  static Map<String, Object> _and(List<Map<String, Object>> clauses) =>
+      switch (clauses) {
+        [] => <String, Object>{},
+        [final single] => single,
+        _ => {r'$and': clauses},
+      };
 
   static List<Map<String, Object>> _filters(PackageSearch search) => [
         if (!search.includeDiscontinued)
@@ -493,21 +491,6 @@ class MongoStore extends MetaStore {
             r'$nor': [_flutterSelector]
           },
       ];
-
-  /// Matches any of the words through the text index, or in a name, so that
-  /// a name can be found while it is being typed. The text index splits
-  /// words on spaces and punctuation, but not on `_`.
-  static Map<String, Object> _textClause(PackageSearch search) => {
-        r'$or': [
-          {
-            r'$text': {r'$search': search.words.join(' ')}
-          },
-          for (final word in search.words)
-            {
-              'name': {r'$regex': RegExp.escape(word)}
-            },
-        ],
-      };
 
   /// Requires every word in the name or a description, ignoring case.
   static List<Map<String, Object>> _patternClauses(PackageSearch search) => [
@@ -523,24 +506,13 @@ class MongoStore extends MetaStore {
       ];
 
   Future<UnpubQueryResult> _search(
-      PackageSearch search, List<Map<String, Object>> clauses,
-      {bool textScore = false}) async {
-    final filter = clauses.isEmpty
-        ? <String, Object>{}
-        : clauses.length == 1
-            ? clauses.single
-            : {r'$and': clauses};
+      PackageSearch search, Map<String, Object> filter) async {
     final collection = db.collection(packageCollection);
     final count = await collection.modernCount(filter: filter);
     final packages = await collection
         .modernFind(
           filter: filter,
           sort: switch (search.sort) {
-            PackageSort.relevance when textScore => {
-                'score': {r'$meta': 'textScore'},
-                'download': -1,
-                'name': 1,
-              },
             PackageSort.relevance || PackageSort.downloads => {
                 'download': -1,
                 'name': 1
@@ -550,12 +522,77 @@ class MongoStore extends MetaStore {
           },
           projection: _listExcludedFields,
           // The driver refuses a skip of 0.
-          skip: search.page > 0 ? search.page * search.size : null,
-          limit: search.size,
+          skip: search.offset > 0 ? search.offset : null,
+          limit: search.limit,
         )
         .map(UnpubPackage.fromJson)
         .toList();
     return UnpubQueryResult(count.count, packages);
+  }
+
+  /// The packages matching [filter], ordered by the score of the text
+  /// index, then by downloads and name.
+  ///
+  /// A package the index does not match, as one found by a part of a word,
+  /// scores 0. Without the index every package does.
+  Future<UnpubQueryResult> _searchByRelevance(
+      PackageSearch search, Map<String, Object> filter) async {
+    final collection = db.collection(packageCollection);
+    final scores = <Object?, num>{};
+    // Quotes and a leading minus would make phrases and negations.
+    final terms = search.words
+        .map(
+            (word) => word.replaceAll('"', ' ').replaceFirst(RegExp('^-+'), ''))
+        .join(' ')
+        .trim();
+    if (terms.isNotEmpty) {
+      try {
+        await for (final item in collection.modernFind(filter: {
+          r'$and': [
+            {
+              r'$text': {r'$search': terms}
+            },
+            filter,
+          ]
+        }, projection: {
+          'name': 1,
+          'score': {r'$meta': 'textScore'},
+        })) {
+          scores[item['_id']] = item['score'] as num? ?? 0;
+        }
+      } catch (error) {
+        // An older server, or one where the index could not be created.
+        _log.fine('text search failed, ordering by downloads: $error');
+        scores.clear();
+      }
+    }
+    final candidates = await collection.modernFind(
+        filter: filter, projection: {'name': 1, 'download': 1}).toList();
+    num score(Map<String, dynamic> item) => scores[item['_id']] ?? 0;
+    num downloads(Map<String, dynamic> item) => item['download'] as num? ?? 0;
+    candidates.sort((a, b) {
+      var order = score(b).compareTo(score(a));
+      if (order == 0) order = downloads(b).compareTo(downloads(a));
+      if (order == 0) {
+        order = (a['name'] as String).compareTo(b['name'] as String);
+      }
+      return order;
+    });
+    final ids = [
+      for (final item in candidates.skip(search.offset).take(search.limit))
+        item['_id'],
+    ];
+    if (ids.isEmpty) return UnpubQueryResult(candidates.length, const []);
+    final found = {
+      await for (final item in collection.modernFind(filter: {
+        '_id': {r'$in': ids}
+      }, projection: _listExcludedFields))
+        item['_id']: UnpubPackage.fromJson(item),
+    };
+    return UnpubQueryResult(candidates.length, [
+      for (final id in ids)
+        if (found[id] case final package?) package,
+    ]);
   }
 
   @override

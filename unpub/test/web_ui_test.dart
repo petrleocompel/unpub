@@ -279,14 +279,71 @@ void main() {
       expect(none.body, contains('No packages match “&lt;b&gt;”'));
     });
 
-    test('searches without the text index', () async {
+    test('matches the same packages with and without the text index', () async {
+      await publish('yaml_tool', '1.0.0', description: 'Reads configuration.');
       await publish('fast_json', '1.0.0',
           description: 'A quick parser for documents.');
+      await publish('doc_tool', '1.0.0', description: 'Writes documents.');
+      await publish('parser_kit', '1.0.0', description: 'Tokenizes source.');
+      await publish('symbols', '1.0.0',
+          description: r'Handles a+b, (c), [d], {e}, ^f$, g|h, back\slash, '
+              '1.5 * and ?');
+      await publish('plain', '1.0.0', description: 'Nothing special, 1x5.');
+      await setDownloads('parser_kit', 100);
+
+      const expected = {
+        'parser': ['fast_json', 'parser_kit'],
+        'parser documents': ['fast_json'],
+        'Parser DOCUMENTS': ['fast_json'],
+        'documents': ['fast_json', 'doc_tool'],
+        'json quick': ['fast_json'],
+        'pars': ['fast_json', 'parser_kit'],
+        'yaml_t': ['yaml_tool'],
+        '_tool': ['yaml_tool', 'doc_tool'],
+        'absent': <String>[],
+        'parser absent': <String>[],
+        '1.5': ['symbols'],
+        '.*': <String>[],
+        'a+b': ['symbols'],
+        '(c)': ['symbols'],
+        '[d]': ['symbols'],
+        '{e}': ['symbols'],
+        r'^f$': ['symbols'],
+        'g|h': ['symbols'],
+        r'back\slash': ['symbols'],
+        '*': ['symbols'],
+        '?': ['symbols'],
+        '"parser" -documents': <String>[],
+      };
+      Future<Map<String, List<String>>> search(String sort) async => {
+            for (final query in expected.keys)
+              query: listed(await fetch(
+                  'GET',
+                  '/packages?${Uri(queryParameters: {
+                        'q': query,
+                        'sort': sort
+                      }).query}')),
+          };
+
+      final indexed = await search('relevance');
+      final byName = await search('name');
+      // The text index puts the package whose description says "parser"
+      // before the more downloaded one that has it in a part of its name.
+      expect(listed(await fetch('GET', '/packages?q=parser')),
+          ['fast_json', 'parser_kit']);
+      expect(listed(await fetch('GET', '/packages?q=parser&size=1&page=2')),
+          ['parser_kit']);
+
       await db.runCommand(
           {'dropIndexes': packageCollection, 'index': packageTextIndexName});
-
-      expect(listed(await fetch('GET', '/packages?q=PARSER')), ['fast_json']);
-      expect(listed(await fetch('GET', '/packages?q=json')), ['fast_json']);
+      final fallback = await search('relevance');
+      for (final MapEntry(key: query, value: names) in expected.entries) {
+        expect(indexed[query], unorderedEquals(names), reason: query);
+        expect(byName[query], unorderedEquals(names), reason: query);
+        expect(fallback[query], unorderedEquals(names), reason: query);
+      }
+      expect(listed(await fetch('GET', '/packages?q=parser')),
+          ['parser_kit', 'fast_json']);
     });
 
     test('filters by SDK and hides discontinued packages', () async {
@@ -360,6 +417,47 @@ void main() {
           ['pkg_20', 'pkg_21', 'pkg_22', 'pkg_23', 'pkg_24']);
       expect(listed(await fetch('GET', '/packages?size=1000')), hasLength(25));
       expect(listed(await fetch('GET', '/packages?size=0')), hasLength(1));
+    });
+
+    test('a page or size out of range is an empty page, not an error',
+        () async {
+      await publish('alpha', '1.0.0');
+      const huge = '9223372036854775807';
+      for (final query in [
+        'page=$huge',
+        'page=$huge&size=$huge',
+        'page=$huge&q=alpha',
+        'page=$huge&q=alpha&sort=name',
+        'page=$huge&partial=1',
+        'page=-$huge',
+        'page=99999999999999999999',
+        'size=$huge',
+        'size=-$huge',
+      ]) {
+        final page = await fetch('GET', '/packages?$query');
+        expect(page.status, HttpStatus.ok, reason: query);
+        expect(page.body, isNot(contains('Something went wrong')));
+      }
+      final beyond = await fetch('GET', '/packages?page=$huge');
+      expect(listed(beyond), isEmpty);
+      expect(beyond.body, contains('No packages on page 100000, there are 1.'));
+      expect(listed(await fetch('GET', '/packages?page=-$huge')), ['alpha']);
+      expect(listed(await fetch('GET', '/packages?size=$huge')), ['alpha']);
+
+      // A search given to the store directly is bounded too.
+      const unbounded = PackageSearch(page: 1 << 62, size: 1 << 62);
+      expect(unbounded.limit, maxSearchSize);
+      expect(unbounded.offset, maxSearchPage * maxSearchSize);
+      expect(const PackageSearch(page: -5, size: -5).offset, 0);
+      for (final text in [null, 'alpha']) {
+        final result = await MongoStore(db).searchPackages(PackageSearch(
+            page: 1 << 62,
+            size: 1 << 62,
+            text: text,
+            sort: text == null ? PackageSort.name : PackageSort.relevance));
+        expect(result.count, 1);
+        expect(result.packages, isEmpty);
+      }
     });
 
     test('answers a partial list for search as you type', () async {

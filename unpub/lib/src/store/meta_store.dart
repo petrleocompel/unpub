@@ -23,9 +23,15 @@ enum PackageSort {
 /// dependency on `flutter`.
 enum SdkFilter { dart, flutter }
 
+/// The last page a search reads, zero-based, and the most packages on one,
+/// so that the offset of a page stays small.
+const maxSearchPage = 99999;
+const maxSearchSize = 1000;
+
 /// A search of the package list.
 class PackageSearch {
-  /// Words that must each appear in the name or the description.
+  /// Words that must each appear, ignoring case, in the name or a
+  /// description.
   final String? text;
   final SdkFilter? sdk;
   final bool includeDiscontinued;
@@ -43,6 +49,13 @@ class PackageSearch {
     this.page = 0,
     this.size = 20,
   });
+
+  /// How many packages a page has, [size] within 1 and [maxSearchSize].
+  int get limit => size.clamp(1, maxSearchSize);
+
+  /// How many packages come before [page], which is kept within 0 and
+  /// [maxSearchPage].
+  int get offset => page.clamp(0, maxSearchPage) * limit;
 
   /// The words of [text], lowercase, without duplicates and at most eight.
   List<String> get words => {
@@ -192,7 +205,7 @@ abstract class MetaStore {
     final matching = all.packages.where(search.matches).toList()
       ..sort(search.compare);
     return UnpubQueryResult(matching.length,
-        matching.skip(search.page * search.size).take(search.size).toList());
+        matching.skip(search.offset).take(search.limit).toList());
   }
 
   /// Which of [names] are packages in this store.

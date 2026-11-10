@@ -45,7 +45,7 @@ class PackageListRequest {
               ? PackageSort.downloads
               : sort)
           : sort ?? PackageSort.relevance,
-      page: page < 1 ? 1 : page,
+      page: page.clamp(1, maxSearchPage + 1),
       size: size.clamp(1, maxPageSize),
     );
   }
