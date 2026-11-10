@@ -60,6 +60,7 @@ export function Header() {
   const next = `${location.pathname}${location.search}`
   // A private registry shows anonymous visitors the login only.
   const locked = config.readAccess === 'authenticated' && !me
+  const onList = location.pathname === '/'
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/85">
@@ -67,12 +68,14 @@ export function Header() {
         <Wordmark />
         {!locked && (
           <nav aria-label="Main" className="shrink-0">
+            {/* The list is also the home page. */}
             <NavLink
               to="/packages"
+              aria-current={onList ? 'page' : undefined}
               className={({ isActive }) =>
                 cn(
                   'flex h-8 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground sm:px-2.5',
-                  isActive && 'bg-accent text-foreground',
+                  (isActive || onList) && 'bg-accent text-foreground',
                 )
               }
             >
