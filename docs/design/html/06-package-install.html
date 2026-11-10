@@ -1,0 +1,398 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Package page, install</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 4060px; height: 2100px;">
+
+<div class="variant">
+<p class="vlabel">Package · Install, discontinued package (anonymous visitor) <span>· 1440 · Light</span></p>
+<div class="frame w1440">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<a class="btn btn-outline btn-sm" href="Login.dc.html"><i class="i i-login"></i>Log in</a>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">legacy_auth</span></nav>
+<div class="pkg-title"><h1>legacy_auth</h1><span class="ver">0.9.2</span><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Copy legacy_auth: ^0.9.2"><i class="i i-copy i-sm"></i></button></div>
+<p class="t-md muted" style="max-width: 760px;">Session and token helpers for the old SSO.</p>
+<div class="pkg-sub">
+<span>Published <time datetime="2026-03-10T10:00:00Z" title="10 Mar 2026, 11:00 CET" class="fg">8 months ago</time></span><span class="sep" aria-hidden="true"></span>
+<span>by <a class="fg ulink" href="#">tomas.novak@company.example</a></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">2 940</b> downloads</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk flutter">Flutter</span><span class="badge warning"><i class="i i-archive"></i>Discontinued</span><a class="badge" href="#">Replaced by <b class="mono fw-5">company_auth</b><i class="i i-chevron-right"></i></a></div>
+<div class="alert warn" role="note"><i class="i i-archive"></i><div><b>This package is discontinued.</b> It gets no more updates. Use <a class="link mono" href="#">company_auth</a> instead.</div></div>
+<nav class="tabs" aria-label="Package sections" style="border-bottom: 0;">
+<a href="Package.dc.html">README</a>
+<a href="#">Changelog</a>
+<a href="PackageVersions.dc.html">Versions <span class="n">6</span></a>
+<a href="#" aria-current="page">Install</a>
+<a href="PackageStats.dc.html">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container pkg-layout">
+<div class="col gap-8 min-w-0" style="max-width: 820px;">
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">1</span>Add it to your app</h2>
+<p class="t-sm muted">Run one of these in the directory of your <code class="inl">pubspec.yaml</code>.</p>
+<div class="code"><div class="code-h"><span>Dart</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the dart pub add command"><i class="i i-copy"></i>Copy</button></div><pre><span class="pr">$ </span>dart pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+<div class="code"><div class="code-h"><span>Flutter</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the flutter pub add command"><i class="i i-check t-success"></i>Copied</button></div><pre><span class="pr">$ </span>flutter pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">2</span>Or edit pubspec.yaml</h2>
+<div class="code"><div class="code-h"><span>pubspec.yaml</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the pubspec snippet"><i class="i i-copy"></i>Copy</button></div><pre><span class="k">dependencies</span>:
+  <span class="k">legacy_auth</span>:
+    <span class="k">hosted</span>: <span class="s">https://pub.company.example</span>
+    <span class="k">version</span>: <span class="s">^0.9.2</span></pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">3</span>Import it</h2>
+<div class="code"><pre><span class="k">import</span> <span class="s">'package:legacy_auth/legacy_auth.dart'</span>;</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy the import"><i class="i i-copy"></i></button></div>
+</section>
+
+<div class="alert info"><i class="i i-key"></i><div><b>Private registry?</b> Tell <code class="inl">dart pub</code> your token once: <code class="inl">dart pub token add https://pub.company.example</code>. <a class="link" href="Login.dc.html">Log in</a> and create a read token under Account.</div></div>
+</div>
+
+<aside class="aside" aria-label="Package details">
+<section>
+<h2>Version</h2>
+<div class="sel w-full"><select class="select" aria-label="Version"><option>0.9.2 · latest</option></select><i class="i i-chevron-down"></i></div>
+</section>
+<section>
+<h2>Metadata</h2>
+<dl class="col gap-1h">
+<div class="row"><dt class="muted">Dart SDK</dt><dd class="mono t-sm">&gt;=3.0.0 &lt;4.0.0</dd></div>
+<div class="row"><dt class="muted">Flutter</dt><dd class="mono t-sm">&gt;=3.10.0</dd></div>
+<div class="row"><dt class="muted">License</dt><dd class="muted">none given</dd></div>
+</dl>
+<div class="flex wrap gap-1"><span class="chip">android</span><span class="chip">ios</span></div>
+</section>
+<section>
+<h2>Dependencies</h2>
+<ul class="deps">
+<li><a class="link mono t-sm" href="#">my_company_core</a><span class="ver t-xs">^1.0.0</span></li>
+<li><a class="link mono t-sm" href="#">flutter_secure_storage <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^9.0.0</span></li>
+</ul>
+</section>
+<section>
+<h2>Uploaders</h2>
+<ul class="col gap-1h"><li class="flex items-center gap-2"><span class="avatar" style="width: 22px; height: 22px; font-size: 10px;">TN</span>tomas.novak@company.example</li></ul>
+</section>
+</aside>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Package · Install, discontinued package (anonymous visitor) <span>· 1440 · Dark</span></p>
+<div class="frame w1440 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<a class="btn btn-outline btn-sm" href="Login.dc.html"><i class="i i-login"></i>Log in</a>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">legacy_auth</span></nav>
+<div class="pkg-title"><h1>legacy_auth</h1><span class="ver">0.9.2</span><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Copy legacy_auth: ^0.9.2"><i class="i i-copy i-sm"></i></button></div>
+<p class="t-md muted" style="max-width: 760px;">Session and token helpers for the old SSO.</p>
+<div class="pkg-sub">
+<span>Published <time datetime="2026-03-10T10:00:00Z" title="10 Mar 2026, 11:00 CET" class="fg">8 months ago</time></span><span class="sep" aria-hidden="true"></span>
+<span>by <a class="fg ulink" href="#">tomas.novak@company.example</a></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">2 940</b> downloads</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk flutter">Flutter</span><span class="badge warning"><i class="i i-archive"></i>Discontinued</span><a class="badge" href="#">Replaced by <b class="mono fw-5">company_auth</b><i class="i i-chevron-right"></i></a></div>
+<div class="alert warn" role="note"><i class="i i-archive"></i><div><b>This package is discontinued.</b> It gets no more updates. Use <a class="link mono" href="#">company_auth</a> instead.</div></div>
+<nav class="tabs" aria-label="Package sections" style="border-bottom: 0;">
+<a href="Package.dc.html">README</a>
+<a href="#">Changelog</a>
+<a href="PackageVersions.dc.html">Versions <span class="n">6</span></a>
+<a href="#" aria-current="page">Install</a>
+<a href="PackageStats.dc.html">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container pkg-layout">
+<div class="col gap-8 min-w-0" style="max-width: 820px;">
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">1</span>Add it to your app</h2>
+<p class="t-sm muted">Run one of these in the directory of your <code class="inl">pubspec.yaml</code>.</p>
+<div class="code"><div class="code-h"><span>Dart</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the dart pub add command"><i class="i i-copy"></i>Copy</button></div><pre><span class="pr">$ </span>dart pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+<div class="code"><div class="code-h"><span>Flutter</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the flutter pub add command"><i class="i i-check t-success"></i>Copied</button></div><pre><span class="pr">$ </span>flutter pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">2</span>Or edit pubspec.yaml</h2>
+<div class="code"><div class="code-h"><span>pubspec.yaml</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the pubspec snippet"><i class="i i-copy"></i>Copy</button></div><pre><span class="k">dependencies</span>:
+  <span class="k">legacy_auth</span>:
+    <span class="k">hosted</span>: <span class="s">https://pub.company.example</span>
+    <span class="k">version</span>: <span class="s">^0.9.2</span></pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">3</span>Import it</h2>
+<div class="code"><pre><span class="k">import</span> <span class="s">'package:legacy_auth/legacy_auth.dart'</span>;</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy the import"><i class="i i-copy"></i></button></div>
+</section>
+
+<div class="alert info"><i class="i i-key"></i><div><b>Private registry?</b> Tell <code class="inl">dart pub</code> your token once: <code class="inl">dart pub token add https://pub.company.example</code>. <a class="link" href="Login.dc.html">Log in</a> and create a read token under Account.</div></div>
+</div>
+
+<aside class="aside" aria-label="Package details">
+<section>
+<h2>Version</h2>
+<div class="sel w-full"><select class="select" aria-label="Version"><option>0.9.2 · latest</option></select><i class="i i-chevron-down"></i></div>
+</section>
+<section>
+<h2>Metadata</h2>
+<dl class="col gap-1h">
+<div class="row"><dt class="muted">Dart SDK</dt><dd class="mono t-sm">&gt;=3.0.0 &lt;4.0.0</dd></div>
+<div class="row"><dt class="muted">Flutter</dt><dd class="mono t-sm">&gt;=3.10.0</dd></div>
+<div class="row"><dt class="muted">License</dt><dd class="muted">none given</dd></div>
+</dl>
+<div class="flex wrap gap-1"><span class="chip">android</span><span class="chip">ios</span></div>
+</section>
+<section>
+<h2>Dependencies</h2>
+<ul class="deps">
+<li><a class="link mono t-sm" href="#">my_company_core</a><span class="ver t-xs">^1.0.0</span></li>
+<li><a class="link mono t-sm" href="#">flutter_secure_storage <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^9.0.0</span></li>
+</ul>
+</section>
+<section>
+<h2>Uploaders</h2>
+<ul class="col gap-1h"><li class="flex items-center gap-2"><span class="avatar" style="width: 22px; height: 22px; font-size: 10px;">TN</span>tomas.novak@company.example</li></ul>
+</section>
+</aside>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Package · Install, discontinued package (anonymous visitor) <span>· 390 · Light</span></p>
+<div class="frame w390">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<a class="btn btn-outline btn-sm" href="Login.dc.html"><i class="i i-login"></i>Log in</a>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">legacy_auth</span></nav>
+<div class="pkg-title"><h1>legacy_auth</h1><span class="ver">0.9.2</span><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Copy legacy_auth: ^0.9.2"><i class="i i-copy i-sm"></i></button></div>
+<p class="t-md muted" style="max-width: 760px;">Session and token helpers for the old SSO.</p>
+<div class="pkg-sub">
+<span>Published <time datetime="2026-03-10T10:00:00Z" title="10 Mar 2026, 11:00 CET" class="fg">8 months ago</time></span><span class="sep" aria-hidden="true"></span>
+<span>by <a class="fg ulink" href="#">tomas.novak@company.example</a></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">2 940</b> downloads</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk flutter">Flutter</span><span class="badge warning"><i class="i i-archive"></i>Discontinued</span><a class="badge" href="#">Replaced by <b class="mono fw-5">company_auth</b><i class="i i-chevron-right"></i></a></div>
+<div class="alert warn" role="note"><i class="i i-archive"></i><div><b>This package is discontinued.</b> It gets no more updates. Use <a class="link mono" href="#">company_auth</a> instead.</div></div>
+<nav class="tabs" aria-label="Package sections" style="border-bottom: 0;">
+<a href="Package.dc.html">README</a>
+<a href="#">Changelog</a>
+<a href="PackageVersions.dc.html">Versions <span class="n">6</span></a>
+<a href="#" aria-current="page">Install</a>
+<a href="PackageStats.dc.html">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container pkg-layout">
+<div class="col gap-8 min-w-0" style="max-width: 820px;">
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">1</span>Add it to your app</h2>
+<p class="t-sm muted">Run one of these in the directory of your <code class="inl">pubspec.yaml</code>.</p>
+<div class="code"><div class="code-h"><span>Dart</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the dart pub add command"><i class="i i-copy"></i>Copy</button></div><pre><span class="pr">$ </span>dart pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+<div class="code"><div class="code-h"><span>Flutter</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the flutter pub add command"><i class="i i-check t-success"></i>Copied</button></div><pre><span class="pr">$ </span>flutter pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">2</span>Or edit pubspec.yaml</h2>
+<div class="code"><div class="code-h"><span>pubspec.yaml</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the pubspec snippet"><i class="i i-copy"></i>Copy</button></div><pre><span class="k">dependencies</span>:
+  <span class="k">legacy_auth</span>:
+    <span class="k">hosted</span>: <span class="s">https://pub.company.example</span>
+    <span class="k">version</span>: <span class="s">^0.9.2</span></pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">3</span>Import it</h2>
+<div class="code"><pre><span class="k">import</span> <span class="s">'package:legacy_auth/legacy_auth.dart'</span>;</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy the import"><i class="i i-copy"></i></button></div>
+</section>
+
+<div class="alert info"><i class="i i-key"></i><div><b>Private registry?</b> Tell <code class="inl">dart pub</code> your token once: <code class="inl">dart pub token add https://pub.company.example</code>. <a class="link" href="Login.dc.html">Log in</a> and create a read token under Account.</div></div>
+</div>
+
+<aside class="aside" aria-label="Package details">
+<section>
+<h2>Version</h2>
+<div class="sel w-full"><select class="select" aria-label="Version"><option>0.9.2 · latest</option></select><i class="i i-chevron-down"></i></div>
+</section>
+<section>
+<h2>Metadata</h2>
+<dl class="col gap-1h">
+<div class="row"><dt class="muted">Dart SDK</dt><dd class="mono t-sm">&gt;=3.0.0 &lt;4.0.0</dd></div>
+<div class="row"><dt class="muted">Flutter</dt><dd class="mono t-sm">&gt;=3.10.0</dd></div>
+<div class="row"><dt class="muted">License</dt><dd class="muted">none given</dd></div>
+</dl>
+<div class="flex wrap gap-1"><span class="chip">android</span><span class="chip">ios</span></div>
+</section>
+<section>
+<h2>Dependencies</h2>
+<ul class="deps">
+<li><a class="link mono t-sm" href="#">my_company_core</a><span class="ver t-xs">^1.0.0</span></li>
+<li><a class="link mono t-sm" href="#">flutter_secure_storage <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^9.0.0</span></li>
+</ul>
+</section>
+<section>
+<h2>Uploaders</h2>
+<ul class="col gap-1h"><li class="flex items-center gap-2"><span class="avatar" style="width: 22px; height: 22px; font-size: 10px;">TN</span>tomas.novak@company.example</li></ul>
+</section>
+</aside>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Package · Install, discontinued package (anonymous visitor) <span>· 390 · Dark</span></p>
+<div class="frame w390 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<a class="btn btn-outline btn-sm" href="Login.dc.html"><i class="i i-login"></i>Log in</a>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">legacy_auth</span></nav>
+<div class="pkg-title"><h1>legacy_auth</h1><span class="ver">0.9.2</span><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Copy legacy_auth: ^0.9.2"><i class="i i-copy i-sm"></i></button></div>
+<p class="t-md muted" style="max-width: 760px;">Session and token helpers for the old SSO.</p>
+<div class="pkg-sub">
+<span>Published <time datetime="2026-03-10T10:00:00Z" title="10 Mar 2026, 11:00 CET" class="fg">8 months ago</time></span><span class="sep" aria-hidden="true"></span>
+<span>by <a class="fg ulink" href="#">tomas.novak@company.example</a></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">2 940</b> downloads</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk flutter">Flutter</span><span class="badge warning"><i class="i i-archive"></i>Discontinued</span><a class="badge" href="#">Replaced by <b class="mono fw-5">company_auth</b><i class="i i-chevron-right"></i></a></div>
+<div class="alert warn" role="note"><i class="i i-archive"></i><div><b>This package is discontinued.</b> It gets no more updates. Use <a class="link mono" href="#">company_auth</a> instead.</div></div>
+<nav class="tabs" aria-label="Package sections" style="border-bottom: 0;">
+<a href="Package.dc.html">README</a>
+<a href="#">Changelog</a>
+<a href="PackageVersions.dc.html">Versions <span class="n">6</span></a>
+<a href="#" aria-current="page">Install</a>
+<a href="PackageStats.dc.html">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container pkg-layout">
+<div class="col gap-8 min-w-0" style="max-width: 820px;">
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">1</span>Add it to your app</h2>
+<p class="t-sm muted">Run one of these in the directory of your <code class="inl">pubspec.yaml</code>.</p>
+<div class="code"><div class="code-h"><span>Dart</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the dart pub add command"><i class="i i-copy"></i>Copy</button></div><pre><span class="pr">$ </span>dart pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+<div class="code"><div class="code-h"><span>Flutter</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the flutter pub add command"><i class="i i-check t-success"></i>Copied</button></div><pre><span class="pr">$ </span>flutter pub add legacy_auth --hosted-url https://pub.company.example</pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">2</span>Or edit pubspec.yaml</h2>
+<div class="code"><div class="code-h"><span>pubspec.yaml</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Copy the pubspec snippet"><i class="i i-copy"></i>Copy</button></div><pre><span class="k">dependencies</span>:
+  <span class="k">legacy_auth</span>:
+    <span class="k">hosted</span>: <span class="s">https://pub.company.example</span>
+    <span class="k">version</span>: <span class="s">^0.9.2</span></pre></div>
+</section>
+
+<section class="col gap-3">
+<h2 class="t-lg fw-6 flex items-center gap-2"><span class="avatar" style="width: 24px; height: 24px; font-size: 12px;">3</span>Import it</h2>
+<div class="code"><pre><span class="k">import</span> <span class="s">'package:legacy_auth/legacy_auth.dart'</span>;</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy the import"><i class="i i-copy"></i></button></div>
+</section>
+
+<div class="alert info"><i class="i i-key"></i><div><b>Private registry?</b> Tell <code class="inl">dart pub</code> your token once: <code class="inl">dart pub token add https://pub.company.example</code>. <a class="link" href="Login.dc.html">Log in</a> and create a read token under Account.</div></div>
+</div>
+
+<aside class="aside" aria-label="Package details">
+<section>
+<h2>Version</h2>
+<div class="sel w-full"><select class="select" aria-label="Version"><option>0.9.2 · latest</option></select><i class="i i-chevron-down"></i></div>
+</section>
+<section>
+<h2>Metadata</h2>
+<dl class="col gap-1h">
+<div class="row"><dt class="muted">Dart SDK</dt><dd class="mono t-sm">&gt;=3.0.0 &lt;4.0.0</dd></div>
+<div class="row"><dt class="muted">Flutter</dt><dd class="mono t-sm">&gt;=3.10.0</dd></div>
+<div class="row"><dt class="muted">License</dt><dd class="muted">none given</dd></div>
+</dl>
+<div class="flex wrap gap-1"><span class="chip">android</span><span class="chip">ios</span></div>
+</section>
+<section>
+<h2>Dependencies</h2>
+<ul class="deps">
+<li><a class="link mono t-sm" href="#">my_company_core</a><span class="ver t-xs">^1.0.0</span></li>
+<li><a class="link mono t-sm" href="#">flutter_secure_storage <i class="i i-external i-xs"></i><span class="sr-only">on pub.dev</span></a><span class="ver t-xs">^9.0.0</span></li>
+</ul>
+</section>
+<section>
+<h2>Uploaders</h2>
+<ul class="col gap-1h"><li class="flex items-center gap-2"><span class="avatar" style="width: 22px; height: 22px; font-size: 10px;">TN</span>tomas.novak@company.example</li></ul>
+</section>
+</aside>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>

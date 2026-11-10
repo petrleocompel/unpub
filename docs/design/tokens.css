@@ -1,0 +1,122 @@
+/*
+ * unpub design tokens, shadcn/ui theme format (Tailwind CSS 4).
+ * A copy of the token part of ui/src/index.css, which is the source the client
+ * builds from. Dark mode is the `dark` class on <html>.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* Slate neutrals with one Dart-adjacent blue; see docs/design. */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.205 0.02 258);
+  --surface: oklch(0.982 0.003 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.02 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.02 258);
+  --primary: oklch(0.5 0.15 255);
+  --primary-foreground: oklch(0.985 0.003 255);
+  --secondary: oklch(0.962 0.008 255);
+  --secondary-foreground: oklch(0.27 0.03 258);
+  --muted: oklch(0.97 0.005 258);
+  --muted-foreground: oklch(0.49 0.02 258);
+  --accent: oklch(0.95 0.014 255);
+  --accent-foreground: oklch(0.27 0.03 258);
+  --destructive: oklch(0.53 0.2 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.5 0.12 155);
+  --warning: oklch(0.54 0.13 65);
+  --info: oklch(0.5 0.15 255);
+  --border: oklch(0.92 0.006 258);
+  --input: oklch(0.87 0.01 258);
+  --ring: oklch(0.56 0.16 255);
+  --chart-bar: oklch(0.56 0.15 255);
+  --chart-grid: oklch(0.92 0.006 258);
+  --code: oklch(0.972 0.005 258);
+
+  --elevation-xs: 0 1px 2px oklch(0.2 0.02 258 / 0.06);
+  --elevation-sm: 0 1px 3px oklch(0.2 0.02 258 / 0.08), 0 1px 2px oklch(0.2 0.02 258 / 0.04);
+  --elevation-md: 0 6px 16px -4px oklch(0.2 0.02 258 / 0.12), 0 2px 4px -2px oklch(0.2 0.02 258 / 0.06);
+  --elevation-lg: 0 20px 48px -12px oklch(0.2 0.02 258 / 0.22), 0 4px 12px -4px oklch(0.2 0.02 258 / 0.08);
+}
+
+.dark {
+  --background: oklch(0.165 0.014 258);
+  --foreground: oklch(0.955 0.005 258);
+  --surface: oklch(0.145 0.012 258);
+  --card: oklch(0.195 0.016 258);
+  --card-foreground: oklch(0.955 0.005 258);
+  --popover: oklch(0.215 0.017 258);
+  --popover-foreground: oklch(0.955 0.005 258);
+  --primary: oklch(0.73 0.13 252);
+  --primary-foreground: oklch(0.17 0.03 258);
+  --secondary: oklch(0.26 0.018 258);
+  --secondary-foreground: oklch(0.955 0.005 258);
+  --muted: oklch(0.225 0.016 258);
+  --muted-foreground: oklch(0.72 0.016 258);
+  --accent: oklch(0.27 0.022 258);
+  --accent-foreground: oklch(0.955 0.005 258);
+  --destructive: oklch(0.69 0.18 24);
+  --destructive-foreground: oklch(0.17 0.03 258);
+  --success: oklch(0.76 0.14 155);
+  --warning: oklch(0.82 0.13 80);
+  --info: oklch(0.73 0.13 252);
+  --border: oklch(0.3 0.016 258);
+  --input: oklch(0.36 0.018 258);
+  --ring: oklch(0.72 0.13 252);
+  --chart-bar: oklch(0.7 0.13 252);
+  --chart-grid: oklch(0.3 0.016 258);
+  --code: oklch(0.205 0.016 258);
+
+  --elevation-xs: 0 1px 2px oklch(0 0 0 / 0.3);
+  --elevation-sm: 0 1px 3px oklch(0 0 0 / 0.35);
+  --elevation-md: 0 6px 16px -4px oklch(0 0 0 / 0.45);
+  --elevation-lg: 0 20px 48px -12px oklch(0 0 0 / 0.6), 0 0 0 1px oklch(1 0 0 / 0.04);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-info: var(--info);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-bar: var(--chart-bar);
+  --color-chart-grid: var(--chart-grid);
+  --color-code: var(--code);
+}

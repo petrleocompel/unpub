@@ -1,0 +1,203 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-10T14:45:00Z"
+  },
+  "title": "unpub web client",
+  "launch": {
+    "view": "canvas",
+    "page": "system"
+  },
+  "pages": [
+    {
+      "id": "system",
+      "name": "Design system"
+    },
+    {
+      "id": "public",
+      "name": "Public pages"
+    },
+    {
+      "id": "admin",
+      "name": "Account & admin"
+    }
+  ],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 3120,
+      "h": 1700,
+      "title": "Foundations — tokens, type, wordmark",
+      "page": "system"
+    },
+    "Components.dc.html": {
+      "x": 0,
+      "y": 1820,
+      "w": 3120,
+      "h": 2000,
+      "title": "Components",
+      "page": "system"
+    },
+    "States.dc.html": {
+      "x": 0,
+      "y": 3940,
+      "w": 3120,
+      "h": 1960,
+      "title": "States, dialogs, toasts, error pages",
+      "page": "system"
+    },
+    "PackageList.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 4060,
+      "h": 2290,
+      "title": "1 · Package list",
+      "page": "public"
+    },
+    "Package.dc.html": {
+      "x": 0,
+      "y": 2410,
+      "w": 4060,
+      "h": 2460,
+      "title": "2 · Package page — README",
+      "page": "public"
+    },
+    "PackageVersions.dc.html": {
+      "x": 0,
+      "y": 4990,
+      "w": 4060,
+      "h": 1420,
+      "title": "2 · Package page — Versions + actions",
+      "page": "public"
+    },
+    "PackageInstall.dc.html": {
+      "x": 0,
+      "y": 6530,
+      "w": 4060,
+      "h": 2100,
+      "title": "2 · Package page — Install",
+      "page": "public"
+    },
+    "PackageStats.dc.html": {
+      "x": 0,
+      "y": 8750,
+      "w": 4060,
+      "h": 1800,
+      "title": "2 · Package page — Stats",
+      "page": "public"
+    },
+    "Login.dc.html": {
+      "x": 0,
+      "y": 10670,
+      "w": 4060,
+      "h": 1180,
+      "title": "3 · Login",
+      "page": "public"
+    },
+    "Errors.dc.html": {
+      "x": 0,
+      "y": 11970,
+      "w": 4060,
+      "h": 1180,
+      "title": "6 · Not found",
+      "page": "public"
+    },
+    "Account.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 4060,
+      "h": 2290,
+      "title": "4 · Account",
+      "page": "admin"
+    },
+    "AdminOverview.dc.html": {
+      "x": 0,
+      "y": 2410,
+      "w": 4060,
+      "h": 1690,
+      "title": "5 · Admin — Overview",
+      "page": "admin"
+    },
+    "AdminUsers.dc.html": {
+      "x": 0,
+      "y": 4220,
+      "w": 4060,
+      "h": 1260,
+      "title": "5 · Admin — Users",
+      "page": "admin"
+    },
+    "AdminPackages.dc.html": {
+      "x": 0,
+      "y": 5600,
+      "w": 4060,
+      "h": 1180,
+      "title": "5 · Admin — Packages",
+      "page": "admin"
+    },
+    "AdminPackage.dc.html": {
+      "x": 0,
+      "y": 6900,
+      "w": 4060,
+      "h": 1810,
+      "title": "5 · Admin — Package",
+      "page": "admin"
+    },
+    "AuditLog.dc.html": {
+      "x": 0,
+      "y": 8830,
+      "w": 4060,
+      "h": 1560,
+      "title": "5 · Admin — Audit log",
+      "page": "admin"
+    },
+    "Webhooks.dc.html": {
+      "x": 0,
+      "y": 10510,
+      "w": 4060,
+      "h": 1410,
+      "title": "5 · Admin — Webhooks",
+      "page": "admin"
+    },
+    "Webhook.dc.html": {
+      "x": 0,
+      "y": 12040,
+      "w": 4060,
+      "h": 2410,
+      "title": "5 · Admin — Webhook",
+      "page": "admin"
+    },
+    "Settings.dc.html": {
+      "x": 0,
+      "y": 14570,
+      "w": 4060,
+      "h": 3730,
+      "title": "5 · Admin — Settings",
+      "page": "admin"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Components.dc.html",
+    "States.dc.html",
+    "PackageList.dc.html",
+    "Package.dc.html",
+    "PackageVersions.dc.html",
+    "PackageInstall.dc.html",
+    "PackageStats.dc.html",
+    "Login.dc.html",
+    "Errors.dc.html",
+    "Account.dc.html",
+    "AdminOverview.dc.html",
+    "AdminUsers.dc.html",
+    "AdminPackages.dc.html",
+    "AdminPackage.dc.html",
+    "AuditLog.dc.html",
+    "Webhooks.dc.html",
+    "Webhook.dc.html",
+    "Settings.dc.html"
+  ],
+  "notes": {},
+  "designSystems": []
+}

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin settings</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 3730px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Admin · Settings (read-only) <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="#" aria-current="page"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Settings</h1><p>The effective configuration: <span class="mono">unpub.yaml</span>, then environment variables on top. Change it there and restart.</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+<div class="alert info"><i class="i i-lock"></i><div>Secrets are redacted. Each key can be overridden by the variable shown under it, for example <code class="inl">UNPUB_SERVER_PUBLIC_URL</code>.</div></div>
+
+<div class="grid gap-4 cols-1-sm items-start" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+<sc-for list="{{sections}}" as="s" hint-placeholder-count="10">
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">{{s.name}}</h2></div>
+<dl class="divide">
+<sc-for list="{{s.rows}}" as="r" hint-placeholder-count="3">
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">{{r.k}}</span><span class="mono muted" style="font-size: 11px;">{{r.env}}</span></dt>
+<dd class="mono t-sm {{r.cls}}" style="word-break: break-all;">{{r.v}}</dd>
+</div>
+</sc-for>
+</dl>
+</section>
+</sc-for>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":3730}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const env = (sec, k) => 'UNPUB_' + (sec + '_' + k).replace(/([a-z])([A-Z])/g, '$1_$2').replace(/\./g, '_').toUpperCase();
+    const S = (name, rows) => ({ name, rows: rows.map(([k, v, kind]) => ({ k, v, env: env(name, k), cls: kind === 'secret' ? 'muted' : kind === 'default' ? 'muted' : '' })) });
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440' },
+        { label: '1440 · Dark', cls: 'w1440 dark' },
+        { label: '390 · Light', cls: 'w390' },
+        { label: '390 · Dark', cls: 'w390 dark' }
+      ],
+      sections: [
+        S('server', [['host', '0.0.0.0'], ['port', '4000'], ['publicUrl', 'https://pub.company.example'], ['trustForwardedFor', 'true']]),
+        S('mongo', [['uri', 'mongodb://unpub:•••••@mongo:27017/dart_pub', 'secret']]),
+        S('storage', [['type', 's3'], ['s3.bucket', 'company-pub-packages'], ['s3.region', 'eu-central-1'], ['s3.secretKey', '••••• redacted', 'secret']]),
+        S('upstream', [['url', 'https://pub.dev'], ['mode', 'proxy'], ['cacheTtl', '10m', 'default'], ['maxConcurrentFetches', '4', 'default']]),
+        S('auth', [['readAccess', 'authenticated'], ['bootstrapEmail', 'admin@localhost', 'default'], ['bootstrapToken', 'not set', 'default']]),
+        S('publish', [['allowedNamePrefixes', 'company_, my_company_'], ['maxArchiveBytes', '100 MiB', 'default'], ['requireVersionBump', 'true', 'default'], ['retractionWindow', '7d', 'default']]),
+        S('audit', [['retentionDays', '365']]),
+        S('webhooks', [['enabled', 'true', 'default'], ['timeout', '10s', 'default'], ['maxAttempts', '5', 'default'], ['allowPrivateNetworks', 'true'], ['retentionDays', '30', 'default']]),
+        S('metrics', [['enabled', 'true', 'default'], ['token', '••••• redacted', 'secret']]),
+        S('logging', [['level', 'info', 'default'], ['format', 'json']])
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
