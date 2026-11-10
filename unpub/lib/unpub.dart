@@ -13,6 +13,7 @@ export 'src/migrate/migrations.dart';
 export 'src/models.dart';
 export 'src/publish_policy.dart';
 export 'src/redact.dart';
+export 'src/request_id.dart' show requestIdHeader, requestIdOf;
 export 'src/server.dart';
 export 'src/store/account_store.dart';
 export 'src/store/archive_references.dart';

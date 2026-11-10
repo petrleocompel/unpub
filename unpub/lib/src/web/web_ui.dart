@@ -20,6 +20,7 @@ import '../config/config.dart';
 import '../http_cache.dart';
 import '../models.dart';
 import '../package_moderation.dart';
+import '../request_id.dart';
 import '../routes/responses.dart' show parseVersionSegment;
 import '../routes/route_support.dart';
 import '../store/audit_store.dart';
@@ -243,7 +244,18 @@ class WebUi {
 
   shelf.Response errorResponse(
       shelf.Request req, int status, String title, String message) {
-    return _html(req, errorPage(_context(req), status, title, message),
+    final requestId = status >= 500 ? requestIdOf(req) : null;
+    return _html(
+        req,
+        errorPage(_context(req), status, title, message,
+            extra: requestId == null
+                ? null
+                : el('p', const {
+                    'class': 'request-id'
+                  }, [
+                    'Request id: ',
+                    el('code', const {}, requestId),
+                  ])),
         status: status);
   }
 
@@ -313,8 +325,14 @@ class WebUi {
           rethrow;
         } catch (error, stackTrace) {
           if (!_wantsPage(req)) rethrow;
-          _log.severe('error answering ${req.method} ${req.requestedUri.path}',
-              error, stackTrace);
+          _log.severe(
+              'error answering ${req.method} ${req.requestedUri.path}'
+              '${switch (requestIdOf(req)) {
+                final id? => ' (request $id)',
+                null => '',
+              }}',
+              error,
+              stackTrace);
           return _rendering(() => errorResponse(
               _local(req),
               HttpStatus.internalServerError,

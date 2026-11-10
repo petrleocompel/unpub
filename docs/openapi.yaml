@@ -46,6 +46,11 @@ info:
     A path that no route matches answers 404 with the text `Route not found`,
     not JSON.
 
+    **Request ids.** Every answer has an `X-Request-Id` header: the one the
+    request sent, if it has 1 to 64 letters, digits, `.`, `_` or `-`, else a
+    new one. The server logs it with the request, and a JSON error with a
+    5xx status carries it as `error.requestId`, to quote when reporting it.
+
     **Lists** take `page`, one-based, and `size`, and answer
     `{"items": [...], "page": 1, "size": 20, "total": 42}`. Both are bounded
     (`page` at most 100000, `size` at most 100, 200 for the audit log) and,
@@ -1352,6 +1357,12 @@ components:
               examples: [not_found]
             message:
               type: string
+            requestId:
+              type: string
+              description: >-
+                The `X-Request-Id` of the answer. Sent with 5xx statuses
+                only.
+              examples: [3f9c2a7b1e0d4c6a8b5f2e1d0c9b8a7f]
     Success:
       type: object
       required: [success]

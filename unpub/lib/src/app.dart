@@ -11,6 +11,7 @@ import 'auth/authenticator.dart';
 import 'config/config.dart';
 import 'metrics.dart';
 import 'publish_policy.dart';
+import 'request_id.dart';
 import 'request_logger.dart';
 import 'routes/admin_api_routes.dart';
 import 'routes/badge_routes.dart';
@@ -127,6 +128,7 @@ class App {
   shelf.Handler get handler {
     final router = this.router;
     return const shelf.Pipeline()
+        .addMiddleware(requestIdMiddleware())
         .addMiddleware(metrics.middleware(router))
         // Bearer tokens work cross-origin, but a session cookie must not: this
         // middleware echoes the origin, so credentialed requests stay disabled.

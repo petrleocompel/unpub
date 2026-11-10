@@ -635,6 +635,11 @@ export interface components {
         /** @example not_found */
         code: string
         message: string
+        /**
+         * @description The `X-Request-Id` of the answer. Sent with 5xx statuses only.
+         * @example 3f9c2a7b1e0d4c6a8b5f2e1d0c9b8a7f
+         */
+        requestId?: string
       }
     }
     Success: {
