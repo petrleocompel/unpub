@@ -1,0 +1,226 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Design tokens. Every colour, radius and font of the client is a CSS
+ * variable here, in the shadcn/ui theme format: restyling the client means
+ * changing these values (and, for a new font, adding it under src/fonts).
+ * No colour is set anywhere else.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0.02 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 255);
+  --primary: oklch(0.47 0.15 255);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.96 0.01 255);
+  --secondary-foreground: oklch(0.25 0.03 255);
+  --muted: oklch(0.965 0.006 255);
+  --muted-foreground: oklch(0.47 0.02 255);
+  --accent: oklch(0.95 0.015 255);
+  --accent-foreground: oklch(0.25 0.03 255);
+  --destructive: oklch(0.53 0.21 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.5 0.13 150);
+  --warning: oklch(0.55 0.13 70);
+  --border: oklch(0.91 0.01 255);
+  --input: oklch(0.88 0.01 255);
+  --ring: oklch(0.55 0.15 255);
+  --chart-bar: oklch(0.55 0.15 255);
+  --chart-grid: oklch(0.91 0.01 255);
+  --code: oklch(0.97 0.006 255);
+}
+
+.dark {
+  --background: oklch(0.17 0.015 255);
+  --foreground: oklch(0.96 0.005 255);
+  --card: oklch(0.21 0.018 255);
+  --card-foreground: oklch(0.96 0.005 255);
+  --popover: oklch(0.21 0.018 255);
+  --popover-foreground: oklch(0.96 0.005 255);
+  --primary: oklch(0.74 0.12 250);
+  --primary-foreground: oklch(0.18 0.03 255);
+  --secondary: oklch(0.27 0.02 255);
+  --secondary-foreground: oklch(0.96 0.005 255);
+  --muted: oklch(0.25 0.018 255);
+  --muted-foreground: oklch(0.74 0.015 255);
+  --accent: oklch(0.29 0.025 255);
+  --accent-foreground: oklch(0.96 0.005 255);
+  --destructive: oklch(0.68 0.19 25);
+  --destructive-foreground: oklch(0.18 0.03 255);
+  --success: oklch(0.75 0.14 150);
+  --warning: oklch(0.8 0.13 80);
+  --border: oklch(0.32 0.02 255);
+  --input: oklch(0.36 0.02 255);
+  --ring: oklch(0.7 0.12 250);
+  --chart-bar: oklch(0.7 0.12 250);
+  --chart-grid: oklch(0.32 0.02 255);
+  --code: oklch(0.22 0.02 255);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-bar: var(--chart-bar);
+  --color-chart-grid: var(--chart-grid);
+  --color-code: var(--code);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  /* Important in the base layer beats the animation utilities of later layers. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Rendered README and CHANGELOG, sanitized by the server. */
+@layer components {
+  /* The first column of a wide table stays in view while the rest scrolls. */
+  [data-sticky-first] {
+    --sticky-bg: var(--color-background);
+  }
+  [data-sticky-first] tr > :first-child:not([colspan]) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: var(--sticky-bg);
+  }
+  [data-sticky-first]
+    tr:is(:hover, [data-current], :has([aria-expanded='true']))
+    > :first-child:not([colspan]) {
+    background-color: color-mix(in oklab, var(--color-muted) 50%, var(--sticky-bg));
+  }
+  @media (width < 40rem) {
+    [data-sticky-first] tr > :first-child:not([colspan]) {
+      box-shadow: inset -1px 0 0 var(--color-border);
+    }
+  }
+  .markdown {
+    @apply max-w-none text-[0.95rem] leading-7 break-words;
+  }
+  .markdown > :first-child {
+    @apply mt-0;
+  }
+  .markdown h1 {
+    @apply mt-8 mb-4 scroll-mt-20 border-b pb-2 text-2xl font-semibold;
+  }
+  .markdown h2 {
+    @apply mt-8 mb-3 scroll-mt-20 border-b pb-1.5 text-xl font-semibold;
+  }
+  .markdown h3 {
+    @apply mt-6 mb-2 scroll-mt-20 text-lg font-semibold;
+  }
+  .markdown h4,
+  .markdown h5,
+  .markdown h6 {
+    @apply mt-5 mb-2 scroll-mt-20 font-semibold;
+  }
+  .markdown p,
+  .markdown ul,
+  .markdown ol,
+  .markdown pre,
+  .markdown blockquote,
+  .markdown table {
+    @apply my-4;
+  }
+  .markdown ul {
+    @apply list-disc pl-6;
+  }
+  .markdown ol {
+    @apply list-decimal pl-6;
+  }
+  .markdown li + li {
+    @apply mt-1;
+  }
+  .markdown a {
+    @apply font-medium text-primary underline underline-offset-4;
+  }
+  .markdown code {
+    @apply rounded bg-code px-1.5 py-0.5 font-mono text-[0.85em];
+  }
+  .markdown pre {
+    @apply overflow-x-auto rounded-lg border bg-code p-4 text-sm leading-6;
+  }
+  .markdown pre code {
+    @apply bg-transparent p-0;
+  }
+  .markdown blockquote {
+    @apply border-l-4 pl-4 text-muted-foreground;
+  }
+  .markdown table {
+    @apply block w-full overflow-x-auto text-sm;
+  }
+  .markdown th,
+  .markdown td {
+    @apply border px-3 py-1.5 text-left;
+  }
+  .markdown th {
+    @apply bg-muted font-semibold;
+  }
+  .markdown img {
+    @apply inline-block max-w-full;
+  }
+  .markdown hr {
+    @apply my-6;
+  }
+}

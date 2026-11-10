@@ -342,6 +342,54 @@ void main() {
         'soon'
       ]);
       expect(result.exitCode, 64);
+      expect(
+          result.stderr,
+          contains(
+              '--expires-in must look like 12h, 30d, 8w or 1y, or be never.'));
+    });
+
+    test('create-token takes years and never', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      Future<DateTime?> expiryOf(String expiresIn) async {
+        final result = await admin([
+          'create-token',
+          '--email',
+          'a@b.c',
+          '--name',
+          expiresIn,
+          '--expires-in',
+          expiresIn
+        ]);
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        final token =
+            await db.collection('tokens').findOne({'name': expiresIn});
+        return token!['expiresAt'] as DateTime?;
+      }
+
+      final year = await expiryOf('1y');
+      expect(year!.difference(DateTime.now()).inDays, closeTo(365, 1));
+      final hundred = await expiryOf('100y');
+      expect(hundred!.difference(DateTime.now()).inDays, closeTo(36500, 1));
+      expect(await expiryOf('never'), isNull);
+    });
+
+    test('create-token refuses more than 100 years', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      for (final expiresIn in ['101y', '999999y']) {
+        final result = await admin([
+          'create-token',
+          '--email',
+          'a@b.c',
+          '--name',
+          'x',
+          '--expires-in',
+          expiresIn
+        ]);
+        expect(result.exitCode, 64, reason: expiresIn);
+        expect(result.stderr,
+            contains('--expires-in must be at most 100y, or be never'));
+      }
+      expect(await db.collection('tokens').findOne(), isNull);
     });
 
     test('commands record who did what', () async {

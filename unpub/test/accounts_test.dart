@@ -24,6 +24,12 @@ class Reply {
   String? get errorCode => body['error']?['code'] as String?;
 }
 
+/// Expects the answer of `GET /webapi/me` when nobody is logged in.
+void expectNobody(Reply reply) {
+  expect(reply.status, HttpStatus.ok, reason: '${reply.body}');
+  expect(reply.body, {'user': null});
+}
+
 /// What a browser holds after logging in.
 class Browser {
   final String cookie;
@@ -544,21 +550,21 @@ void main() {
           where.eq('hash', created.token.hash),
           modify.set('expiresAt',
               DateTime.now().subtract(const Duration(seconds: 1))));
-      expect((await me(created.secret)).status, HttpStatus.unauthorized);
+      expectNobody(await me(created.secret));
     });
 
     test('a revoked token is anonymous', () async {
       final reader = await user('r@b.c', Role.reader);
       final created = await accounts.createToken(reader, name: 'old');
       await accounts.revokeToken(created.token);
-      expect((await me(created.secret)).status, HttpStatus.unauthorized);
+      expectNobody(await me(created.secret));
     });
 
     test('a token of a disabled user is anonymous', () async {
       final publisher = await user('p@b.c', Role.publisher);
       final secret = await token(publisher);
       await store.updateUser(publisher.id, DateTime.now(), disabled: true);
-      expect((await me(secret)).status, HttpStatus.unauthorized);
+      expectNobody(await me(secret));
     });
 
     test('demoting a user takes effect on existing tokens', () async {
@@ -944,16 +950,16 @@ void main() {
           where.eq('_id', hashSecret(browser.cookie)),
           modify.set('expiresAt',
               DateTime.now().subtract(const Duration(seconds: 1))));
-      expect((await send('GET', '/webapi/me', browser: browser)).status,
-          HttpStatus.unauthorized);
+      final reply = await send('GET', '/webapi/me', browser: browser);
+      expectNobody(reply);
+      expect(reply.headers['set-cookie'], contains('Max-Age=0'));
     });
 
     test('a session of a disabled user is anonymous', () async {
       final reader = await user('r@b.c', Role.reader);
       final browser = await login(reader);
       await store.updateUser(reader.id, DateTime.now(), disabled: true);
-      expect((await send('GET', '/webapi/me', browser: browser)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: browser));
     });
 
     test('logout ends the session and clears the cookie', () async {
@@ -961,8 +967,7 @@ void main() {
       final reply = await send('POST', '/webapi/logout', browser: browser);
       expect(reply.status, HttpStatus.ok);
       expect(reply.headers['set-cookie'], contains('Max-Age=0'));
-      expect((await send('GET', '/webapi/me', browser: browser)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: browser));
     });
 
     test('logout needs the CSRF token', () async {
@@ -978,8 +983,7 @@ void main() {
       await send('POST', '/webapi/login',
           headers: {'cookie': '$sessionCookieName=${first.cookie}'},
           body: {'email': 'r@b.c', 'password': _password});
-      expect((await send('GET', '/webapi/me', browser: first)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: first));
     });
 
     for (final (role, scopes) in [
@@ -1031,10 +1035,26 @@ void main() {
           HttpStatus.ok);
     });
 
-    test('me without credentials is unauthorized in public mode', () async {
-      final reply = await send('GET', '/webapi/me');
-      expect(reply.status, HttpStatus.unauthorized);
-      expect(reply.errorCode, 'unauthorized');
+    test('me without credentials answers that nobody is logged in', () async {
+      final private = buildApp(readAccess: ReadAccess.authenticated);
+      for (final using in [app, private]) {
+        final reply = await send('GET', '/webapi/me', using: using);
+        expectNobody(reply);
+        expect(reply.headers['set-cookie'], isNull);
+        expect(reply.headers['cache-control'], 'no-store');
+        expectNobody(
+            await send('GET', '/webapi/me', bearer: 'stale', using: using));
+      }
+    });
+
+    test('me clears a session cookie that is not accepted', () async {
+      final private = buildApp(readAccess: ReadAccess.authenticated);
+      for (final using in [app, private]) {
+        final reply = await send('GET', '/webapi/me',
+            browser: const Browser('unknown', 'csrf'), using: using);
+        expectNobody(reply);
+        expect(reply.headers['set-cookie'], contains('Max-Age=0'));
+      }
     });
   });
 
@@ -1179,9 +1199,45 @@ void main() {
       expect(stored.values, isNot(contains(secret)));
 
       final list = await send('GET', '/webapi/tokens', browser: browser);
-      expect(list.body['tokens'], hasLength(1));
-      expect(list.body['tokens'][0].containsKey('hash'), isFalse);
+      expect(list.body['items'], hasLength(1));
+      expect(list.body['items'][0].containsKey('hash'), isFalse);
       expect(jsonEncode(list.body), isNot(contains(secret)));
+    });
+
+    test('expiresIn takes 1y and never', () async {
+      final year = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'year', 'expiresIn': '1y'});
+      expect(year.status, HttpStatus.created, reason: '${year.body}');
+      final expiresAt =
+          DateTime.parse(year.body['token']['expiresAt'] as String);
+      expect(expiresAt.difference(DateTime.now()).inDays,
+          inInclusiveRange(364, 365));
+      final never = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'never', 'expiresIn': 'never'});
+      expect(never.status, HttpStatus.created, reason: '${never.body}');
+      expect(never.body['token']['expiresAt'], isNull);
+    });
+
+    test('expiresIn is at most 100 years', () async {
+      final hundred = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'hundred', 'expiresIn': '100y'});
+      expect(hundred.status, HttpStatus.created, reason: '${hundred.body}');
+      final expiresAt =
+          DateTime.parse(hundred.body['token']['expiresAt'] as String);
+      expect(expiresAt.difference(DateTime.now()).inDays,
+          inInclusiveRange(36499, 36500));
+      for (final expiresIn in ['101y', '36501d', '300000y', '999999y']) {
+        final reply = await send('POST', '/webapi/tokens',
+            browser: browser, body: {'name': 'long', 'expiresIn': expiresIn});
+        expect(reply.status, HttpStatus.badRequest, reason: expiresIn);
+        expect(reply.body['error']['code'], 'invalid_request');
+        expect(reply.body['error']['message'],
+            'expiresIn must be at most 100y, or be never for no expiry');
+      }
+      final zero = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'zero', 'expiresIn': '0d'});
+      expect(zero.status, HttpStatus.badRequest);
+      expect(zero.body['error']['message'], contains('must look like'));
     });
 
     test('defaults to the scopes the role allows', () async {
@@ -1215,7 +1271,7 @@ void main() {
       await token(other);
       await token(owner);
       final list = await send('GET', '/webapi/tokens', browser: browser);
-      expect(list.body['tokens'], hasLength(1));
+      expect(list.body['items'], hasLength(1));
     });
 
     test('can revoke an own token, repeatedly', () async {
@@ -1360,8 +1416,7 @@ void main() {
 
       expect((await send('GET', '/webapi/me', browser: browser)).status,
           HttpStatus.ok);
-      expect((await send('GET', '/webapi/me', browser: other)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: other));
 
       expect(
           (await send('POST', '/webapi/login',
@@ -1575,8 +1630,8 @@ void main() {
 
     test('lists users without their hashes', () async {
       final reply = await send('GET', '/webapi/users', browser: browser);
-      expect(reply.body['users'], hasLength(1));
-      expect(reply.body['users'][0]['hasPassword'], isTrue);
+      expect(reply.body['items'], hasLength(1));
+      expect(reply.body['items'][0]['hasPassword'], isTrue);
       expect(jsonEncode(reply.body), isNot(contains('argon2')));
     });
 
@@ -1711,8 +1766,7 @@ void main() {
       final reply = await send('POST', '/webapi/users/${other.id}/password',
           browser: browser, body: {'password': 'set-by-admin'});
       expect(reply.status, HttpStatus.ok);
-      expect((await send('GET', '/webapi/me', browser: session)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: session));
       expect(
           (await send('POST', '/webapi/login',
                   body: {'email': 'o@b.c', 'password': 'set-by-admin'}))
@@ -2620,6 +2674,19 @@ storage:
         headers: {'origin': 'https://evil.example.com'},
       )));
       expect(reply.headers['access-control-allow-credentials'], 'false');
+    });
+
+    test('exposes X-Request-Id to a cross-origin script', () async {
+      for (final method in ['GET', 'OPTIONS']) {
+        final reply = await decode(await app.handler(shelf.Request(
+          method,
+          Uri.parse('http://internal:4000/webapi/packages'),
+          headers: {'origin': 'https://other.example.com'},
+        )));
+        expect(reply.headers['access-control-expose-headers'], 'X-Request-Id',
+            reason: method);
+        expect(reply.headers[requestIdHeader], isNotEmpty, reason: method);
+      }
     });
 
     test('does not let a preflight send the CSRF header', () async {

@@ -104,6 +104,10 @@ class Delivery {
   final DateTime? lastAttemptAt;
   final DateTime? finishedAt;
 
+  /// How long the last attempt took, null before one was sent and for
+  /// attempts recorded before this was stored.
+  final int? durationMs;
+
   /// The status code of the last answer, if there was one.
   final int? responseStatus;
 
@@ -132,6 +136,7 @@ class Delivery {
     required this.createdAt,
     this.lastAttemptAt,
     this.finishedAt,
+    this.durationMs,
     this.responseStatus,
     this.responseBody,
     this.error,
@@ -155,6 +160,7 @@ class Delivery {
       createdAt: document['createdAt'] as DateTime,
       lastAttemptAt: document['lastAttemptAt'] as DateTime?,
       finishedAt: document['finishedAt'] as DateTime?,
+      durationMs: (document['durationMs'] as num?)?.toInt(),
       responseStatus: (response?['status'] as num?)?.toInt(),
       responseBody: response?['body'] as String?,
       error: document['error'] as String?,
@@ -170,6 +176,7 @@ class Delivery {
         'eventId': eventId,
         'package': package,
         'version': version,
+        'payload': payload,
         'status': status,
         'attempt': attempt,
         'nextAt': status == DeliveryStatus.pending
@@ -178,6 +185,7 @@ class Delivery {
         'createdAt': createdAt.toUtc().toIso8601String(),
         'lastAttemptAt': lastAttemptAt?.toUtc().toIso8601String(),
         'finishedAt': finishedAt?.toUtc().toIso8601String(),
+        'durationMs': durationMs,
         'response': responseStatus == null && responseBody == null
             ? null
             : {'status': responseStatus, 'body': responseBody},
@@ -340,15 +348,29 @@ class WebhookStore {
     }
   }
 
-  /// The newest deliveries of [webhookId].
-  Future<List<Delivery>> deliveries(String webhookId, {int limit = 50}) async =>
+  /// The newest deliveries of [webhookId], [limit] of them after [skip].
+  Future<List<Delivery>> deliveries(String webhookId,
+          {int limit = 50, int skip = 0}) async =>
       [
         await for (final document in _deliveries.modernFind(
             filter: {'webhookId': webhookId},
             sort: {'createdAt': -1, '_id': -1},
+            skip: skip > 0 ? skip : null,
             limit: limit))
           Delivery.fromDocument(document),
       ];
+
+  /// How many deliveries [webhookId] has.
+  Future<int> countDeliveries(String webhookId) async =>
+      (await _deliveries.modernCount(filter: {'webhookId': webhookId})).count;
+
+  /// How many deliveries of any webhook were given up since [since].
+  Future<int> countFailedSince(DateTime since) async =>
+      (await _deliveries.modernCount(filter: {
+        'status': DeliveryStatus.failed,
+        'finishedAt': {r'$gte': since},
+      }))
+          .count;
 
   Future<Delivery?> delivery(String webhookId, String id) async {
     final objectId = parseObjectId(id);
@@ -419,6 +441,7 @@ class WebhookStore {
     required String status,
     required int attempt,
     DateTime? nextAt,
+    Duration? duration,
     int? responseStatus,
     String? responseBody,
     String? error,
@@ -436,6 +459,7 @@ class WebhookStore {
         'lastAttemptAt': now,
         if (nextAt != null) 'nextAt': nextAt,
         if (status != DeliveryStatus.pending) 'finishedAt': now,
+        'durationMs': duration?.inMilliseconds,
         'response': responseStatus == null && responseBody == null
             ? null
             : {'status': responseStatus, 'body': responseBody},
@@ -448,16 +472,42 @@ class WebhookStore {
   }
 
   /// Counts the deliveries of [webhookId] by status.
-  Future<Map<String, int>> statusCounts(String webhookId) async {
-    final counts = <String, int>{};
-    for (final status in [
-      DeliveryStatus.pending,
-      DeliveryStatus.succeeded,
-      DeliveryStatus.failed,
-    ]) {
-      counts[status] = (await _deliveries
-              .modernCount(filter: {'webhookId': webhookId, 'status': status}))
-          .count;
+  Future<Map<String, int>> statusCounts(String webhookId) async =>
+      (await statusCountsOf([webhookId]))[webhookId]!;
+
+  /// Counts the deliveries of each of [webhookIds] by status, in one
+  /// aggregation: `pending`, `succeeded` and `failed`, zero included.
+  Future<Map<String, Map<String, int>>> statusCountsOf(
+      Iterable<String> webhookIds) async {
+    final ids = webhookIds.toSet().toList();
+    final counts = {
+      for (final id in ids)
+        id: {
+          DeliveryStatus.pending: 0,
+          DeliveryStatus.succeeded: 0,
+          DeliveryStatus.failed: 0,
+        },
+    };
+    if (ids.isEmpty) return counts;
+    final groups = _deliveries.modernAggregate([
+      {
+        r'$match': {
+          'webhookId': {r'$in': ids},
+        },
+      },
+      {
+        r'$group': {
+          '_id': {'webhookId': r'$webhookId', 'status': r'$status'},
+          'count': {r'$sum': 1},
+        },
+      },
+    ]);
+    await for (final group in groups) {
+      final key = group['_id'] as Map;
+      final byStatus = counts[key['webhookId']];
+      final status = key['status'];
+      if (byStatus == null || status is! String) continue;
+      byStatus[status] = (group['count'] as num).toInt();
     }
     return counts;
   }

@@ -13,23 +13,28 @@ class _AdminOpsUi {
 
   void addRoutes(Router router) {
     router
-      ..get('/admin/audit', web._guard(audit))
-      ..get('/admin/packages/<name>/versions/<version>/delete',
+      ..get(web._at('/admin/audit'), web._guard(audit))
+      ..get(web._at('/admin/packages/<name>/versions/<version>/delete'),
           web._guard2(confirmDeleteVersion))
-      ..post('/admin/packages/<name>/versions/<version>/delete',
+      ..post(web._at('/admin/packages/<name>/versions/<version>/delete'),
           web._guard2(deleteVersion))
-      ..post('/admin/packages/<name>/delete', web._guard1(deletePackage))
-      ..get(
-          '/admin/packages/<name>/owner', web._guard1(confirmTransferOwnership))
-      ..post('/admin/packages/<name>/owner', web._guard1(transferOwnership))
-      ..get('/admin/webhooks', web._guard(webhooks))
-      ..post('/admin/webhooks', web._guard(createWebhook))
-      ..get('/admin/webhooks/<id>', web._guard1(webhook))
-      ..post('/admin/webhooks/<id>/enabled', web._guard1(setWebhookEnabled))
-      ..post('/admin/webhooks/<id>/secret', web._guard1(rotateWebhookSecret))
-      ..get('/admin/webhooks/<id>/delete', web._guard1(confirmDeleteWebhook))
-      ..post('/admin/webhooks/<id>/delete', web._guard1(deleteWebhook))
-      ..post('/admin/webhooks/<id>/deliveries/<delivery>/redeliver',
+      ..post(
+          web._at('/admin/packages/<name>/delete'), web._guard1(deletePackage))
+      ..get(web._at('/admin/packages/<name>/owner'),
+          web._guard1(confirmTransferOwnership))
+      ..post(web._at('/admin/packages/<name>/owner'),
+          web._guard1(transferOwnership))
+      ..get(web._at('/admin/webhooks'), web._guard(webhooks))
+      ..post(web._at('/admin/webhooks'), web._guard(createWebhook))
+      ..get(web._at('/admin/webhooks/<id>'), web._guard1(webhook))
+      ..post(web._at('/admin/webhooks/<id>/enabled'),
+          web._guard1(setWebhookEnabled))
+      ..post(web._at('/admin/webhooks/<id>/secret'),
+          web._guard1(rotateWebhookSecret))
+      ..get(web._at('/admin/webhooks/<id>/delete'),
+          web._guard1(confirmDeleteWebhook))
+      ..post(web._at('/admin/webhooks/<id>/delete'), web._guard1(deleteWebhook))
+      ..post(web._at('/admin/webhooks/<id>/deliveries/<delivery>/redeliver'),
           web._guard2(redeliver));
   }
 

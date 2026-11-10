@@ -31,20 +31,26 @@ class HealthRoutes {
   }
 
   Future<shelf.Response> readyz(shelf.Request req) async {
-    var results = await Future.wait([
+    final report = await readiness();
+    return shelf.Response(
+      report['status'] == 'ok' ? HttpStatus.ok : HttpStatus.serviceUnavailable,
+      headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
+      body: json.encode(report),
+    );
+  }
+
+  /// What `/readyz` reports: `status`, `ok` or `unavailable`, and the
+  /// `checks` of Mongo and the storage.
+  Future<Map<String, Object>> readiness() async {
+    final results = await Future.wait([
       _runCheck(app.metaStore.checkHealth),
       _runCheck(app.packageStore.checkHealth),
     ]);
-    var checks = {'mongo': results[0], 'storage': results[1]};
-    var ready = results.every((result) => result['status'] == 'ok');
-    return shelf.Response(
-      ready ? HttpStatus.ok : HttpStatus.serviceUnavailable,
-      headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
-      body: json.encode({
-        'status': ready ? 'ok' : 'unavailable',
-        'checks': checks,
-      }),
-    );
+    final ready = results.every((result) => result['status'] == 'ok');
+    return {
+      'status': ready ? 'ok' : 'unavailable',
+      'checks': {'mongo': results[0], 'storage': results[1]},
+    };
   }
 
   static Future<Map<String, String>> _runCheck(

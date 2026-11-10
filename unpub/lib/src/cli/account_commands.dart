@@ -326,7 +326,9 @@ class _CreateTokenCommand extends _DatabaseCommand {
           allowed: const ['read', 'publish'],
           help: 'Defaults to everything the role of the user allows.')
       ..addOption('expires-in',
-          valueHelp: 'duration', help: 'For example 12h, 30d or 8w.');
+          valueHelp: 'duration',
+          help: 'For example 12h, 30d, 8w or 1y, at most 100y, or never, the '
+              'default.');
   }
 
   @override
@@ -334,10 +336,12 @@ class _CreateTokenCommand extends _DatabaseCommand {
     final args = argResults!;
     DateTime? expiresAt;
     final expiresIn = args.option('expires-in');
-    if (expiresIn != null) {
-      final duration = parseDuration(expiresIn);
-      if (duration == null) {
-        usageException('--expires-in must look like 12h, 30d or 8w.');
+    if (expiresIn != null && expiresIn.trim() != 'never') {
+      final Duration duration;
+      try {
+        duration = parseTokenLifetime(expiresIn, field: '--expires-in');
+      } on FormatException catch (e) {
+        usageException('${e.message}.');
       }
       expiresAt = accounts.clock().add(duration);
     }

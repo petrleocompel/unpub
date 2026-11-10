@@ -1,0 +1,6 @@
+name: e2e_demo
+description: A package the end-to-end test of the web client publishes.
+version: 1.2.0
+repository: https://github.com/petrleocompel/unpub
+environment:
+  sdk: ^3.5.0

@@ -143,8 +143,19 @@ void main() {
     test('other account routes are not open', () async {
       expect((await handler(request('POST', 'webapi/logout'))).statusCode,
           HttpStatus.unauthorized);
-      expect((await handler(request('GET', 'webapi/me'))).statusCode,
+      expect((await handler(request('POST', 'webapi/me'))).statusCode,
           HttpStatus.unauthorized);
+    });
+
+    test('an anonymous visitor may ask who is logged in', () async {
+      for (final authorization in [null, 'Bearer wrong']) {
+        expect(
+            (await handler(
+                    request('GET', 'webapi/me', authorization: authorization)))
+                .statusCode,
+            HttpStatus.ok);
+        expect(seen, isNull);
+      }
     });
 
     for (var route in const [
@@ -372,9 +383,38 @@ void main() {
     expect(parseDuration('12h'), const Duration(hours: 12));
     expect(parseDuration('30d'), const Duration(days: 30));
     expect(parseDuration('2w'), const Duration(days: 14));
-    for (var text in ['', '30', 'd', '0d', '-1d', '1y']) {
+    expect(parseDuration('1y'), const Duration(days: 365));
+    expect(parseDuration('100y'), const Duration(days: 36500));
+    expect(parseDuration('36500d'), const Duration(days: 36500));
+    for (var text in [
+      '',
+      '30',
+      'd',
+      '0d',
+      '-1d',
+      '1x',
+      'never',
+      '101y',
+      '36501d',
+      '300000y',
+      '999999y',
+      '1000000y',
+    ]) {
       expect(parseDuration(text), isNull, reason: text);
     }
+  });
+
+  test('token lifetimes are at most 100 years', () {
+    expect(parseTokenLifetime('100y', field: 'expiresIn'),
+        const Duration(days: 36500));
+    expect(
+        () => parseTokenLifetime('101y', field: 'expiresIn'),
+        throwsA(isA<FormatException>().having((e) => e.message, 'message',
+            'expiresIn must be at most 100y, or be never for no expiry')));
+    expect(
+        () => parseTokenLifetime('0d', field: 'expiresIn'),
+        throwsA(isA<FormatException>()
+            .having((e) => e.message, 'message', contains('must look like'))));
   });
 
   group('password hasher', () {

@@ -419,7 +419,21 @@ class PublishRoutes {
     final principal = principalOf(req);
     if (principal == null) return unauthenticated();
 
-    var email = Uri.splitQueryString(await req.readAsString())['email'];
+    // A form from `dart pub`, or JSON from the web client.
+    String? email;
+    final body = await req.readAsString();
+    if (req.mimeType == 'application/json') {
+      try {
+        final decoded = json.decode(body);
+        if (decoded is Map && decoded['email'] is String) {
+          email = decoded['email'] as String;
+        }
+      } on FormatException {
+        return badRequest('the body must be JSON');
+      }
+    } else {
+      email = Uri.splitQueryString(body)['email'];
+    }
     if (email == null) return badRequest('email is required');
     email = normalizeEmail(email);
     if (!isValidEmail(email)) return badRequest('email is invalid');

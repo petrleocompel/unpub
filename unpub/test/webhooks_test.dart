@@ -567,7 +567,9 @@ void main() {
       final list = await h.send('GET', '/webapi/webhooks', bearer: adminToken);
       expect(list.status, HttpStatus.ok);
       expect(list.body, isNot(contains(secret)));
-      expect(list.json['webhooks'].single['id'], hook.id);
+      expect(list.json['items'].single['id'], hook.id);
+      expect(list.json['items'].single['deliveries'],
+          {'pending': 0, 'succeeded': 0, 'failed': 0});
       final one = await h.send('GET', '/webapi/webhooks/${hook.id}',
           bearer: adminToken);
       expect(one.body, isNot(contains(secret)));
@@ -600,10 +602,18 @@ void main() {
       final listed = await h.send(
           'GET', '/webapi/webhooks/${hook.id}/deliveries',
           bearer: adminToken);
-      final delivery = listed.json['deliveries'].single;
+      final delivery = listed.json['items'].single;
       expect(delivery['status'], 'succeeded');
       expect(delivery['response']['status'], 200);
       expect(listed.body, isNot(contains(newSecret)));
+      // The payload is the exact body that was sent and signed.
+      expect(utf8.encode(delivery['payload'] as String), first.body);
+      expect(
+          WebhookService.signature(
+              newSecret, utf8.encode(delivery['payload'] as String)),
+          first.headers['x-unpub-signature']);
+      expect(delivery['durationMs'], isA<int>());
+      expect(delivery['durationMs'], greaterThanOrEqualTo(0));
 
       final again = await h.send('POST',
           '/webapi/webhooks/${hook.id}/deliveries/${delivery['id']}/redeliver',

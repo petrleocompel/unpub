@@ -20,6 +20,7 @@ import '../config/config.dart';
 import '../http_cache.dart';
 import '../models.dart';
 import '../package_moderation.dart';
+import '../request_id.dart';
 import '../routes/responses.dart' show parseVersionSegment;
 import '../routes/route_support.dart';
 import '../store/audit_store.dart';
@@ -114,11 +115,50 @@ class _BadForm implements Exception {
   const _BadForm();
 }
 
-/// The server-side rendered web UI.
+/// The server-rendered web UI.
+///
+/// Its pages are written for `/`. Served under [basePath], such as
+/// `/classic`, every route, link, form, redirect and cookie path is moved
+/// under it; see [underBasePath].
 class WebUi {
   final App app;
 
-  WebUi(this.app);
+  /// Where the pages are served, `''` for `/`. By default the
+  /// [UiConfig.classicBasePath] of the app.
+  final String basePath;
+
+  WebUi(this.app, {String? basePath})
+      : basePath = basePath ?? app.ui.classicBasePath {
+    if (this.basePath.isNotEmpty &&
+        (!this.basePath.startsWith('/') || this.basePath.endsWith('/'))) {
+      throw ArgumentError.value(
+          basePath, 'basePath', 'must start with a slash and not end with one');
+    }
+  }
+
+  /// Whether [req], as the auth middleware sees it, is for a page of this UI
+  /// rather than for the single-page client next to it.
+  bool isPageRequest(shelf.Request req) {
+    if (basePath.isEmpty) return true;
+    final path = req.url.path;
+    final prefix = basePath.substring(1);
+    return path == prefix || path.startsWith('$prefix/');
+  }
+
+  /// [req] as the routes see it: relative to [basePath].
+  shelf.Request _local(shelf.Request req) {
+    if (basePath.isEmpty || !isPageRequest(req)) return req;
+    final prefix = basePath.substring(1);
+    return req.url.path == prefix
+        ? req.change(path: prefix)
+        : req.change(path: '$prefix/');
+  }
+
+  /// Renders the answer to [req] with the URLs under [basePath].
+  T _rendering<T>(T Function() render) => underBasePath(basePath, render);
+
+  /// [route], a path of a page, under [basePath].
+  String _at(String route) => '$basePath$route';
 
   late final _moderation = PackageModeration(app);
 
@@ -136,41 +176,49 @@ class WebUi {
     // First, as they are more specific than the routes they share a prefix
     // with.
     _adminOps.addRoutes(router);
+    // The stylesheet and script stay at /static as well, for pages cached
+    // from before the move.
+    if (basePath.isNotEmpty) {
+      router
+        ..get(basePath, _guard(listPage))
+        ..get('/static/<file>', staticAsset);
+    }
     router
-      ..get('/', _guard(listPage))
-      ..get('/packages', _guard(listPage))
-      ..get('/packages/<name>', _guard1(showPackage))
-      ..get('/packages/<name>/versions/<version>', _guard2(showVersion))
-      ..get('/packages/<name>/stats', _guard1(showStats))
-      ..get('/static/<file>', staticAsset)
-      ..get('/login', _guard(loginForm))
-      ..post('/login', _guard(login))
-      ..post('/logout', _guard(logout))
-      ..get('/account', _guard(account))
-      ..post('/account/password', _guard(changePassword))
-      ..post('/account/tokens', _guard(createToken))
-      ..post('/account/tokens/<id>/revoke', _guard1(revokeToken))
-      ..get('/admin', _guard(adminIndex))
-      ..get('/admin/users', _guard(adminUsers))
-      ..post('/admin/users', _guard(adminCreateUser))
-      ..post('/admin/users/<id>', _guard1(adminUpdateUser))
-      ..post('/admin/users/<id>/password', _guard1(adminSetPassword))
-      ..get('/admin/packages', _guard(adminPackages))
-      ..get('/admin/packages/<name>', _guard1(adminPackage))
-      ..post('/admin/packages/<name>/discontinue', _guard1(adminDiscontinue))
-      ..post('/admin/packages/<name>/versions/<version>/<action>',
+      ..get(_at('/'), _guard(listPage))
+      ..get(_at('/packages'), _guard(listPage))
+      ..get(_at('/packages/<name>'), _guard1(showPackage))
+      ..get(_at('/packages/<name>/versions/<version>'), _guard2(showVersion))
+      ..get(_at('/packages/<name>/stats'), _guard1(showStats))
+      ..get(_at('/static/<file>'), staticAsset)
+      ..get(_at('/login'), _guard(loginForm))
+      ..post(_at('/login'), _guard(login))
+      ..post(_at('/logout'), _guard(logout))
+      ..get(_at('/account'), _guard(account))
+      ..post(_at('/account/password'), _guard(changePassword))
+      ..post(_at('/account/tokens'), _guard(createToken))
+      ..post(_at('/account/tokens/<id>/revoke'), _guard1(revokeToken))
+      ..get(_at('/admin'), _guard(adminIndex))
+      ..get(_at('/admin/users'), _guard(adminUsers))
+      ..post(_at('/admin/users'), _guard(adminCreateUser))
+      ..post(_at('/admin/users/<id>'), _guard1(adminUpdateUser))
+      ..post(_at('/admin/users/<id>/password'), _guard1(adminSetPassword))
+      ..get(_at('/admin/packages'), _guard(adminPackages))
+      ..get(_at('/admin/packages/<name>'), _guard1(adminPackage))
+      ..post(
+          _at('/admin/packages/<name>/discontinue'), _guard1(adminDiscontinue))
+      ..post(_at('/admin/packages/<name>/versions/<version>/<action>'),
           _guard3(adminRetraction))
-      ..post('/admin/packages/<name>/uploaders', _guard1(adminAddUploader))
-      ..post('/admin/packages/<name>/uploaders/remove',
+      ..post(_at('/admin/packages/<name>/uploaders'), _guard1(adminAddUploader))
+      ..post(_at('/admin/packages/<name>/uploaders/remove'),
           _guard1(adminRemoveUploader))
-      ..get('/admin/settings', _guard(adminSettings));
+      ..get(_at('/admin/settings'), _guard(adminSettings));
   }
 
   // Responses.
 
   PageContext _context(shelf.Request req) => PageContext(
         principal: principalOf(req),
-        path: req.requestedUri.path,
+        path: '/${req.url.path}',
         query: req.url.path == 'packages' || req.url.path.isEmpty
             ? req.url.queryParameters['q']
             : null,
@@ -196,7 +244,18 @@ class WebUi {
 
   shelf.Response errorResponse(
       shelf.Request req, int status, String title, String message) {
-    return _html(req, errorPage(_context(req), status, title, message),
+    final requestId = status >= 500 ? requestIdOf(req) : null;
+    return _html(
+        req,
+        errorPage(_context(req), status, title, message,
+            extra: requestId == null
+                ? null
+                : el('p', const {
+                    'class': 'request-id'
+                  }, [
+                    'Request id: ',
+                    el('code', const {}, requestId),
+                  ])),
         status: status);
   }
 
@@ -207,42 +266,54 @@ class WebUi {
   shelf.Response _forbiddenPage(shelf.Request req, String message) =>
       errorResponse(req, HttpStatus.forbidden, 'Forbidden', message);
 
+  /// A redirect to [location], a path of a page, under the base path of the
+  /// page being rendered.
   static shelf.Response _redirect(String location) =>
       shelf.Response(HttpStatus.seeOther, headers: {
-        HttpHeaders.locationHeader: location,
+        HttpHeaders.locationHeader: rebase(location),
         HttpHeaders.cacheControlHeader: 'no-store',
       });
 
-  /// Where a browser goes to log in and come back to [req].
+  /// Where a browser goes to log in and come back to [req], a request
+  /// relative to the base path.
   static String loginLocation(shelf.Request req) {
-    final target = req.requestedUri;
-    final back =
-        target.hasQuery ? '${target.path}?${target.query}' : target.path;
+    final target = req.url;
+    final path = '/${target.path}';
+    final back = target.hasQuery ? '$path?${target.query}' : path;
     return back == '/'
         ? '/login'
         : '/login?${Uri(queryParameters: {'next': back}).query}';
   }
 
+  /// Whether [req] is answered with a page of this UI: it is one of its
+  /// paths, and from a browser.
+  bool _wantsPage(shelf.Request req) => wantsHtml(req) && isPageRequest(req);
+
   /// The response to a failure of the auth middleware: pages for browsers,
   /// the JSON challenge for everything else.
   shelf.Response authFailure(shelf.Request req, AuthException error) {
-    if (!wantsHtml(req)) return authFailureResponse(error);
-    if (error.statusCode == HttpStatus.unauthorized) {
-      final readMethod = req.method == 'GET' || req.method == 'HEAD';
-      return _redirect(readMethod ? loginLocation(req) : '/login');
-    }
-    if (error.code == 'csrf_failed') {
-      return _forbiddenPage(
-          req,
-          'The form was sent without a valid security token. Reload the page '
-          'and try again.');
-    }
-    return _forbiddenPage(req, error.message);
+    if (!_wantsPage(req)) return authFailureResponse(error);
+    final local = _local(req);
+    return _rendering(() {
+      if (error.statusCode == HttpStatus.unauthorized) {
+        final readMethod = req.method == 'GET' || req.method == 'HEAD';
+        return _redirect(readMethod ? loginLocation(local) : '/login');
+      }
+      if (error.code == 'csrf_failed') {
+        return _forbiddenPage(
+            local,
+            'The form was sent without a valid security token. Reload the '
+            'page and try again.');
+      }
+      return _forbiddenPage(local, error.message);
+    });
   }
 
   /// The response for a path no route matched.
   shelf.Response notFound(shelf.Request req) {
-    if (wantsHtml(req)) return _notFoundPage(req);
+    if (_wantsPage(req)) {
+      return _rendering(() => _notFoundPage(_local(req)));
+    }
     return shelf.Response.notFound('Route not found');
   }
 
@@ -253,22 +324,33 @@ class WebUi {
         } on shelf.HijackException {
           rethrow;
         } catch (error, stackTrace) {
-          if (!wantsHtml(req)) rethrow;
-          _log.severe('error answering ${req.method} ${req.requestedUri.path}',
-              error, stackTrace);
-          return errorResponse(
-              req,
+          if (!_wantsPage(req)) rethrow;
+          _log.severe(
+              'error answering ${req.method} ${req.requestedUri.path}'
+              '${switch (requestIdOf(req)) {
+                final id? => ' (request $id)',
+                null => '',
+              }}',
+              error,
+              stackTrace);
+          return _rendering(() => errorResponse(
+              _local(req),
               HttpStatus.internalServerError,
               'Something went wrong',
-              'The server could not answer. Try again later.');
+              'The server could not answer. Try again later.'));
         }
       };
 
-  /// Shows the refusals routes throw as pages.
-  Future<shelf.Response> _reporting(
-      shelf.Request req, Future<shelf.Response> Function() route) async {
+  /// Shows the refusals routes throw as pages, and renders under the base
+  /// path. [route] gets the request relative to it.
+  Future<shelf.Response> _reporting(shelf.Request outer,
+          Future<shelf.Response> Function(shelf.Request) route) =>
+      _rendering(() => _report(_local(outer), route));
+
+  Future<shelf.Response> _report(shelf.Request req,
+      Future<shelf.Response> Function(shelf.Request) route) async {
     try {
-      return await route();
+      return await route(req);
     } on AuthException catch (error) {
       if (error.statusCode == HttpStatus.unauthorized) {
         return _redirect(loginLocation(req));
@@ -287,23 +369,24 @@ class WebUi {
   }
 
   shelf.Handler _guard(Future<shelf.Response> Function(shelf.Request) route) =>
-      (req) => _reporting(req, () => route(req));
+      (req) => _reporting(req, route);
 
   Function _guard1(
           Future<shelf.Response> Function(shelf.Request, String) route) =>
-      (shelf.Request req, String a) => _reporting(req, () => route(req, a));
+      (shelf.Request req, String a) =>
+          _reporting(req, (local) => route(local, a));
 
   Function _guard2(
           Future<shelf.Response> Function(shelf.Request, String, String)
               route) =>
       (shelf.Request req, String a, String b) =>
-          _reporting(req, () => route(req, a, b));
+          _reporting(req, (local) => route(local, a, b));
 
   Function _guard3(
           Future<shelf.Response> Function(shelf.Request, String, String, String)
               route) =>
       (shelf.Request req, String a, String b, String c) =>
-          _reporting(req, () => route(req, a, b, c));
+          _reporting(req, (local) => route(local, a, b, c));
 
   /// The fields of a form post, each with every value it was given.
   static Future<Map<String, List<String>>> _form(shelf.Request req) async {
@@ -488,7 +571,8 @@ class WebUi {
   }
 
   String _loginCookie(String value, {bool clear = false}) =>
-      '$loginCookieName=${clear ? '' : value}; Path=/login; HttpOnly; '
+      '$loginCookieName=${clear ? '' : value}; Path=$basePath/login; '
+      'HttpOnly; '
       'SameSite=Strict; Max-Age=${clear ? 0 : 3600}'
       '${_accountApi?.secureCookies ?? false ? '; Secure' : ''}';
 
@@ -574,7 +658,7 @@ class WebUi {
     switch (outcome) {
       case LoggedIn(:final result):
         return shelf.Response(HttpStatus.seeOther, headers: {
-          HttpHeaders.locationHeader: next ?? '/',
+          HttpHeaders.locationHeader: rebase(next ?? '/'),
           HttpHeaders.cacheControlHeader: 'no-store',
           HttpHeaders.setCookieHeader: [
             sessionCookieHeader(result.cookieValue, secure: api.secureCookies),
@@ -602,7 +686,7 @@ class WebUi {
     final cookie = sessionCookie(req);
     if (api != null && cookie != null) await api.accounts.logout(cookie);
     return shelf.Response(HttpStatus.seeOther, headers: {
-      HttpHeaders.locationHeader: '/',
+      HttpHeaders.locationHeader: rebase('/'),
       HttpHeaders.cacheControlHeader: 'no-store',
       HttpHeaders.setCookieHeader:
           clearedSessionCookieHeader(secure: api?.secureCookies ?? false),

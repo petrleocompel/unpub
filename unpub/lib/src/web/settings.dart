@@ -101,6 +101,10 @@ Map<String, Map<String, String>> settingsOverview(Config config) {
       'enabled': '${config.metrics.enabled}',
       'token': _secret(config.metrics.token),
     },
+    'ui': {
+      'assetsDir': config.ui.assetsDir ?? '(none)',
+      'mode': config.ui.mode.name,
+    },
     'logging': {
       'level': config.logging.level.name,
       'format': config.logging.format.name,

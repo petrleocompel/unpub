@@ -133,8 +133,10 @@ class UnpubServer {
         publishPolicy: PublishPolicy(config.publish),
         publicUrl: config.server.publicUrl,
         config: config,
+        ui: config.ui,
         metrics: metrics,
       );
+      _logUi(config.ui);
       final http = await app.serve(config.server.host, config.server.port);
       if (config.metrics.enabled) app.metricsSources.warmUp();
       final reclaimer = TemporaryReclaimer(packageStore,
@@ -146,6 +148,22 @@ class UnpubServer {
       await db.close().catchError((Object _) {});
       rethrow;
     }
+  }
+
+  static void _logUi(UiConfig ui) {
+    final directory = ui.assetsDir;
+    if (directory == null) {
+      _log.warning('no web client found in '
+          '${UiConfig.defaultAssetDirs.join(' or ')}, serving the '
+          'server-rendered pages only; build ui/ or set ui.assetsDir');
+      return;
+    }
+    _log.info(LogEvent('serving the web client', {
+      'assetsDir': directory,
+      'mode': ui.mode.name,
+      'client': ui.spaBasePath.isEmpty ? '/' : ui.spaBasePath,
+      'classic': ui.classicBasePath.isEmpty ? '/' : ui.classicBasePath,
+    }));
   }
 
   static void _warnAboutUnusedAllowlist(UpstreamConfig upstream) {

@@ -8,3 +8,7 @@
 # Local configuration, which may hold secrets.
 /unpub.yaml
 /unpub/unpub.yaml
+
+# The web client: dependencies and build output.
+/ui/node_modules/
+/ui/dist/

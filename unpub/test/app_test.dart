@@ -503,6 +503,82 @@ void main() {
       expect(record.error, isA<StateError>());
     });
 
+    App failingApp() => App(
+          metaStore: _ThrowingMetaStore(),
+          packageStore: packageStore,
+          authenticator:
+              const StaticTokenAuthenticator(bootstrapToken: 'secret'),
+        );
+
+    test('a 500 carries the request id in the header, body and log', () async {
+      final response = await failingApp().handler(get('/api/packages/foo'));
+      expect(response.statusCode, HttpStatus.internalServerError);
+      final id = response.headers['x-request-id']!;
+      expect(id, matches(RegExp(r'^[0-9a-f]{32}$')));
+      final body = await response.readAsString();
+      expect(response.headers['content-length'], '${utf8.encode(body).length}');
+      expect(json.decode(body), {
+        'error': {
+          'code': 'server_error',
+          'message': 'Internal Server Error',
+          'requestId': id,
+        },
+      });
+      final record = records.singleWhere((r) => r.level == Level.SEVERE);
+      expect((record.object as LogEvent).fields['requestId'], id);
+      expect(record.message, contains('requestId=$id'));
+    });
+
+    test('a 500 page shows the request id', () async {
+      final response = await failingApp().handler(get('/packages/foo',
+          headers: {'accept': 'text/html', 'x-request-id': 'edge-42.a_b'}));
+      expect(response.statusCode, HttpStatus.internalServerError);
+      expect(response.headers['x-request-id'], 'edge-42.a_b');
+      final page = await response.readAsString();
+      expect(page, contains('Something went wrong'));
+      expect(page, contains('<code>edge-42.a_b</code>'));
+      expect(
+          records.where((r) => r.level == Level.SEVERE).map((r) => r.message),
+          contains(contains('(request edge-42.a_b)')));
+    });
+
+    test('every answer has a request id, an incoming sane one kept', () async {
+      final app = createApp();
+      final fresh = await app.handler(get('/healthz'));
+      final other = await app.handler(get('/healthz'));
+      expect(fresh.headers['x-request-id'], matches(RegExp(r'^[0-9a-f]{32}$')));
+      expect(
+          other.headers['x-request-id'], isNot(fresh.headers['x-request-id']));
+      final event = records.first.object as LogEvent;
+      expect(event.fields['requestId'], fresh.headers['x-request-id']);
+
+      final notFound = await app.handler(
+          get('/api/packages/nothing', headers: {'x-request-id': 'abc'}));
+      expect(notFound.headers['x-request-id'], 'abc');
+      expect(await notFound.readAsString(), isNot(contains('requestId')));
+
+      for (final insane in [
+        '',
+        'a' * 65,
+        'has space',
+        'semi;colon',
+        'a,b',
+        'ünï',
+      ]) {
+        final reply = await app
+            .handler(get('/healthz', headers: {'x-request-id': insane}));
+        expect(
+            reply.headers['x-request-id'], matches(RegExp(r'^[0-9a-f]{32}$')),
+            reason: insane);
+      }
+      final longest = 'a' * 64;
+      expect(
+          (await app
+                  .handler(get('/healthz', headers: {'x-request-id': longest})))
+              .headers['x-request-id'],
+          longest);
+    });
+
     test('every request logs method, path, status and duration', () async {
       await createApp().handler(get('/healthz'));
       var event = records.single.object as LogEvent;

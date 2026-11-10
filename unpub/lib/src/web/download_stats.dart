@@ -29,10 +29,13 @@ class DownloadStats {
 
   /// Reads the statistics of [name] from [store]. Days are those of the
   /// server's local time, as the counters are.
+  ///
+  /// [top] versions are ranked, every one with downloads when it is null.
   static Future<DownloadStats> load(MetaStore store, String name,
       {required int total,
       required Iterable<String> versions,
-      DateTime? now}) async {
+      DateTime? now,
+      int? top = topVersionCount}) async {
     final today = now ?? DateTime.now();
     final dates = [
       for (var back = statsDays - 1; back >= 0; back--)
@@ -49,7 +52,7 @@ class DownloadStats {
     return DownloadStats(
       days: [for (final d in dates) (d, counts[_dayKey.format(d)] ?? 0)],
       total: total,
-      topVersions: ranked.take(topVersionCount).toList(),
+      topVersions: top == null ? ranked : ranked.take(top).toList(),
     );
   }
 }

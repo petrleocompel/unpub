@@ -66,6 +66,19 @@ void main() {
     });
   });
 
+  group('retention days', () {
+    test('are bounded so the duration cannot overflow', () {
+      expect(() => parse('audit:\n  retentionDays: 109500000\n'),
+          problemsContaining([contains('must be between 0 and 36500')]));
+      expect(() => parse(null, env: {'UNPUB_WEBHOOKS_RETENTION_DAYS': '-1'}),
+          problemsContaining([contains('must be between 0 and 36500')]));
+      final config = parse('audit:\n  retentionDays: 36500\n'
+          'webhooks:\n  retentionDays: 0\n');
+      expect(config.audit.retention, const Duration(days: 36500));
+      expect(config.webhooks.retention, isNull);
+    });
+  });
+
   group('forwarded address', () {
     test('is not trusted by default', () {
       expect(parse(null).server.trustForwardedFor, isFalse);
@@ -673,6 +686,68 @@ upstream:
         expect('$error', isNot(contains('hunter2')));
       }
     });
+  });
+
+  group('ui', () {
+    late Directory client;
+
+    setUp(() async {
+      client = await Directory.systemTemp.createTemp('unpub-ui-');
+      await File(path.join(client.path, 'index.html')).writeAsString('<html>');
+    });
+
+    tearDown(() => client.delete(recursive: true));
+
+    test('without a built client is the server-rendered UI', () {
+      // Neither /app/ui nor ui/dist exists where the tests run.
+      final ui = parse(null).ui;
+      expect(ui.assetsDir, isNull);
+      expect(ui.mode, UiMode.ssr);
+      expect(ui.classicBasePath, '');
+    });
+
+    test('a directory with index.html makes the client the default', () {
+      final ui = parse('ui:\n  assetsDir: ${client.path}\n').ui;
+      expect(ui.assetsDir, client.path);
+      expect(ui.mode, UiMode.spa);
+      expect(ui.spaBasePath, '');
+      expect(ui.classicBasePath, '/classic');
+    });
+
+    test('reads the environment', () {
+      final ui = parse(null, env: {
+        'UNPUB_UI_ASSETS_DIR': client.path,
+        'UNPUB_UI_MODE': 'ssr',
+      }).ui;
+      expect(ui.assetsDir, client.path);
+      expect(ui.mode, UiMode.ssr);
+      expect(ui.spaBasePath, '/app');
+      expect(ui.classicBasePath, '');
+    });
+
+    test('spa without a client is an error', () {
+      expect(() => parse('ui:\n  mode: spa\n'),
+          problemsContaining([contains('no web client was found')]));
+    });
+
+    test('an assetsDir without index.html is an error', () {
+      expect(() => parse('ui:\n  assetsDir: ${client.path}/nope\n'),
+          problemsContaining([contains('must be a directory holding')]));
+    });
+
+    test('rejects an unknown mode', () {
+      expect(() => parse('ui:\n  mode: both\n'),
+          problemsContaining([contains('must be one of spa, ssr')]));
+    });
+  });
+
+  test('every key has its environment variable', () {
+    expect(
+        environmentVariableFor('server.publicUrl'), 'UNPUB_SERVER_PUBLIC_URL');
+    expect(environmentVariableFor('storage.s3.useSSL'),
+        'UNPUB_STORAGE_S3_USE_SSL');
+    expect(environmentVariableFor('ui.assetsDir'), 'UNPUB_UI_ASSETS_DIR');
+    expect(environmentVariableFor('mongo.uri'), 'UNPUB_MONGO_URI');
   });
 
   group('load', () {

@@ -5,10 +5,12 @@ import 'package:logging/logging.dart';
 import 'package:shelf/shelf.dart' as shelf;
 
 import 'logging.dart';
+import 'request_id.dart';
 
 final _log = Logger('unpub.http');
 
-/// Logs one line per request and turns uncaught handler errors into a 500.
+/// Logs one line per request, with the id of [requestIdMiddleware] when it
+/// set one, and turns uncaught handler errors into a 500.
 shelf.Middleware requestLogger() {
   return (shelf.Handler inner) {
     return (shelf.Request request) async {
@@ -23,6 +25,7 @@ shelf.Middleware requestLogger() {
             'path': request.requestedUri.path,
             'status': status,
             'durationMs': watch.elapsedMilliseconds,
+            if (requestIdOf(request) case final id?) 'requestId': id,
           }),
           error,
           st,
@@ -41,7 +44,10 @@ shelf.Middleware requestLogger() {
         return shelf.Response.internalServerError(
           headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
           body: json.encode({
-            'error': {'message': 'Internal Server Error'},
+            'error': {
+              'code': 'server_error',
+              'message': 'Internal Server Error'
+            },
           }),
         );
       }

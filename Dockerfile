@@ -1,3 +1,21 @@
+# syntax=docker/dockerfile:1
+
+# The web client in ui/, built when it exists. Without ui/package.json /out
+# stays empty and the server shows the server-rendered pages only.
+FROM node:22-alpine AS ui
+WORKDIR /ui
+RUN --mount=type=bind,target=/context \
+    --mount=type=cache,target=/root/.npm \
+    mkdir -p /out \
+    && if [ -f /context/ui/package.json ]; then \
+         cp -R /context/ui/. /ui/ \
+         && npm ci \
+         && npm run build \
+         && cp -R dist/. /out/; \
+       else \
+         echo 'ui/package.json not found, building without the web client'; \
+       fi
+
 FROM dart:stable AS build
 WORKDIR /src
 
@@ -19,6 +37,8 @@ COPY --from=build /out/app /app
 # from its parent, because COPY gives the destination directory a default mode.
 COPY --from=build /out/root/ /
 COPY --from=build --chown=65532:65532 /out/data /data
+# ui.assetsDir defaults to /app/ui when it holds index.html.
+COPY --from=ui /out /app/ui
 
 WORKDIR /app
 USER 65532:65532

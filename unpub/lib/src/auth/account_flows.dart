@@ -69,15 +69,16 @@ Set<Scope> requestedScopes(Object? raw, Principal principal, User user) {
 }
 
 /// The expiry of a new token living for [expiresIn], such as `30d`, or for
-/// ever when null. A token cannot outlive the one creating it.
+/// ever when null or `never`. A token cannot outlive the one creating it.
 DateTime? requestedExpiry(
     String? expiresIn, Principal principal, DateTime now) {
   DateTime? expiresAt;
-  if (expiresIn != null) {
-    final duration = parseDuration(expiresIn);
-    if (duration == null) {
-      throw const AccountException.invalid(
-          'expiresIn must look like 12h, 30d or 8w');
+  if (expiresIn != null && expiresIn.trim() != 'never') {
+    final Duration duration;
+    try {
+      duration = parseTokenLifetime(expiresIn, field: 'expiresIn');
+    } on FormatException catch (e) {
+      throw AccountException.invalid(e.message);
     }
     expiresAt = now.add(duration);
   }

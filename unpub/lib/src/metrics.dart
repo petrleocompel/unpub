@@ -103,6 +103,19 @@ class PatternRouter extends Router {
     return RegExp(pattern.toString());
   }
 
+  /// The verb and pattern of every route added, in order, without the HEAD
+  /// routes that come with each GET. A mounted handler appears as `ALL` and
+  /// its prefix.
+  Iterable<(String, String)> get routes sync* {
+    String? previous;
+    for (final (verb, route, _) in _patterns) {
+      // add() puts the HEAD of a GET right after it.
+      if (verb == 'HEAD' && previous == 'GET $route') continue;
+      previous = '$verb $route';
+      yield (verb, route);
+    }
+  }
+
   /// The pattern of the first route [method] and [path] match, as the router
   /// would choose it.
   String? patternOf(String method, String path) {

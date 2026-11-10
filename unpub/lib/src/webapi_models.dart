@@ -62,7 +62,6 @@ class WebapiDetailView {
   final String? changelog;
   List<DetailViewVersion> versions;
   List<String?> authors;
-  List<String>? dependencies;
   List<String> tags;
   bool isRetracted;
   DateTime? retractedAt;
@@ -84,7 +83,6 @@ class WebapiDetailView {
       this.changelog,
       this.versions,
       this.authors,
-      this.dependencies,
       this.tags,
       {this.isRetracted = false,
       this.retractedAt,

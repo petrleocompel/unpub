@@ -11,6 +11,7 @@ import 'auth/authenticator.dart';
 import 'config/config.dart';
 import 'metrics.dart';
 import 'publish_policy.dart';
+import 'request_id.dart';
 import 'request_logger.dart';
 import 'routes/admin_api_routes.dart';
 import 'routes/badge_routes.dart';
@@ -24,6 +25,7 @@ import 'store/audit_store.dart';
 import 'store/meta_store.dart';
 import 'store/package_store.dart';
 import 'upstream/upstream_proxy.dart';
+import 'web/spa.dart';
 import 'web/web_ui.dart';
 import 'webhooks/webhook_service.dart';
 
@@ -82,10 +84,21 @@ class App {
   /// page with its secrets redacted. Absent when embedding without one.
   final Config? config;
 
+  /// Which web UI is at `/`, and where the files of the single-page client
+  /// are. By default the server-rendered pages only.
+  final UiConfig ui;
+
   /// Holds the uploads in progress, so it lives as long as the app.
   late final _publishRoutes = PublishRoutes(this);
 
   late final _webUi = WebUi(this);
+
+  /// The single-page client, when [ui] has its files.
+  late final SpaClient? spaClient = switch (ui.assetsDir) {
+    final directory? => SpaClient(directory,
+        basePath: ui.spaBasePath, classicPath: ui.classicBasePath),
+    null => null,
+  };
 
   App({
     required this.metaStore,
@@ -102,21 +115,40 @@ class App {
     this.uploadValidator,
     this.publicUrl,
     this.config,
+    this.ui = const UiConfig(),
     Metrics? metrics,
-  }) : metrics = metrics ?? Metrics();
+  }) : metrics = metrics ?? Metrics() {
+    if (ui.mode == UiMode.spa && ui.assetsDir == null) {
+      throw ArgumentError.value(
+          ui, 'ui', 'the mode spa needs the assetsDir of the client');
+    }
+  }
 
   /// The complete request handler, including all middleware.
   shelf.Handler get handler {
     final router = this.router;
     return const shelf.Pipeline()
+        .addMiddleware(requestIdMiddleware())
         .addMiddleware(metrics.middleware(router))
         // Bearer tokens work cross-origin, but a session cookie must not: this
         // middleware echoes the origin, so credentialed requests stay disabled.
-        .addMiddleware(
-            corsHeaders(headers: {'Access-Control-Allow-Credentials': 'false'}))
+        // X-Request-Id is exposed so that a script can quote it in a report.
+        .addMiddleware(corsHeaders(headers: {
+          'Access-Control-Allow-Credentials': 'false',
+          'Access-Control-Expose-Headers': 'X-Request-Id',
+        }))
         .addMiddleware(requestLogger())
         .addMiddleware(authMiddleware(authenticator,
-            readAccess: readAccess, failureResponse: _webUi.authFailure))
+            readAccess: readAccess,
+            failureResponse: _webUi.authFailure,
+            pagesPath:
+                _webUi.basePath.isEmpty ? '' : _webUi.basePath.substring(1),
+            // The shell and files of the client hold no data, so that it can
+            // show its own login. Routes go first, as the router tries them.
+            isOpenRequest: (request) =>
+                spaClient?.resolve(request) != null &&
+                router.patternOf(request.method, '/${request.url.path}') ==
+                    null))
         .addMiddleware(_webUi.errorPages)
         .addHandler(router.call);
   }
@@ -133,7 +165,9 @@ class App {
   /// Every route, without the middleware of [handler]. Routes are matched in
   /// the order they are added.
   PatternRouter get router {
-    final router = PatternRouter(notFoundHandler: _webUi.notFound);
+    final router = PatternRouter(
+        notFoundHandler: (shelf.Request request) async =>
+            await spaClient?.handle(request) ?? _webUi.notFound(request));
     HealthRoutes(this).addRoutes(router);
     MetricsRoutes(this).addRoutes(router);
     PubApiRoutes(this).addRoutes(router);
