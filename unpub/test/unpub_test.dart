@@ -566,12 +566,13 @@ void main() {
       });
     });
 
-    test('serves the compiled ui', () async {
+    test('serves the web ui', () async {
       var index = await http.get(baseUri.resolve('/'));
       expect(index.statusCode, HttpStatus.ok);
       expect(index.headers['content-type'], contains('text/html'));
+      expect(index.body, contains(package0));
 
-      var script = await http.get(baseUri.resolve('/main.dart.js'));
+      var script = await http.get(baseUri.resolve('/static/app.js'));
       expect(script.statusCode, HttpStatus.ok);
       expect(script.headers['content-type'], contains('text/javascript'));
     });
@@ -622,7 +623,7 @@ void main() {
 
     for (var route in [
       '/',
-      '/main.dart.js',
+      '/packages/package_0',
       '/api/packages/package_0',
       '/api/packages/package_0/versions/0.0.1',
       '/packages/package_0/versions/0.0.1.tar.gz',

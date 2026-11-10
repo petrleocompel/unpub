@@ -117,6 +117,7 @@ class UnpubServer {
         upstreamProxy: upstreamProxy,
         publishPolicy: PublishPolicy(config.publish),
         publicUrl: config.server.publicUrl,
+        config: config,
       );
       final http = await app.serve(config.server.host, config.server.port);
       final reclaimer = TemporaryReclaimer(packageStore,

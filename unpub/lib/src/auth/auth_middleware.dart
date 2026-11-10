@@ -44,7 +44,16 @@ bool isHealthRequest(shelf.Request request) {
 }
 
 bool _isLoginRequest(shelf.Request request) =>
-    request.method == 'POST' && request.url.path == 'webapi/login';
+    request.method == 'POST' &&
+    (request.url.path == 'webapi/login' || request.url.path == 'login');
+
+/// Whether [request] reads a page that stays open in every read mode: the
+/// login form and the stylesheet and script it needs.
+bool isOpenPageRequest(shelf.Request request) {
+  if (!_readMethods.contains(request.method)) return false;
+  final path = request.url.path;
+  return path == 'login' || path.startsWith('static/');
+}
 
 /// Whether [path] is where a signed-in user looks after their own account.
 ///
@@ -54,7 +63,11 @@ bool _isOwnAccountRoute(String path) =>
     path == 'webapi/logout' ||
     path == 'webapi/me/password' ||
     path == 'webapi/tokens' ||
-    path.startsWith('webapi/tokens/');
+    path.startsWith('webapi/tokens/') ||
+    path == 'logout' ||
+    path == 'account/password' ||
+    path == 'account/tokens' ||
+    path.startsWith('account/tokens/');
 
 /// The principal set by [authMiddleware], if the request was authenticated.
 Principal? principalOf(shelf.Request request) =>
@@ -64,11 +77,17 @@ Principal? principalOf(shelf.Request request) =>
 ///
 /// Anything with credentials that are missing or not accepted is anonymous,
 /// and may only use safe methods while [readAccess] is `public`, plus the
-/// health probes and the login endpoint. Handlers read the identity with
-/// [principalOf] and apply the rules specific to their resource.
+/// health probes, the login endpoints and the login page with its assets.
+/// Handlers read the identity with [principalOf] and apply the rules specific
+/// to their resource.
+///
+/// A failure is answered by [failureResponse], [authFailureResponse] by
+/// default.
 shelf.Middleware authMiddleware(
   Authenticator authenticator, {
   ReadAccess readAccess = ReadAccess.public,
+  shelf.Response Function(shelf.Request request, AuthException error)?
+      failureResponse,
 }) {
   return (shelf.Handler inner) {
     return (shelf.Request request) async {
@@ -80,7 +99,8 @@ shelf.Middleware authMiddleware(
 
       try {
         final principal = await authenticator.authenticate(request);
-        _authorize(request, principal, readAccess);
+        _authorize(request, principal,
+            isOpenPageRequest(request) ? ReadAccess.public : readAccess);
         var authorized = request;
         final session = principal?.session;
         if (session != null && !_safeMethods.contains(request.method)) {
@@ -90,11 +110,14 @@ shelf.Middleware authMiddleware(
             ? authorized
             : authorized.change(context: {_principalContextKey: principal}));
       } on AuthException catch (error) {
-        return authFailureResponse(error);
+        return (failureResponse ?? _defaultFailure)(request, error);
       }
     };
   };
 }
+
+shelf.Response _defaultFailure(shelf.Request request, AuthException error) =>
+    authFailureResponse(error);
 
 void _authorize(
     shelf.Request request, Principal? principal, ReadAccess readAccess) {

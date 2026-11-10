@@ -14,7 +14,6 @@ import 'publish_policy.dart';
 import 'request_logger.dart';
 import 'routes/badge_routes.dart';
 import 'routes/health_routes.dart';
-import 'routes/legacy_ui_routes.dart';
 import 'routes/moderation_routes.dart';
 import 'routes/pub_api_routes.dart';
 import 'routes/publish_routes.dart';
@@ -23,6 +22,7 @@ import 'store/audit_store.dart';
 import 'store/meta_store.dart';
 import 'store/package_store.dart';
 import 'upstream/upstream_proxy.dart';
+import 'web/web_ui.dart';
 
 class App {
   /// meta information store
@@ -65,8 +65,14 @@ class App {
   final Future<void> Function(
       Map<String, dynamic> pubspec, String uploaderEmail)? uploadValidator;
 
+  /// The effective configuration, shown read-only on the admin settings
+  /// page with its secrets redacted. Absent when embedding without one.
+  final Config? config;
+
   /// Holds the uploads in progress, so it lives as long as the app.
   late final _publishRoutes = PublishRoutes(this);
+
+  late final _webUi = WebUi(this);
 
   App({
     required this.metaStore,
@@ -81,6 +87,7 @@ class App {
     this.publishPolicy = const PublishPolicy(PublishConfig()),
     this.uploadValidator,
     this.publicUrl,
+    this.config,
   });
 
   /// The complete request handler, including all middleware.
@@ -90,7 +97,9 @@ class App {
       .addMiddleware(
           corsHeaders(headers: {'Access-Control-Allow-Credentials': 'false'}))
       .addMiddleware(requestLogger())
-      .addMiddleware(authMiddleware(authenticator, readAccess: readAccess))
+      .addMiddleware(authMiddleware(authenticator,
+          readAccess: readAccess, failureResponse: _webUi.authFailure))
+      .addMiddleware(_webUi.errorPages)
       .addHandler(router.call);
 
   Future<HttpServer> serve([String host = '0.0.0.0', int port = 4000]) {
@@ -105,13 +114,13 @@ class App {
   /// Every route, without the middleware of [handler]. Routes are matched in
   /// the order they are added.
   Router get router {
-    final router = Router();
+    final router = Router(notFoundHandler: _webUi.notFound);
     HealthRoutes(this).addRoutes(router);
     PubApiRoutes(this).addRoutes(router);
     _publishRoutes.addRoutes(router);
     ModerationRoutes(this).addRoutes(router);
     WebapiRoutes(this).addRoutes(router);
-    LegacyUiRoutes().addRoutes(router);
+    _webUi.addRoutes(router);
     BadgeRoutes(this).addRoutes(router);
     accountApi?.addRoutes(router);
     return router;

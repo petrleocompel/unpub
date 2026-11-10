@@ -88,7 +88,7 @@ void main() {
 
     const readRoutes = [
       ['GET', ''],
-      ['GET', 'main.dart.js'],
+      ['GET', 'packages'],
       ['GET', 'api/packages/foo'],
       ['GET', 'packages/foo/versions/1.0.0.tar.gz'],
       ['GET', 'webapi/packages'],
