@@ -21,7 +21,8 @@ describe('account', () => {
 
     await user.type(await screen.findByLabelText('Name'), 'ci-read')
     await user.click(screen.getByRole('checkbox', { name: 'publish' }))
-    await user.selectOptions(screen.getByLabelText('Expires after'), '30d')
+    await user.click(screen.getByRole('button', { name: '30 d' }))
+    expect(screen.getByRole('button', { name: '30 d' })).toHaveAttribute('aria-pressed', 'true')
     await user.click(screen.getByRole('button', { name: 'Create token' }))
 
     const box = await screen.findByRole('status', { name: /ci-read/ })
@@ -57,17 +58,17 @@ describe('account', () => {
     const { user } = renderApp('/account', { me: f.me() })
     await user.type(await screen.findByLabelText('Current password'), 'old-password')
     await user.type(screen.getByLabelText('New password'), 'new-password-1')
-    await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-2')
+    await user.type(screen.getByLabelText('Repeat new password'), 'new-password-2')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('The new passwords do not match.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Confirm the new password')).toHaveAccessibleErrorMessage(
+    expect(screen.getByLabelText('Repeat new password')).toHaveAccessibleErrorMessage(
       'The new passwords do not match.',
     )
     expect(screen.getByLabelText('Current password')).not.toHaveAttribute('aria-invalid')
     expect(changed).toHaveLength(0)
 
-    await user.clear(screen.getByLabelText('Confirm the new password'))
-    await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-1')
+    await user.clear(screen.getByLabelText('Repeat new password'))
+    await user.type(screen.getByLabelText('Repeat new password'), 'new-password-1')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('Your other sessions have been logged out.')).toBeInTheDocument()
     expect(await changed[0]!.json()).toEqual({
@@ -86,7 +87,7 @@ describe('account', () => {
     const { user } = renderApp('/account', { me: f.me() })
     await user.type(await screen.findByLabelText('Current password'), 'nope')
     await user.type(screen.getByLabelText('New password'), 'new-password-1')
-    await user.type(screen.getByLabelText('Confirm the new password'), 'new-password-1')
+    await user.type(screen.getByLabelText('Repeat new password'), 'new-password-1')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByText('The current password is wrong.')).toBeInTheDocument()
     expect(screen.getByLabelText('Current password')).toHaveAccessibleErrorMessage(

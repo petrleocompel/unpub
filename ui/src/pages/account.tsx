@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from 'react'
-import { KeyRound, Loader2, Plus, Trash2 } from 'lucide-react'
-import { useSearchParams } from 'react-router'
+import { Ban, Clock, Info, KeyRound, Loader2, Lock, Plus, User } from 'lucide-react'
+import { useLocation, useSearchParams } from 'react-router'
 import { ApiError, errorMessage } from '@/api/client'
 import { useChangePassword, useCreateToken, useRevokeToken, useTokens } from '@/api/queries'
 import type { Scope, Token, TokenCreated } from '@/api/types'
@@ -8,81 +8,115 @@ import { hostedUrl, useSession } from '@/auth/session'
 import { RoleBadge, ScopeBadge } from '@/components/badges'
 import { CodeBlock } from '@/components/copy-button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CompactTable } from '@/components/dashboard/compact-table'
+import { Panel, PanelBody, PanelFooter, PanelHeader, ToneBadge } from '@/components/dashboard/panel'
+import { Segmented } from '@/components/dashboard/segmented'
+import {
+  DashboardHeading,
+  DashboardShell,
+  type DashboardSection,
+} from '@/components/dashboard/shell'
 import { Field, FormError, invalidField } from '@/components/form'
-import { NativeSelect } from '@/components/native-select'
 import { intParam, Pager } from '@/components/pager'
 import { SecretBox } from '@/components/secret-box'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/states'
-import { DateTime, RelativeTime } from '@/components/time'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Page } from '@/layout/root'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatDate, formatRelative } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useTitle } from '@/lib/use-title'
 
 export const expiryOptions = [
-  { value: '30d', label: '30 days' },
-  { value: '90d', label: '90 days' },
-  { value: '1y', label: '1 year' },
+  { value: '30d', label: '30 d' },
+  { value: '90d', label: '90 d' },
+  { value: '1y', label: '1 y' },
   { value: 'never', label: 'Never' },
 ]
 
+const sectionIds = ['profile', 'password', 'tokens'] as const
+
 export function AccountPage() {
   useTitle('Account')
+  const { hash } = useLocation()
+  const shown = sectionIds.find((id) => hash === `#${id}`) ?? 'profile'
+  const sections: DashboardSection[] = [
+    { hash: 'profile', label: 'Profile', icon: User },
+    { hash: 'password', label: 'Password', icon: Lock },
+    { hash: 'tokens', label: 'API tokens', icon: KeyRound },
+  ].map((section) => ({ ...section, current: section.hash === shown }))
   return (
-    <Page>
+    <DashboardShell label="Account" sections={sections} mainClassName="max-w-[68.75rem]">
+      <DashboardHeading
+        title="Account"
+        description={
+          <>
+            Your profile, your password and the tokens <InlineCode>dart pub</InlineCode> and CI use.
+          </>
+        }
+      />
       <div className="grid gap-6">
-        <h1 className="text-2xl font-semibold">Account</h1>
         <Profile />
-        <Tokens />
         <PasswordForm />
+        <Tokens />
       </div>
-    </Page>
+    </DashboardShell>
   )
+}
+
+function InlineCode({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="rounded-sm border bg-muted px-1 py-px font-mono text-[0.75rem] text-foreground">
+      {children}
+    </code>
+  )
+}
+
+/** Up to two letters for an avatar: of the display name, else of the email. */
+export function initials(name: string | null | undefined, email: string) {
+  const words = (name ?? '').trim().split(/\s+/).filter(Boolean)
+  if (words.length >= 2) return `${words[0]![0]}${words[words.length - 1]![0]}`.toUpperCase()
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase()
+  const local = email.split('@')[0] ?? email
+  const parts = local.split(/[._-]+/).filter(Boolean)
+  return (parts.length >= 2 ? `${parts[0]![0]}${parts[1]![0]}` : local.slice(0, 2)).toUpperCase()
 }
 
 function Profile() {
   const { me } = useSession()
   if (!me) return null
   const user = me.user
+  const displayName = 'displayName' in user ? user.displayName : null
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>Profile</h2>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[10rem_1fr]">
+    <Panel id="profile" aria-labelledby="profile-title" className="scroll-mt-20">
+      <PanelHeader title="Profile" titleId="profile-title" />
+      <PanelBody className="flex flex-wrap items-start gap-6">
+        <span
+          aria-hidden
+          className="grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
+        >
+          {initials(displayName, user.email)}
+        </span>
+        <dl className="grid max-w-160 grow grid-cols-1 gap-x-4 gap-y-0.5 text-[0.8125rem] sm:grid-cols-[11.25rem_minmax(0,1fr)] sm:gap-y-2.5 [&>dd]:mb-2.5 sm:[&>dd]:mb-0">
           <dt className="text-muted-foreground">Email</dt>
-          <dd>{user.email}</dd>
+          <dd className="font-medium break-all">{user.email}</dd>
           <dt className="text-muted-foreground">Display name</dt>
-          <dd>{('displayName' in user && user.displayName) || '–'}</dd>
+          <dd>{displayName || '–'}</dd>
           <dt className="text-muted-foreground">Role</dt>
           <dd>
             <RoleBadge role={user.role} />
           </dd>
-          <dt className="text-muted-foreground">Scopes of this session</dt>
-          <dd className="flex gap-1.5">
+          <dt className="text-muted-foreground">This session</dt>
+          <dd className="flex flex-wrap items-center gap-2">
             {me.scopes.map((scope) => (
               <ScopeBadge key={scope} scope={scope} />
             ))}
           </dd>
         </dl>
-      </CardContent>
-    </Card>
+      </PanelBody>
+    </Panel>
   )
 }
 
@@ -126,68 +160,69 @@ function PasswordForm() {
         : null
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>Change password</h2>
-        </CardTitle>
-        <CardDescription>
-          Your other sessions are logged out when the password changes.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isSession ? (
-          <form onSubmit={submit} className="grid max-w-sm gap-4">
+    <Panel id="password" aria-labelledby="password-title" className="scroll-mt-20">
+      <PanelHeader title="Change password" titleId="password-title" />
+      {isSession ? (
+        <form onSubmit={submit}>
+          <PanelBody className="grid gap-4">
             {/* For password managers. */}
             <input type="text" autoComplete="username" hidden readOnly value="" />
-            <Field id={`${id}-current`} label="Current password">
-              <Input
-                id={`${id}-current`}
-                type="password"
-                autoComplete="current-password"
-                required
-                value={current}
-                {...invalidField(`${id}-error`, wrongCurrent)}
-                onChange={(event) => setCurrent(event.target.value)}
-              />
-            </Field>
-            <Field id={`${id}-new`} label="New password" hint="At least 8 characters.">
-              <Input
-                id={`${id}-new`}
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                value={next}
-                aria-describedby={`${id}-new-hint`}
-                onChange={(event) => setNext(event.target.value)}
-              />
-            </Field>
-            <Field id={`${id}-confirm`} label="Confirm the new password">
-              <Input
-                id={`${id}-confirm`}
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                value={confirm}
-                {...invalidField(`${id}-error`, mismatch)}
-                onChange={(event) => setConfirm(event.target.value)}
-              />
-            </Field>
-            <FormError id={`${id}-error`} message={error} />
-            <div>
-              <Button type="submit" disabled={change.isPending}>
-                {change.isPending && <Loader2 aria-hidden className="animate-spin" />}
-                Change password
-              </Button>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Field id={`${id}-current`} label="Current password">
+                <Input
+                  id={`${id}-current`}
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={current}
+                  {...invalidField(`${id}-error`, wrongCurrent)}
+                  onChange={(event) => setCurrent(event.target.value)}
+                />
+              </Field>
+              <Field id={`${id}-new`} label="New password" hint="At least 8 characters.">
+                <Input
+                  id={`${id}-new`}
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={next}
+                  aria-describedby={`${id}-new-hint`}
+                  onChange={(event) => setNext(event.target.value)}
+                />
+              </Field>
+              <Field id={`${id}-confirm`} label="Repeat new password">
+                <Input
+                  id={`${id}-confirm`}
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={confirm}
+                  {...invalidField(`${id}-error`, mismatch)}
+                  onChange={(event) => setConfirm(event.target.value)}
+                />
+              </Field>
             </div>
-          </form>
-        ) : (
+            <FormError id={`${id}-error`} message={error} />
+          </PanelBody>
+          <PanelFooter className="justify-between">
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Info aria-hidden className="size-3 shrink-0" />
+              Saving logs out your other sessions.
+            </p>
+            <Button type="submit" size="sm" disabled={change.isPending}>
+              {change.isPending && <Loader2 aria-hidden className="animate-spin" />}
+              Change password
+            </Button>
+          </PanelFooter>
+        </form>
+      ) : (
+        <PanelBody>
           <p className="text-sm text-muted-foreground">Log in with your password to change it.</p>
-        )}
-      </CardContent>
-    </Card>
+        </PanelBody>
+      )}
+    </Panel>
   )
 }
 
@@ -202,24 +237,26 @@ function Tokens() {
   const [now] = useState(() => Date.now())
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>API tokens</h2>
-        </CardTitle>
-        <CardDescription>
-          Tokens let <code className="font-mono">dart pub</code> and scripts act as you, limited to
-          their scopes.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-6">
+    <Panel id="tokens" aria-labelledby="tokens-title" className="scroll-mt-20">
+      <PanelHeader
+        title="API tokens"
+        titleId="tokens-title"
+        description={
+          <>
+            For <InlineCode>dart pub</InlineCode>, CI and scripts. A token has your role at most.
+          </>
+        }
+      />
+      <PanelBody className="grid gap-5">
         {created && (
           <SecretBox
             title={`Token “${created.token.name}” created`}
             secret={created.secret}
             label="the token"
           >
-            <p className="text-sm">Add it to the pub client, which asks for the token:</p>
+            <p className="text-sm">
+              Then tell <InlineCode>dart pub</InlineCode> about it and paste the token when asked:
+            </p>
             <CodeBlock code={`dart pub token add ${hostedUrl(config)}`} label="the token command" />
             <div>
               <Button variant="outline" size="sm" onClick={() => setCreated(null)}>
@@ -240,7 +277,7 @@ function Tokens() {
           </EmptyState>
         ) : (
           <div className="grid gap-3">
-            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+            <CompactTable>
               <caption className="sr-only">Your API tokens, newest first</caption>
               <TableHeader>
                 <TableRow>
@@ -262,16 +299,13 @@ function Tokens() {
                   return (
                     <TableRow
                       key={token.id}
-                      className={inactive ? 'text-muted-foreground' : undefined}
+                      data-muted={inactive || undefined}
+                      data-expanded={token.id === created?.token.id || undefined}
                     >
-                      <TableCell className="font-medium">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {token.name}
-                          {token.revokedAt && <Badge variant="outline">Revoked</Badge>}
-                          {!token.revokedAt && expired && <Badge variant="outline">Expired</Badge>}
-                        </div>
+                      <TableCell className="font-medium">{token.name}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {token.prefix}…
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{token.prefix}…</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           {token.scopes.map((scope) => (
@@ -280,23 +314,41 @@ function Tokens() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <DateTime value={token.createdAt} date />
+                        <When value={token.createdAt} now={now} />
                       </TableCell>
                       <TableCell>
-                        {token.lastUsedAt ? <RelativeTime value={token.lastUsedAt} /> : 'Never'}
+                        {token.lastUsedAt ? (
+                          <When value={token.lastUsedAt} now={now} />
+                        ) : (
+                          <span className="text-muted-foreground">never</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {token.expiresAt ? <DateTime value={token.expiresAt} date /> : 'Never'}
+                        {token.revokedAt ? (
+                          <ToneBadge tone="neutral">
+                            <Ban aria-hidden />
+                            Revoked
+                          </ToneBadge>
+                        ) : expired ? (
+                          <ToneBadge tone="neutral">
+                            <Clock aria-hidden />
+                            Expired
+                          </ToneBadge>
+                        ) : token.expiresAt ? (
+                          <When value={token.expiresAt} now={now} />
+                        ) : (
+                          <span className="text-muted-foreground">never</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {!token.revokedAt && (
                           <Button
-                            variant="ghost"
-                            size="sm"
+                            variant="outline"
+                            size="xs"
+                            className="border-destructive/45 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => setRevoking(token)}
                             aria-label={`Revoke ${token.name}`}
                           >
-                            <Trash2 aria-hidden />
                             Revoke
                           </Button>
                         )}
@@ -305,7 +357,7 @@ function Tokens() {
                   )
                 })}
               </TableBody>
-            </Table>
+            </CompactTable>
             <Pager
               page={tokens.data.page}
               size={tokens.data.size}
@@ -327,8 +379,17 @@ function Tokens() {
             toast.success(`Revoked ${revoking.name}`)
           }}
         />
-      </CardContent>
-    </Card>
+      </PanelBody>
+    </Panel>
+  )
+}
+
+/** A time as "3 days ago" or "in 90 days", with the date in its title. */
+function When({ value, now }: { value: string; now: number }) {
+  return (
+    <time dateTime={value} title={formatDate(value)} className="whitespace-nowrap">
+      {formatRelative(value, now)}
+    </time>
   )
 }
 
@@ -359,26 +420,19 @@ function CreateTokenForm({ onCreated }: { onCreated: (created: TokenCreated) => 
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="grid gap-4 rounded-lg border p-4"
-      aria-labelledby={`${id}-title`}
-    >
-      <h3 id={`${id}-title`} className="font-semibold">
-        Create a token
-      </h3>
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+    <form onSubmit={submit} className="grid gap-3" aria-label="New token">
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_auto_auto_auto] md:items-end">
         <Field id={`${id}-name`} label="Name">
           <Input
             id={`${id}-name`}
             required
             value={name}
-            placeholder="laptop, ci-read, …"
+            placeholder="e.g. github-actions"
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
         <fieldset className="grid gap-2">
-          <legend className="mb-2 text-sm font-medium">Scopes</legend>
+          <legend className="mb-2 text-sm leading-none font-medium">Scopes</legend>
           <div className="flex h-9 items-center gap-4">
             {(['read', 'publish'] as const).map((scope) => (
               <div key={scope} className="flex items-center gap-2">
@@ -401,28 +455,13 @@ function CreateTokenForm({ onCreated }: { onCreated: (created: TokenCreated) => 
             ))}
           </div>
         </fieldset>
-        <Field id={`${id}-expiry`} label="Expires after">
-          <NativeSelect
-            id={`${id}-expiry`}
-            value={expiry}
-            onChange={(event) => setExpiry(event.target.value)}
-            className="w-32"
-          >
-            {expiryOptions.map((option) => (
-              <option key={option.label} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </Field>
-      </div>
-      {me?.user.role === 'reader' && (
-        <p className="text-xs text-muted-foreground">
-          As a reader you can create read tokens only.
-        </p>
-      )}
-      <FormError id={`${id}-error`} message={create.error ? errorMessage(create.error) : null} />
-      <div>
+        <Segmented
+          label="Expires"
+          value={expiry}
+          options={expiryOptions}
+          onChange={setExpiry}
+          className="[&_button]:flex-1 [&>[role=group]]:w-full md:[&>[role=group]]:w-fit"
+        />
         <Button type="submit" disabled={create.isPending || chosen.length === 0}>
           {create.isPending ? (
             <Loader2 aria-hidden className="animate-spin" />
@@ -432,6 +471,12 @@ function CreateTokenForm({ onCreated }: { onCreated: (created: TokenCreated) => 
           Create token
         </Button>
       </div>
+      {me?.user.role === 'reader' && (
+        <p className="text-xs text-muted-foreground">
+          As a reader you can create read tokens only.
+        </p>
+      )}
+      <FormError id={`${id}-error`} message={create.error ? errorMessage(create.error) : null} />
     </form>
   )
 }
