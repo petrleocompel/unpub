@@ -41,6 +41,8 @@
   --chart-bar: oklch(0.56 0.15 255);
   --chart-grid: oklch(0.92 0.006 258);
   --code: oklch(0.972 0.005 258);
+  /* Behind dialogs and sheets. */
+  --scrim: oklch(0.15 0.02 258 / 0.45);
 
   --elevation-xs: 0 1px 2px oklch(0.2 0.02 258 / 0.06);
   --elevation-sm: 0 1px 3px oklch(0.2 0.02 258 / 0.08), 0 1px 2px oklch(0.2 0.02 258 / 0.04);
@@ -75,6 +77,7 @@
   --chart-bar: oklch(0.7 0.13 252);
   --chart-grid: oklch(0.3 0.016 258);
   --code: oklch(0.205 0.016 258);
+  --scrim: oklch(0 0 0 / 0.6);
 
   --elevation-xs: 0 1px 2px oklch(0 0 0 / 0.3);
   --elevation-sm: 0 1px 3px oklch(0 0 0 / 0.35);
@@ -119,4 +122,5 @@
   --color-chart-bar: var(--chart-bar);
   --color-chart-grid: var(--chart-grid);
   --color-code: var(--code);
+  --color-scrim: var(--scrim);
 }
