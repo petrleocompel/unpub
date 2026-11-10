@@ -30,7 +30,7 @@ function usersApi(initial: User[]) {
         id: `u${users.length + 1}`,
         email: body.email!,
         role: body.role!,
-        displayName: body.displayName ?? null,
+        displayName: body.displayName ?? '',
       })
       users = [...users, created]
       return HttpResponse.json({ user: created }, { status: 201 })

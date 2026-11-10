@@ -35,8 +35,8 @@ import { useTitle } from '@/lib/use-title'
 export const expiryOptions = [
   { value: '30d', label: '30 days' },
   { value: '90d', label: '90 days' },
-  { value: '365d', label: '1 year' },
-  { value: '', label: 'Never' },
+  { value: '1y', label: '1 year' },
+  { value: 'never', label: 'Never' },
 ]
 
 export function AccountPage() {

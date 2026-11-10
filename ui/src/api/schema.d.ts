@@ -658,6 +658,29 @@ export interface components {
     Role: 'admin' | 'publisher' | 'reader'
     /** @enum {string} */
     Scope: 'read' | 'publish'
+    /**
+     * @example {
+     *       "version": "3.0.0-dev.6",
+     *       "publicUrl": "https://pub.example.com",
+     *       "readAccess": "authenticated",
+     *       "accounts": true,
+     *       "upstream": {
+     *         "url": "https://pub.dev",
+     *         "mode": "proxy"
+     *       },
+     *       "features": {
+     *         "metrics": true,
+     *         "webhooks": true,
+     *         "spa": true,
+     *         "classic": true
+     *       },
+     *       "ui": {
+     *         "mode": "spa",
+     *         "basePath": "",
+     *         "classicPath": "/classic"
+     *       }
+     *     }
+     */
     Config: {
       /**
        * @description The version of the server.
@@ -753,16 +776,77 @@ export interface components {
       downloads: number
       /**
        * @deprecated
-       * @description The same as `published`.
+       * @description The same as `published`. Still sent, but not required; read `published`.
        */
-      createdAt: components['schemas']['DateTime']
+      createdAt?: components['schemas']['DateTime']
       /**
        * @deprecated
-       * @description The same as `retracted`.
+       * @description The same as `retracted`. Still sent, but not required; read `retracted`.
        */
-      isRetracted: boolean
+      isRetracted?: boolean
     }
-    /** @description A package at one version, with every version listed. */
+    /**
+     * @description A package at one version, with every version listed. It comes wrapped as `{"data": ...}`, a legacy of the former web UI that stays. Field names keep their former spelling where they had one (`isDiscontinued`, not `discontinued`); the deprecated twins `createdAt`, `isRetracted`, `authors` and `tags` are still sent.
+     * @example {
+     *       "name": "alpha_client",
+     *       "version": "1.4.0",
+     *       "latest": "1.4.0",
+     *       "description": "A client for the Alpha service.",
+     *       "published": "2026-11-02T09:14:00.000Z",
+     *       "uploader": "dev@example.com",
+     *       "uploaders": [
+     *         "dev@example.com",
+     *         "lead@example.com"
+     *       ],
+     *       "versions": [
+     *         {
+     *           "version": "1.4.0",
+     *           "published": "2026-11-02T09:14:00.000Z",
+     *           "uploader": "dev@example.com",
+     *           "retracted": false,
+     *           "prerelease": false,
+     *           "downloads": 210,
+     *           "createdAt": "2026-11-02T09:14:00.000Z",
+     *           "isRetracted": false
+     *         }
+     *       ],
+     *       "readmeHtml": "<h1>alpha_client</h1>",
+     *       "changelogHtml": null,
+     *       "readme": "# alpha_client",
+     *       "changelog": null,
+     *       "dependencies": [
+     *         {
+     *           "name": "http",
+     *           "constraint": "^1.2.0",
+     *           "hosted": true,
+     *           "local": false
+     *         }
+     *       ],
+     *       "devDependencies": [],
+     *       "environment": {
+     *         "sdk": "^3.5.0",
+     *         "flutter": null
+     *       },
+     *       "platforms": [],
+     *       "retracted": false,
+     *       "retractedAt": null,
+     *       "isDiscontinued": false,
+     *       "replacedBy": null,
+     *       "discontinuedAt": null,
+     *       "archiveSha256": "3b1f0c9e0d4a7b2c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d",
+     *       "downloads": {
+     *         "version": 210,
+     *         "package": 1287
+     *       },
+     *       "private": true,
+     *       "isFlutter": false,
+     *       "homepage": "https://alpha.example.com",
+     *       "repository": null,
+     *       "issueTracker": null,
+     *       "documentation": null,
+     *       "license": null
+     *     }
+     */
     Package: {
       name: string
       /** @description The version shown. */
@@ -833,6 +917,145 @@ export interface components {
     PackageResponse: {
       data: components['schemas']['Package']
     }
+    /**
+     * @example {
+     *       "name": "alpha_client",
+     *       "total": 1287,
+     *       "recent": 86,
+     *       "days": [
+     *         {
+     *           "day": "2026-10-12",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-13",
+     *           "count": 4
+     *         },
+     *         {
+     *           "day": "2026-10-14",
+     *           "count": 2
+     *         },
+     *         {
+     *           "day": "2026-10-15",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-16",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-17",
+     *           "count": 7
+     *         },
+     *         {
+     *           "day": "2026-10-18",
+     *           "count": 3
+     *         },
+     *         {
+     *           "day": "2026-10-19",
+     *           "count": 1
+     *         },
+     *         {
+     *           "day": "2026-10-20",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-21",
+     *           "count": 5
+     *         },
+     *         {
+     *           "day": "2026-10-22",
+     *           "count": 6
+     *         },
+     *         {
+     *           "day": "2026-10-23",
+     *           "count": 2
+     *         },
+     *         {
+     *           "day": "2026-10-24",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-25",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-26",
+     *           "count": 4
+     *         },
+     *         {
+     *           "day": "2026-10-27",
+     *           "count": 3
+     *         },
+     *         {
+     *           "day": "2026-10-28",
+     *           "count": 8
+     *         },
+     *         {
+     *           "day": "2026-10-29",
+     *           "count": 1
+     *         },
+     *         {
+     *           "day": "2026-10-30",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-10-31",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-11-01",
+     *           "count": 6
+     *         },
+     *         {
+     *           "day": "2026-11-02",
+     *           "count": 5
+     *         },
+     *         {
+     *           "day": "2026-11-03",
+     *           "count": 2
+     *         },
+     *         {
+     *           "day": "2026-11-04",
+     *           "count": 3
+     *         },
+     *         {
+     *           "day": "2026-11-05",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-11-06",
+     *           "count": 0
+     *         },
+     *         {
+     *           "day": "2026-11-07",
+     *           "count": 9
+     *         },
+     *         {
+     *           "day": "2026-11-08",
+     *           "count": 7
+     *         },
+     *         {
+     *           "day": "2026-11-09",
+     *           "count": 4
+     *         },
+     *         {
+     *           "day": "2026-11-10",
+     *           "count": 4
+     *         }
+     *       ],
+     *       "versions": [
+     *         {
+     *           "version": "1.4.0",
+     *           "downloads": 210
+     *         },
+     *         {
+     *           "version": "1.3.2",
+     *           "downloads": 0
+     *         }
+     *       ]
+     *     }
+     */
     Stats: {
       name: string
       /** @description Every download counted. */
@@ -851,10 +1074,24 @@ export interface components {
         downloads: number
       }[]
     }
+    /**
+     * @example {
+     *       "id": "6730a1b2c3d4e5f6a7b8c9d0",
+     *       "email": "dev@example.com",
+     *       "displayName": "Dev Example",
+     *       "role": "publisher",
+     *       "disabled": false,
+     *       "hasPassword": true,
+     *       "createdAt": "2026-10-01T08:00:00.000Z",
+     *       "updatedAt": "2026-10-01T08:00:00.000Z",
+     *       "lastLoginAt": "2026-11-09T07:45:12.000Z"
+     *     }
+     */
     User: {
       id: string
       email: string
-      displayName: string | null
+      /** @description Never null; the part of the email before `@` unless one was given. */
+      displayName: string
       role: components['schemas']['Role']
       disabled: boolean
       /** @description False for a placeholder that cannot log in. */
@@ -883,6 +1120,22 @@ export interface components {
       user: components['schemas']['User']
       csrfToken: string
     }
+    /**
+     * @example {
+     *       "id": "6730c0a1b2c3d4e5f6a7b8c9",
+     *       "userId": "6730a1b2c3d4e5f6a7b8c9d0",
+     *       "name": "CI",
+     *       "prefix": "up_3f9a",
+     *       "scopes": [
+     *         "read",
+     *         "publish"
+     *       ],
+     *       "expiresAt": "2027-02-08T10:00:00.000Z",
+     *       "lastUsedAt": null,
+     *       "createdAt": "2026-11-10T10:00:00.000Z",
+     *       "revokedAt": null
+     *     }
+     */
     Token: {
       id: string
       userId: string
@@ -903,6 +1156,20 @@ export interface components {
     TokenPage: components['schemas']['PageInfo'] & {
       items: components['schemas']['Token'][]
     }
+    /**
+     * @example {
+     *       "at": "2026-11-02T09:14:00.000Z",
+     *       "action": "package.published",
+     *       "actor": "dev@example.com",
+     *       "actorKind": "token",
+     *       "token": "up_3f9a",
+     *       "package": "alpha_client",
+     *       "version": "1.4.0",
+     *       "target": null,
+     *       "ip": "10.0.0.12",
+     *       "details": {}
+     *     }
+     */
     AuditEvent: {
       at: components['schemas']['DateTime']
       /** @example package.published */
@@ -943,6 +1210,21 @@ export interface components {
       events: components['schemas']['WebhookEvent'][]
       description?: string
     }
+    /**
+     * @example {
+     *       "id": "6730b0e1a9d3e4b5c6d7e8a1",
+     *       "url": "https://ci.example.com/hooks/unpub",
+     *       "events": [
+     *         "package.published",
+     *         "version.retracted"
+     *       ],
+     *       "description": "Rebuild the docs",
+     *       "enabled": true,
+     *       "createdAt": "2026-10-20T12:00:00.000Z",
+     *       "updatedAt": "2026-10-20T12:00:00.000Z",
+     *       "createdBy": "admin@example.com"
+     *     }
+     */
     Webhook: {
       id: string
       /** Format: uri */
@@ -1378,8 +1660,11 @@ export interface operations {
           /** @description By default every scope the role and the credential allow. */
           scopes?: components['schemas']['Scope'][]
           /**
-           * @description A lifetime such as `30d`, `90d`, `52w` or `12h`. Without it the token does not expire.
+           * @description The lifetime: a positive number of at most six digits and a unit, `s`, `m`, `h`, `d`, `w` (7 days) or `y` (365 days), such as `12h`, `30d`, `90d`, `52w` or `1y`; or `never`, the same as leaving it out, for a token that does not expire. A token created by a token that expires cannot outlive it: `never` or no value then gives the expiry of the creating token, and a later one is refused with 400 `invalid_request`.
            * @example 30d
+           * @example 90d
+           * @example 1y
+           * @example never
            */
           expiresIn?: string
         }
