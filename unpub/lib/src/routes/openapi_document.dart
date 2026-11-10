@@ -303,8 +303,10 @@ paths:
                   description: >-
                     The lifetime: a positive number of at most six digits and a
                     unit, `s`, `m`, `h`, `d`, `w` (7 days) or `y` (365 days), such
-                    as `12h`, `30d`, `90d`, `52w` or `1y`; or `never`, the same as
-                    leaving it out, for a token that does not expire. A token
+                    as `12h`, `30d`, `90d`, `52w` or `1y`, of at most 100 years
+                    (`100y`, `36500d`), a longer one being refused with 400
+                    `invalid_request`; or `never`, the same as leaving it out, for
+                    a token that does not expire. A token
                     created by a token that expires cannot outlive it: `never` or
                     no value then gives the expiry of the creating token, and a
                     later one is refused with 400 `invalid_request`.

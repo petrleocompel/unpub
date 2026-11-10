@@ -1218,6 +1218,28 @@ void main() {
       expect(never.body['token']['expiresAt'], isNull);
     });
 
+    test('expiresIn is at most 100 years', () async {
+      final hundred = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'hundred', 'expiresIn': '100y'});
+      expect(hundred.status, HttpStatus.created, reason: '${hundred.body}');
+      final expiresAt =
+          DateTime.parse(hundred.body['token']['expiresAt'] as String);
+      expect(expiresAt.difference(DateTime.now()).inDays,
+          inInclusiveRange(36499, 36500));
+      for (final expiresIn in ['101y', '36501d', '300000y', '999999y']) {
+        final reply = await send('POST', '/webapi/tokens',
+            browser: browser, body: {'name': 'long', 'expiresIn': expiresIn});
+        expect(reply.status, HttpStatus.badRequest, reason: expiresIn);
+        expect(reply.body['error']['code'], 'invalid_request');
+        expect(reply.body['error']['message'],
+            'expiresIn must be at most 100y, or be never for no expiry');
+      }
+      final zero = await send('POST', '/webapi/tokens',
+          browser: browser, body: {'name': 'zero', 'expiresIn': '0d'});
+      expect(zero.status, HttpStatus.badRequest);
+      expect(zero.body['error']['message'], contains('must look like'));
+    });
+
     test('defaults to the scopes the role allows', () async {
       final reply = await send('POST', '/webapi/tokens',
           browser: browser, body: {'name': 'x'});

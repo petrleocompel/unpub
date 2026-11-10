@@ -368,7 +368,28 @@ void main() {
 
       final year = await expiryOf('1y');
       expect(year!.difference(DateTime.now()).inDays, closeTo(365, 1));
+      final hundred = await expiryOf('100y');
+      expect(hundred!.difference(DateTime.now()).inDays, closeTo(36500, 1));
       expect(await expiryOf('never'), isNull);
+    });
+
+    test('create-token refuses more than 100 years', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      for (final expiresIn in ['101y', '999999y']) {
+        final result = await admin([
+          'create-token',
+          '--email',
+          'a@b.c',
+          '--name',
+          'x',
+          '--expires-in',
+          expiresIn
+        ]);
+        expect(result.exitCode, 64, reason: expiresIn);
+        expect(result.stderr,
+            contains('--expires-in must be at most 100y, or be never'));
+      }
+      expect(await db.collection('tokens').findOne(), isNull);
     });
 
     test('commands record who did what', () async {

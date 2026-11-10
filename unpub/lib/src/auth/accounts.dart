@@ -87,21 +87,51 @@ bool constantTimeEquals(String a, String b) {
 
 final _durationPattern = RegExp(r'^(\d{1,6})([smhdwy])$');
 
-/// Parses a duration such as `90s`, `12h`, `30d`, `8w` or `1y`, a year
-/// being 365 days.
-Duration? parseDuration(String text) {
+/// The longest duration [parseDuration] accepts, and so the longest lifetime
+/// a token can be given: 100 years.
+const maxDuration = Duration(days: 100 * 365);
+
+/// The seconds in a duration such as `90s` or `1y`, computed without
+/// overflow, or null when [text] is not one or is zero.
+int? _durationSeconds(String text) {
   final match = _durationPattern.firstMatch(text.trim());
   if (match == null) return null;
   final amount = int.parse(match.group(1)!);
   if (amount == 0) return null;
-  return switch (match.group(2)!) {
-    's' => Duration(seconds: amount),
-    'm' => Duration(minutes: amount),
-    'h' => Duration(hours: amount),
-    'd' => Duration(days: amount),
-    'w' => Duration(days: amount * 7),
-    _ => Duration(days: amount * 365),
-  };
+  const day = 24 * 60 * 60;
+  return amount *
+      switch (match.group(2)!) {
+        's' => 1,
+        'm' => 60,
+        'h' => 60 * 60,
+        'd' => day,
+        'w' => 7 * day,
+        _ => 365 * day,
+      };
+}
+
+/// Parses a duration such as `90s`, `12h`, `30d`, `8w` or `1y`, a year
+/// being 365 days, of at most [maxDuration].
+Duration? parseDuration(String text) {
+  final seconds = _durationSeconds(text);
+  if (seconds == null || seconds > maxDuration.inSeconds) return null;
+  return Duration(seconds: seconds);
+}
+
+/// Parses the lifetime of a new token given as [field], such as `30d`, and
+/// throws a [FormatException] saying what is wrong when it is not one of at
+/// most [maxDuration]. `never` is for the caller to handle.
+Duration parseTokenLifetime(String text, {required String field}) {
+  final seconds = _durationSeconds(text);
+  if (seconds == null) {
+    throw FormatException(
+        '$field must look like 12h, 30d, 8w or 1y, or be never');
+  }
+  if (seconds > maxDuration.inSeconds) {
+    throw FormatException(
+        '$field must be at most 100y, or be never for no expiry');
+  }
+  return Duration(seconds: seconds);
 }
 
 String? _isoDate(DateTime? date) => date?.toUtc().toIso8601String();

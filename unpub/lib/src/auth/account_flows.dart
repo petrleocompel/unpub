@@ -74,10 +74,11 @@ DateTime? requestedExpiry(
     String? expiresIn, Principal principal, DateTime now) {
   DateTime? expiresAt;
   if (expiresIn != null && expiresIn.trim() != 'never') {
-    final duration = parseDuration(expiresIn);
-    if (duration == null) {
-      throw const AccountException.invalid(
-          'expiresIn must look like 12h, 30d, 8w or 1y, or be never');
+    final Duration duration;
+    try {
+      duration = parseTokenLifetime(expiresIn, field: 'expiresIn');
+    } on FormatException catch (e) {
+      throw AccountException.invalid(e.message);
     }
     expiresAt = now.add(duration);
   }
