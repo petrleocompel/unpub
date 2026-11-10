@@ -69,6 +69,28 @@ test('lists, searches and shows a package', async ({ page }) => {
   ).toBeVisible()
 })
 
+test('a heading reached by its fragment clears the sticky header', async ({ page }) => {
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 720 })
+    await page.goto('/packages/e2e_demo')
+    const heading = page
+      .getByRole('document', { name: 'README' })
+      .getByRole('heading', { name: 'Troubleshooting' })
+    await expect(heading).toBeAttached()
+    await page.evaluate(() => {
+      window.location.hash = 'md-troubleshooting'
+    })
+    const header = await page.locator('header').first().boundingBox()
+    expect(header, 'the header').not.toBeNull()
+    // Two rows on a phone, one from sm; the heading starts below either.
+    const below = header!.y + header!.height
+    await expect
+      .poll(async () => (await heading.boundingBox())?.y ?? Infinity)
+      .toBeLessThan(below + 40)
+    expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(below)
+  }
+})
+
 test('logs in, creates a token, creates a user and reads the audit log', async ({ page }) => {
   await login(page)
 

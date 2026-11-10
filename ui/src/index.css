@@ -141,6 +141,19 @@
   html.dark {
     color-scheme: dark;
   }
+  /*
+   * The height of the sticky header, border included: two rows below sm
+   * (the search under the rest), one 60 px row from sm. A target of a
+   * fragment link keeps this much clear above it, see .markdown h1.
+   */
+  :root {
+    --header-height: 6.5625rem;
+  }
+  @media (width >= 40rem) {
+    :root {
+      --header-height: 3.8125rem;
+    }
+  }
   body {
     @apply bg-background font-sans text-foreground antialiased;
   }
@@ -194,18 +207,18 @@
     @apply mt-0;
   }
   .markdown h1 {
-    @apply mt-8 mb-3.5 scroll-mt-20 border-b pb-2 text-2xl font-semibold tracking-tight;
+    @apply mt-8 mb-3.5 scroll-mt-[calc(var(--header-height)+1.25rem)] border-b pb-2 text-2xl font-semibold tracking-tight;
   }
   .markdown h2 {
-    @apply mt-8 mb-3.5 scroll-mt-20 border-b pb-2 text-[1.375rem] leading-[1.875rem] font-semibold tracking-tight;
+    @apply mt-8 mb-3.5 scroll-mt-[calc(var(--header-height)+1.25rem)] border-b pb-2 text-[1.375rem] leading-[1.875rem] font-semibold tracking-tight;
   }
   .markdown h3 {
-    @apply mt-6 mb-2 scroll-mt-20 text-[1.0625rem] leading-6 font-semibold;
+    @apply mt-6 mb-2 scroll-mt-[calc(var(--header-height)+1.25rem)] text-[1.0625rem] leading-6 font-semibold;
   }
   .markdown h4,
   .markdown h5,
   .markdown h6 {
-    @apply mt-5 mb-2 scroll-mt-20 font-semibold;
+    @apply mt-5 mb-2 scroll-mt-[calc(var(--header-height)+1.25rem)] font-semibold;
   }
   .markdown p,
   .markdown ul,

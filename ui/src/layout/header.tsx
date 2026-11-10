@@ -50,7 +50,8 @@ export function Wordmark() {
 
 /**
  * The header of docs/design (board 01): mark, navigation, search, theme and
- * the user. Below sm the search takes a row of its own under the rest.
+ * the user. Below sm the search takes a row of its own under the rest; the
+ * height of both layouts is --header-height in index.css, keep them equal.
  */
 export function Header() {
   const { me, isAdmin, config } = useSession()
