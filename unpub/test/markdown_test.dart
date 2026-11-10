@@ -1,113 +1,38 @@
-import 'package:html/dom.dart' as dom;
-import 'package:html/parser.dart' as html_parser;
 import 'package:test/test.dart';
 import 'package:unpub/src/web/markdown.dart';
 import 'package:unpub/src/web/pages/package_page.dart' show markdownLinks;
 
-/// The elements of [markup], parsed as a browser would.
-List<dom.Element> _elements(String markup) =>
-    html_parser.parseFragment(markup).querySelectorAll('*');
-
-final _allowedUrl =
-    RegExp(r'^(https?://[^/?#@\\]+|mailto:|#md-)', caseSensitive: false);
-
-/// Fails unless no element of [markup] can run script or leave the allowed
-/// URLs, whatever it looks like as text.
-void _expectInert(String markup, {String? reason}) {
-  for (final element in _elements(markup)) {
-    final tag = element.localName!;
-    expect(tag, isNot(anyOf('script', 'style', 'svg', 'math', 'iframe')),
-        reason: reason);
-    for (final MapEntry(:key, :value) in element.attributes.entries) {
-      final name = '$key'.toLowerCase();
-      expect(name, isNot(startsWith('on')), reason: '$reason: $markup');
-      expect(name, isNot(anyOf('style', 'srcset', 'formaction', 'xlink:href')),
-          reason: reason);
-      if (name == 'href' || name == 'src') {
-        expect(value, matches(_allowedUrl), reason: '$reason: $markup');
-      }
-      if (name == 'id') expect(value, startsWith('md-'), reason: reason);
-      if (name == 'target') {
-        expect(value, '_blank', reason: reason);
-        expect(element.attributes['rel'], 'nofollow noopener', reason: reason);
-      }
-    }
-  }
-}
+import 'markdown_attacks.dart';
 
 String _render(String source, {MarkdownLinks? links}) =>
     renderMarkdown(source, links: links).markup;
 
 void main() {
   group('sanitizer', () {
-    const attacks = {
-      'svg': '<svg onload="alert(1)"><circle r="1"/></svg>after',
-      'svg in a link': '<a href="https://ok.example"><svg onload=alert(1)>',
-      'math': '<math><mi xlink:href="javascript:alert(1)">x</mi></math>',
-      'malformed nesting': '<a href="x"<img src=y onerror=alert(1)>text</a>',
-      'unclosed attribute':
-          '<img src="https://ok.example/a.png onerror=alert(1)',
-      'entity in the scheme': '<a href="java&#115;cript:alert(1)">x</a>',
-      'hex entity': '<a href="&#x6A;avascript:alert(1)">x</a>',
-      'named entity colon': '<a href="javascript&colon;alert(1)">x</a>',
-      'tab in the scheme': '<a href="java\tscript:alert(1)">x</a>',
-      'newline in the scheme': '<a href="java\nscript:alert(1)">x</a>',
-      'leading space': '<a href=" javascript:alert(1)">x</a>',
-      'control character': '<a href="\u0001javascript:alert(1)">x</a>',
-      'markdown entity': '[x](java&#115;cript:alert(1))',
-      'markdown mixed case': '[x](JaVaScRiPt:alert(1))',
-      'vbscript': '<a href="vbscript:msgbox(1)">x</a>',
-      'data link': '<a href="data:text/html,<script>alert(1)</script>">x</a>',
-      'data image': '<img src="data:image/svg+xml;base64,PHN2Zz4=" alt="d">',
-      'markdown data image': '![d](data:image/png;base64,AAAA)',
-      'attribute breakout':
-          '<img src="https://ok.example/a.png&quot; onmouseover=&quot;alert(1)" '
-              'alt="x">',
-      'title breakout': '<a href="https://ok.example" '
-          'title=\'" onmouseover="alert(1)\'>x</a>',
-      'markdown breakout': '![x](https://ok.example/a.png" onmouseover="a(1))',
-      'srcset': '<img src="https://ok.example/a.png" '
-          'srcset="javascript:alert(1) 1x, https://evil.example/b.png 2x">',
-      'attacker target': '<a href="https://ok.example" target="_self" '
-          'rel="opener">x</a>',
-      'target on a fragment': '<a href="#usage" target="_blank">x</a>',
-      'protocol relative': '<a href="//evil.example/">x</a>',
-      'scheme without host': '<a href="https:evil">x</a>',
-      'scheme with one slash': '<img src="https:/evil/a.png" alt="x">',
-      'markdown scheme without host': '[x](https:evil) ![y](HTTPS:evil.png)',
-      'backslash host': '<a href="https:\\\\evil.example/">x</a>',
-      'backslash after the host': '<a href="https://ok.example\\@evil">x</a>',
-      'empty host': '<a href="https:///evil.example/">x</a>',
-      'userinfo': '<a href="https://ok.example@evil.example/">x</a>',
-      'base': '<base href="https://evil.example/">x',
-      'form': '<form action="https://evil.example"><button formaction="x">',
-      'style': '<p style="background:url(javascript:alert(1))">x</p>',
-      'meta refresh': '<meta http-equiv="refresh" content="0;url=https://e">',
-    };
-
-    for (final MapEntry(key: name, value: source) in attacks.entries) {
+    for (final MapEntry(key: name, value: source) in markdownAttacks.entries) {
       test('neutralizes $name', () {
-        _expectInert(_render(source), reason: name);
-        _expectInert(
+        expectInert(_render(source), reason: name);
+        expectInert(
             _render(source,
                 links: MarkdownLinks.forRepository(
                     Uri.parse('https://github.com/o/r'))),
             reason: '$name with links');
         // Without the markdown renderer, which escapes some of it.
-        _expectInert(sanitizeHtml(source).markup, reason: '$name as HTML');
+        expectInert(sanitizeHtml(source).markup, reason: '$name as HTML');
       });
     }
 
     test('keeps the safe parts of what it neutralizes', () {
-      final breakout = _elements(_render(attacks['attribute breakout']!));
+      final breakout =
+          elementsOf(_render(markdownAttacks['attribute breakout']!));
       final image = breakout.singleWhere((item) => item.localName == 'img');
       expect(image.attributes.keys, unorderedEquals(['src', 'alt']));
 
-      final title = _elements(_render(attacks['title breakout']!))
+      final title = elementsOf(_render(markdownAttacks['title breakout']!))
           .singleWhere((item) => item.localName == 'a');
       expect(title.attributes['title'], '" onmouseover="alert(1)');
 
-      final target = _elements(_render(attacks['attacker target']!))
+      final target = elementsOf(_render(markdownAttacks['attacker target']!))
           .singleWhere((item) => item.localName == 'a');
       expect(target.attributes, {
         'href': 'https://ok.example',
@@ -115,17 +40,18 @@ void main() {
         'target': '_blank',
       });
 
-      final fragment = _elements(_render(attacks['target on a fragment']!))
-          .singleWhere((item) => item.localName == 'a');
+      final fragment =
+          elementsOf(_render(markdownAttacks['target on a fragment']!))
+              .singleWhere((item) => item.localName == 'a');
       expect(fragment.attributes, {'href': '#md-usage'});
 
       for (final name in ['entity in the scheme', 'tab in the scheme']) {
-        final markup = _render(attacks[name]!);
+        final markup = _render(markdownAttacks[name]!);
         expect(
-            _elements(markup).where((item) => item.localName == 'a'), isEmpty);
+            elementsOf(markup).where((item) => item.localName == 'a'), isEmpty);
         expect(markup, contains('x'));
       }
-      expect(_render(attacks['svg']!), contains('after'));
+      expect(_render(markdownAttacks['svg']!), contains('after'));
     });
   });
 
@@ -142,13 +68,14 @@ See [the guide](doc/guide.md), [the license](/LICENSE),
 ''';
 
     Map<String, String> hrefs(String markup) => {
-          for (final link in _elements(markup).where((e) => e.localName == 'a'))
+          for (final link
+              in elementsOf(markup).where((e) => e.localName == 'a'))
             link.text: link.attributes['href']!,
         };
 
     test('without a repository keep only their text', () {
       final markup = _render(source);
-      _expectInert(markup);
+      expectInert(markup);
       expect(hrefs(markup), {
         'here': '#md-usage',
         'mail': 'mailto:a@example.com',
@@ -157,7 +84,7 @@ See [the guide](doc/guide.md), [the license](/LICENSE),
       expect(markup, contains('See the guide, the license,'));
       final images = [
         for (final image
-            in _elements(markup).where((e) => e.localName == 'img'))
+            in elementsOf(markup).where((e) => e.localName == 'img'))
           image.attributes['src'],
       ];
       expect(images, ['https://img.example/badge.svg']);
@@ -169,7 +96,7 @@ See [the guide](doc/guide.md), [the license](/LICENSE),
       final markup = _render(source,
           links:
               MarkdownLinks.forRepository(Uri.parse('https://github.com/o/r')));
-      _expectInert(markup);
+      expectInert(markup);
       expect(hrefs(markup), {
         'the guide': 'https://github.com/o/r/blob/HEAD/doc/guide.md',
         'the license': 'https://github.com/o/r/blob/HEAD/LICENSE',
@@ -181,7 +108,7 @@ See [the guide](doc/guide.md), [the license](/LICENSE),
       });
       // Relative images are not served, also with a repository.
       expect(
-          _elements(markup).where((e) => e.localName == 'img'), hasLength(1));
+          elementsOf(markup).where((e) => e.localName == 'img'), hasLength(1));
     });
 
     test('lead into the directory of a package in a monorepo', () {
@@ -246,9 +173,9 @@ Setext heading
 
 [go](#usage) [start](#getting-started) [bad](#a"b)
 ''');
-      _expectInert(markup);
+      expectInert(markup);
       final ids = {
-        for (final element in _elements(markup))
+        for (final element in elementsOf(markup))
           if (element.id.isNotEmpty) element.text: element.id,
       };
       expect(ids, {
@@ -260,7 +187,7 @@ Setext heading
         '2.0.0': 'md-200',
       });
       final hrefs = [
-        for (final link in _elements(markup).where((e) => e.localName == 'a'))
+        for (final link in elementsOf(markup).where((e) => e.localName == 'a'))
           link.attributes['href'],
       ];
       expect(hrefs, ['#md-usage', '#md-getting-started']);

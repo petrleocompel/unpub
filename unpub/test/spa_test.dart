@@ -290,7 +290,7 @@ void main() {
 
     test('the API still answers 401', () async {
       for (final path in [
-        '/webapi/packages',
+        '/webapi/v2/packages',
         '/webapi/me',
         '/api/packages/alpha',
         '/packages/alpha.json',

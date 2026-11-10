@@ -29,13 +29,30 @@ shelf.Response successMessage(String message) => okWithJson({
       'success': {'message': message}
     });
 
+/// The error code of a response with [status], when nothing more specific
+/// applies.
+String errorCodeFor(int status) => switch (status) {
+      HttpStatus.badRequest => 'invalid_request',
+      HttpStatus.unauthorized => 'unauthorized',
+      HttpStatus.forbidden => 'forbidden',
+      HttpStatus.notFound => 'not_found',
+      HttpStatus.conflict => 'conflict',
+      HttpStatus.requestEntityTooLarge => 'too_large',
+      HttpStatus.tooManyRequests => 'rate_limited',
+      HttpStatus.badGateway => 'bad_gateway',
+      HttpStatus.serviceUnavailable => 'unavailable',
+      _ => status >= 500 ? 'server_error' : 'invalid_request',
+    };
+
+/// The error `{"error": {"code": ..., "message": ...}}`, with [code]
+/// derived from [status] unless given.
 shelf.Response badRequest(String message,
-        {int status = HttpStatus.badRequest}) =>
+        {int status = HttpStatus.badRequest, String? code}) =>
     shelf.Response(
       status,
       headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
       body: json.encode({
-        'error': {'message': message}
+        'error': {'code': code ?? errorCodeFor(status), 'message': message}
       }),
     );
 

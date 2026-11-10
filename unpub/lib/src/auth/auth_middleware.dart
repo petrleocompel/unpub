@@ -64,11 +64,16 @@ bool _isLoginRequest(shelf.Request request, String pagesPath) =>
     (request.url.path == 'webapi/login' ||
         _pagePath(request, pagesPath) == 'login');
 
+/// JSON reads that stay open in every read mode, so that the web client can
+/// learn whether to show its login. They hold no data.
+const _openReads = {'webapi/config', 'webapi/openapi.yaml'};
+
 /// Whether [request] reads a page that stays open in every read mode: the
 /// login form and the stylesheet and script it needs. [pagesPath] is where
 /// the pages are, `''` for `/`.
 bool isOpenPageRequest(shelf.Request request, {String pagesPath = ''}) {
   if (!_readMethods.contains(request.method)) return false;
+  if (_openReads.contains(request.url.path)) return true;
   final page = _pagePath(request, pagesPath);
   return page == 'login' ||
       (page?.startsWith('static/') ?? false) ||

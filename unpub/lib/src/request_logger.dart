@@ -41,7 +41,10 @@ shelf.Middleware requestLogger() {
         return shelf.Response.internalServerError(
           headers: {HttpHeaders.contentTypeHeader: ContentType.json.mimeType},
           body: json.encode({
-            'error': {'message': 'Internal Server Error'},
+            'error': {
+              'code': 'server_error',
+              'message': 'Internal Server Error'
+            },
           }),
         );
       }
