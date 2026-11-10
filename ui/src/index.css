@@ -164,7 +164,7 @@
 @layer components {
   /* The first column of a wide table stays in view while the rest scrolls. */
   [data-sticky-first] {
-    --sticky-bg: var(--color-background);
+    --sticky-bg: var(--color-card);
   }
   [data-sticky-first] tr > :first-child:not([colspan]) {
     position: sticky;
@@ -175,10 +175,11 @@
   [data-sticky-first] thead tr > :first-child:not([colspan]) {
     background-color: var(--color-surface);
   }
-  [data-sticky-first]
-    tr:is(:hover, [data-current], :has([aria-expanded='true']))
-    > :first-child:not([colspan]) {
-    background-color: color-mix(in oklab, var(--color-muted) 50%, var(--sticky-bg));
+  [data-sticky-first] tr:is(:hover, :has([aria-expanded='true'])) > :first-child:not([colspan]) {
+    background-color: color-mix(in oklab, var(--color-muted) 70%, var(--sticky-bg));
+  }
+  [data-sticky-first] tr[data-current] > :first-child:not([colspan]) {
+    background-color: var(--color-surface);
   }
   @media (width < 40rem) {
     [data-sticky-first] tr > :first-child:not([colspan]) {
@@ -225,6 +226,9 @@
   }
   .markdown a {
     @apply text-primary underline underline-offset-3;
+  }
+  .markdown a[data-anchor] {
+    @apply ml-1 font-normal text-muted-foreground opacity-70 hover:opacity-100;
   }
   .markdown code {
     @apply rounded border bg-code px-[5px] py-px font-mono text-[0.88em];
