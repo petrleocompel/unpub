@@ -20,6 +20,7 @@ describe('admin settings', () => {
                   key: 'server.publicUrl',
                   value: 'https://pub.company.example',
                   env: 'UNPUB_SERVER_PUBLIC_URL',
+                  source: 'file',
                 },
               ],
             },
@@ -30,6 +31,7 @@ describe('admin settings', () => {
                   key: 'storage.s3.secretKey',
                   value: '<redacted>',
                   env: 'UNPUB_STORAGE_S3_SECRET_KEY',
+                  source: 'env',
                 },
               ],
             },
@@ -56,6 +58,38 @@ describe('admin settings', () => {
     )
   })
 
+  it('mutes the keys left at their default', async () => {
+    server.use(
+      http.get(url('/webapi/settings'), () =>
+        HttpResponse.json({
+          configured: true,
+          sections: [
+            {
+              name: 'server',
+              settings: [
+                {
+                  key: 'server.host',
+                  value: '0.0.0.0',
+                  env: 'UNPUB_SERVER_HOST',
+                  source: 'default',
+                },
+                { key: 'server.port', value: '8080', env: 'UNPUB_SERVER_PORT', source: 'flag' },
+              ],
+            },
+          ],
+        }),
+      ),
+    )
+    renderApp('/admin/settings', { me: f.me() })
+    const section = await screen.findByRole('region', { name: 'server' })
+    const [host, port] = within(section).getAllByRole('definition')
+    expect(host).toHaveClass('text-muted-foreground')
+    expect(host).toHaveTextContent('0.0.0.0 (default)')
+    expect(port).not.toHaveClass('text-muted-foreground')
+    expect(port).toHaveTextContent(/^8080$/)
+    expect(screen.getByText(/Values left at their default are muted/)).toBeInTheDocument()
+  })
+
   it('names a key within its section', () => {
     expect(keyInSection('server', 'server.publicUrl')).toBe('publicUrl')
     expect(keyInSection('storage', 'storage.s3.bucket')).toBe('s3.bucket')
@@ -68,7 +102,14 @@ describe('admin settings', () => {
       sections: [
         {
           name: 'audit',
-          settings: [{ key: 'audit.retentionDays', value, env: 'UNPUB_AUDIT_RETENTION_DAYS' }],
+          settings: [
+            {
+              key: 'audit.retentionDays',
+              value,
+              env: 'UNPUB_AUDIT_RETENTION_DAYS',
+              source: 'default' as const,
+            },
+          ],
         },
       ],
     })

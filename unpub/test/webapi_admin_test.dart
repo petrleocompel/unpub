@@ -163,8 +163,10 @@ metrics:
       expect(settings['server.publicUrl'], {
         'key': 'server.publicUrl',
         'value': '(not set)',
-        'env': 'UNPUB_SERVER_PUBLIC_URL'
+        'env': 'UNPUB_SERVER_PUBLIC_URL',
+        'source': 'default'
       });
+      expect(settings['storage.s3.bucket']!['source'], 'file');
       expect(settings['storage.s3.useSSL']!['env'], 'UNPUB_STORAGE_S3_USE_SSL');
       expect(settings['storage.s3.secretKey']!['value'], '<redacted>');
       expect(settings['auth.admin.password']!['value'], '<redacted>');

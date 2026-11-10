@@ -174,6 +174,23 @@ logging:
       expect(config.server.port, 7000);
     });
 
+    test('records where each key came from', () {
+      var config =
+          Config.parse('server:\n  port: 5000\nlogging:\n  level: debug\n',
+              environment: {
+                'UNPUB_SERVER_PORT': '6000',
+                'UNPUB_MONGO_URI': 'mongodb://env/db',
+              },
+              host: 'localhost');
+      expect(config.sourceOf('server.host'), ConfigSource.flag);
+      expect(config.sourceOf('server.port'), ConfigSource.environment);
+      expect(config.sourceOf('mongo.uri'), ConfigSource.environment);
+      expect(config.sourceOf('logging.level'), ConfigSource.file);
+      expect(config.sourceOf('logging.format'), ConfigSource.defaults);
+      expect([for (final source in ConfigSource.values) source.label],
+          ['default', 'file', 'env', 'flag']);
+    });
+
     test('camelCase keys accept both spellings', () {
       for (var name in [
         'UNPUB_AUTH_BOOTSTRAP_TOKEN',

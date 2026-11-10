@@ -491,6 +491,26 @@ class LoggingConfig {
   const LoggingConfig({required this.level, required this.format});
 }
 
+/// Where the value of a configuration key came from.
+enum ConfigSource {
+  /// Not set anywhere: the built-in default.
+  defaults('default'),
+
+  /// The YAML file.
+  file('file'),
+
+  /// An `UNPUB_*` environment variable.
+  environment('env'),
+
+  /// A command-line flag, such as `--port`.
+  flag('flag');
+
+  /// The name the settings API uses.
+  final String label;
+
+  const ConfigSource(this.label);
+}
+
 /// Validated server configuration.
 ///
 /// Values are resolved from, in increasing precedence: built-in defaults, the
@@ -511,6 +531,9 @@ class Config {
   final UiConfig ui;
   final LoggingConfig logging;
 
+  /// Where each key that is not at its default came from, by dotted key.
+  final Map<String, ConfigSource> sources;
+
   const Config({
     required this.server,
     required this.mongo,
@@ -523,7 +546,11 @@ class Config {
     this.metrics = const MetricsConfig(),
     this.ui = const UiConfig(),
     required this.logging,
+    this.sources = const {},
   });
+
+  /// Where the value of the dotted [key] came from.
+  ConfigSource sourceOf(String key) => sources[key] ?? ConfigSource.defaults;
 
   /// Reads the file at [path] and resolves the configuration.
   ///
@@ -578,6 +605,7 @@ class _ConfigReader {
   final Map<String, String> _environment;
   final _values = <String, Object>{};
   final _sources = <String, String>{};
+  final _kinds = <String, ConfigSource>{};
   final _problems = <String>[];
 
   _ConfigReader(this._environment);
@@ -614,6 +642,7 @@ class _ConfigReader {
         if (value != null) {
           _values[key] = value as Object;
           _sources[key] = sourceName;
+          _kinds[key] = ConfigSource.file;
         }
       } else if (!(value == null && _isSection(key))) {
         _problems.add('unknown key "$key" in $sourceName');
@@ -643,6 +672,7 @@ class _ConfigReader {
       if (key != null && value.isNotEmpty) {
         _values[key] = value;
         _sources[key] = name;
+        _kinds[key] = ConfigSource.environment;
       }
     }
   }
@@ -651,6 +681,7 @@ class _ConfigReader {
     if (value == null) return;
     _values[key] = value;
     _sources[key] = source;
+    _kinds[key] = ConfigSource.flag;
   }
 
   String _describe(String key) {
@@ -778,6 +809,7 @@ class _ConfigReader {
       metrics: metrics,
       ui: ui,
       logging: logging,
+      sources: Map.unmodifiable(_kinds),
     );
   }
 

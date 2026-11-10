@@ -6,6 +6,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Panel } from '@/components/dashboard/panel'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { cn } from '@/lib/utils'
 import { useTitle } from '@/lib/use-title'
 import { AdminHeading } from './layout'
 
@@ -58,6 +59,8 @@ function SettingsSection({ section }: { section: Section }) {
       <dl className="divide-y">
         {section.settings.map((setting) => {
           const redacted = setting.value === '<redacted>'
+          // Not set anywhere: muted, so what was configured stands out.
+          const unset = setting.source === 'default'
           return (
             <div
               key={setting.key}
@@ -78,7 +81,12 @@ function SettingsSection({ section }: { section: Section }) {
                   />
                 </span>
               </dt>
-              <dd className="font-mono text-[0.8125rem] break-all">
+              <dd
+                className={cn(
+                  'font-mono text-[0.8125rem] break-all',
+                  unset && 'text-muted-foreground',
+                )}
+              >
                 {redacted ? (
                   <span className="inline-flex items-center gap-1 text-muted-foreground">
                     <Lock aria-hidden className="size-3" />
@@ -87,6 +95,7 @@ function SettingsSection({ section }: { section: Section }) {
                 ) : (
                   setting.value || <span className="text-muted-foreground">(empty)</span>
                 )}
+                {unset && <span className="sr-only"> (default)</span>}
               </dd>
             </div>
           )
@@ -126,7 +135,8 @@ export function SettingsPage() {
             <AlertDescription>
               <p>
                 Secrets are redacted. Each key can be overridden by the variable shown under it, for
-                example <code className="font-mono">{example}</code>.
+                example <code className="font-mono">{example}</code>. Values left at their default
+                are muted.
               </p>
             </AlertDescription>
           </Alert>

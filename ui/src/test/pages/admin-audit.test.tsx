@@ -33,7 +33,12 @@ function auditApi() {
           {
             name: 'audit',
             settings: [
-              { key: 'audit.retentionDays', value: '90', env: 'UNPUB_AUDIT_RETENTION_DAYS' },
+              {
+                key: 'audit.retentionDays',
+                value: '90',
+                env: 'UNPUB_AUDIT_RETENTION_DAYS',
+                source: 'env',
+              },
             ],
           },
         ],
