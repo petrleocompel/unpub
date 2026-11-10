@@ -3,6 +3,9 @@ import { cn } from '@/lib/utils'
 
 type Heading = { id: string; text: string; level: number }
 
+/** The top of the strip the table of contents watches, below the header. */
+const stripTop = 64
+
 /**
  * README or CHANGELOG HTML, rendered and sanitized by the server through an
  * allowlist (no scripts, styles or event handlers), so it is inserted as is.
@@ -53,27 +56,43 @@ export function Markdown({
 
   const showToc = toc && headings.length >= 3
 
-  // The section in view: the last heading above the upper third.
+  // The section in view: the first heading in the strip below the header
+  // and above the lower two thirds, else the last heading above that strip,
+  // as after a jump into the middle of a long section.
   useEffect(() => {
     const root = ref.current
     if (!showToc || !root || typeof IntersectionObserver === 'undefined') return
+    const elements = headings
+      .map((heading) => document.getElementById(heading.id))
+      .filter((element): element is HTMLElement => !!element && root.contains(element))
     const visible = new Set<string>()
+    const update = () => {
+      const first = elements.find((element) => visible.has(element.id))
+      if (first) return setActive(first.id)
+      const above = elements.filter((element) => element.getBoundingClientRect().top < stripTop)
+      setActive((above[above.length - 1] ?? elements[0])?.id ?? null)
+    }
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) visible.add(entry.target.id)
           else visible.delete(entry.target.id)
         }
-        const first = headings.find((heading) => visible.has(heading.id))
-        if (first) setActive(first.id)
+        update()
       },
-      { rootMargin: '-64px 0px -66% 0px' },
+      { rootMargin: `-${stripTop}px 0px -66% 0px` },
     )
-    for (const heading of headings) {
-      const element = document.getElementById(heading.id)
-      if (element && root.contains(element)) observer.observe(element)
+    for (const element of elements) observer.observe(element)
+    // A jump can pass over every heading, which the observer does not
+    // report; the positions tell the section then.
+    const onScroll = () => {
+      if (visible.size === 0) update()
     }
-    return () => observer.disconnect()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', onScroll)
+    }
   }, [headings, showToc])
 
   const top = Math.min(...headings.map((heading) => heading.level))
