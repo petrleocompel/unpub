@@ -58,26 +58,69 @@ class DownloadStats {
 /// counters are kept by local day.
 String isoDay(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
+/// [count] with thousands separators, as `1,000,000`.
+String formatCount(int count) => _countFormat.format(count);
+
+final _countFormat = NumberFormat('#,##0', 'en_US');
+
 const _chartWidth = 600;
 const _chartHeight = 160;
 const _labelHeight = 16;
 
+/// What the chart of [days] shows, in words, for its `<desc>`.
+String _chartDescription(List<(DateTime, int)> days, int highest) {
+  final range = 'from ${isoDay(days.first.$1)} to ${isoDay(days.last.$1)}';
+  if (highest == 0) return 'No downloads $range.';
+  final total = days.fold(0, (sum, day) => sum + day.$2);
+  final busiest = days.firstWhere((day) => day.$2 == highest).$1;
+  return '${formatCount(total)} download${total == 1 ? '' : 's'} $range. The most on one day were '
+      '${formatCount(highest)}, on ${isoDay(busiest)}. The table below lists '
+      'every day.';
+}
+
 /// A bar chart of [days] drawn on the server: plain SVG with classes for the
 /// stylesheet, no style attribute and no script, which the CSP would refuse.
+///
+/// Its `<title>` and `<desc>` name and summarize it for assistive
+/// technology. The table of the statistics page holds the same numbers.
 Html downloadChart(List<(DateTime, int)> days) {
   final highest = days.fold(0, (top, day) => day.$2 > top ? day.$2 : top);
   final scale = highest == 0 ? 0.0 : (_chartHeight - _labelHeight) / highest;
   final slot = _chartWidth / days.length;
   final barWidth = (slot * 0.75).floor();
+  // A tick halfway up, at a whole number, once there is room between 0 and
+  // the top.
+  final mid = highest >= 2 ? (highest / 2).round() : null;
   return el('svg', {
     'class': 'chart',
     'viewBox': '0 0 $_chartWidth ${_chartHeight + _labelHeight}',
     'role': 'img',
-    'aria-label': 'Downloads per day over the last ${days.length} days, at '
-        'most $highest on one day',
+    'aria-labelledby': 'download-chart-title',
+    'aria-describedby': 'download-chart-desc',
     'xmlns': 'http://www.w3.org/2000/svg',
   }, [
-    el('text', {'class': 'chart-label', 'x': '0', 'y': '12'}, 'max $highest'),
+    el('title', {'id': 'download-chart-title'},
+        'Downloads per day over the last ${days.length} days'),
+    el('desc', {'id': 'download-chart-desc'}, _chartDescription(days, highest)),
+    el('text', {'class': 'chart-label', 'x': '0', 'y': '12'},
+        'max ${formatCount(highest)}'),
+    if (mid != null) ...[
+      el('line', {
+        'class': 'axis tick',
+        'x1': '0',
+        'y1': '${_chartHeight - (mid * scale).round()}',
+        'x2': '$_chartWidth',
+        'y2': '${_chartHeight - (mid * scale).round()}',
+      }),
+      el(
+          'text',
+          {
+            'class': 'chart-label',
+            'x': '0',
+            'y': '${_chartHeight - (mid * scale).round() - 2}',
+          },
+          formatCount(mid)),
+    ],
     for (final (index, (date, count)) in days.indexed)
       _bar(date, count,
           x: (index * slot).round(),
@@ -123,7 +166,7 @@ Html _bar(DateTime date, int count,
           'width': '$width',
           'height': '${height == 0 ? 1 : height}',
         },
-        el('title', const {}, '${isoDay(date)}: $count'));
+        el('title', const {}, '${isoDay(date)}: ${formatCount(count)}'));
 
 /// The statistics section of a package page.
 Html downloadStatsSection(String name, DownloadStats stats) => Html.join([

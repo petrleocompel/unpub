@@ -6,6 +6,8 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
 
+import 'package:unpub/src/web/download_stats.dart';
+
 import 'harness.dart';
 
 void main() {
@@ -139,7 +141,11 @@ void main() {
               .every((script) => script.attributes.containsKey('src')),
           isTrue);
       expect(svg.attributes['role'], 'img');
-      expect(svg.attributes['aria-label'], contains('at most 30'));
+      expect(svg.children.first.localName, 'title');
+      expect(svg.attributes['aria-labelledby'], svg.children.first.id);
+      expect(svg.children[1].localName, 'desc');
+      expect(svg.attributes['aria-describedby'], svg.children[1].id);
+      expect(svg.children[1].text, contains('The most on one day were 30'));
     });
 
     test('is linked from every package page as a tab', () async {
@@ -191,6 +197,64 @@ void main() {
       final browser = await h.logIn('admin@b.c');
       final page = await h.page('/admin/packages/alpha', as: browser);
       expect(page.body, contains('href="/packages/alpha/stats"'));
+    });
+  });
+
+  group('the chart', () {
+    List<(DateTime, int)> days(Map<int, int> counts) => [
+          for (var i = 0; i < statsDays; i++)
+            (DateTime(2026, 10, 1 + i), counts[i] ?? 0),
+        ];
+
+    dynamic svgOf(List<(DateTime, int)> data) =>
+        html_parser.parse(downloadChart(data).toString()).querySelector('svg')!;
+
+    List<String> labels(dynamic svg) => [
+          for (final text in svg.querySelectorAll('text')) text.text as String,
+        ];
+
+    test('of no downloads', () {
+      final svg = svgOf(days(const {}));
+      expect(svg.children.first.localName, 'title');
+      expect(svg.children.first.text, contains('30 days'));
+      expect(svg.children[1].localName, 'desc');
+      expect(
+          svg.children[1].text, 'No downloads from 2026-10-01 to 2026-10-30.');
+      expect(labels(svg), ['max 0', '2026-10-01', '2026-10-30']);
+      expect(svg.querySelectorAll('line.tick'), isEmpty);
+      expect(
+          svg
+              .querySelectorAll('rect')
+              .every((bar) => bar.classes.contains('empty') as bool),
+          isTrue);
+    });
+
+    test('of one day with downloads', () {
+      final svg = svgOf(days(const {4: 1}));
+      expect(svg.children[1].text,
+          startsWith('1 download from 2026-10-01 to 2026-10-30.'));
+      expect(svg.children[1].text, contains('were 1, on 2026-10-05'));
+      expect(labels(svg).first, 'max 1');
+      // No room for a tick between 0 and 1.
+      expect(svg.querySelectorAll('line.tick'), isEmpty);
+      final bars = svg.querySelectorAll('rect');
+      expect(bars.where((bar) => !(bar.classes.contains('empty') as bool)),
+          hasLength(1));
+    });
+
+    test('of a million downloads', () {
+      final svg = svgOf(days(const {0: 1000000, 29: 250000}));
+      expect(labels(svg), containsAll(['max 1,000,000', '500,000']));
+      expect(svg.children[1].text,
+          contains('1,250,000 downloads from 2026-10-01'));
+      expect(svg.children[1].text, contains('were 1,000,000, on 2026-10-01'));
+      final tick = svg.querySelector('line.tick');
+      final y = int.parse(tick.attributes['y1'] as String);
+      // Halfway between the axis at 160 and the top bar at 16.
+      expect(y, 88);
+      final bars = svg.querySelectorAll('rect');
+      expect(bars.first.querySelector('title').text, '2026-10-01: 1,000,000');
+      expect(int.parse(bars.first.attributes['height'] as String), 144);
     });
   });
 }
