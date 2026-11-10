@@ -42,6 +42,34 @@ jobs:
       - name: Wait for S3
         run: timeout 60 bash -c 'until curl -s -o /dev/null http://localhost:9000; do sleep 1; done'
       - run: dart test
+      - name: Lint the OpenAPI description
+        working-directory: .
+        run: npx --yes @redocly/cli@latest lint docs/openapi.yaml
+
+  # The web client. Skipped until ui/package.json exists.
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: hashFiles('ui/package.json') != ''
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - if: hashFiles('ui/package.json') != ''
+        run: npm ci
+      - if: hashFiles('ui/package.json') != ''
+        run: npm run lint
+      - if: hashFiles('ui/package.json') != ''
+        run: npm run typecheck
+      - if: hashFiles('ui/package.json') != ''
+        run: npm test -- --run
+      - if: hashFiles('ui/package.json') != ''
+        run: npm run build
 
   docker:
     runs-on: ubuntu-latest
