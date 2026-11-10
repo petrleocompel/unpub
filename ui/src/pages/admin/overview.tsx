@@ -19,7 +19,7 @@ export function OverviewPage() {
 
   if (overview.isPending) {
     return (
-      <div aria-busy="true" className="grid gap-4">
+      <div aria-busy="true" aria-live="polite" className="grid gap-4">
         <AdminHeading title="Overview" />
         <span className="sr-only">Loading the overview…</span>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

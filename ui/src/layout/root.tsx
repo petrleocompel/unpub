@@ -15,7 +15,7 @@ import { OfflineBanner } from './offline-banner'
 /** The page while the config and the session load. */
 export function ShellSkeleton() {
   return (
-    <div aria-busy="true" className="min-h-screen">
+    <div aria-busy="true" aria-live="polite" className="min-h-screen">
       <span className="sr-only">Loading unpub…</span>
       <div className="flex h-14 items-center gap-6 border-b px-4">
         <Skeleton className="h-7 w-24" />
@@ -32,7 +32,7 @@ export function ShellSkeleton() {
 
 export function PageSkeleton() {
   return (
-    <div aria-busy="true" className="grid gap-4">
+    <div aria-busy="true" aria-live="polite" className="grid gap-4">
       <span className="sr-only">Loading…</span>
       <Skeleton className="h-8 w-1/3" />
       <Skeleton className="h-40 w-full" />

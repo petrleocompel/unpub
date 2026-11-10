@@ -161,7 +161,7 @@ export function PackagePage({ defaultTab = 'readme' }: { defaultTab?: PackageTab
 function PackageSkeleton() {
   return (
     <Page wide>
-      <div aria-busy="true" className="grid gap-6">
+      <div aria-busy="true" aria-live="polite" className="grid gap-6">
         <span className="sr-only">Loading the package…</span>
         <div className="grid gap-3">
           <Skeleton className="h-9 w-72" />
@@ -410,7 +410,7 @@ function StatsTab({ name }: { name: string }) {
   const stats = usePackageStats(name)
   if (stats.isPending) {
     return (
-      <div aria-busy="true" className="grid gap-4">
+      <div aria-busy="true" aria-live="polite" className="grid gap-4">
         <span className="sr-only">Loading statistics…</span>
         <Skeleton className="h-20 w-full" />
         <Skeleton className="h-44 w-full" />

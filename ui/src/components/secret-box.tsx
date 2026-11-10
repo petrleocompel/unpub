@@ -1,5 +1,5 @@
 import { KeyRound } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { CodeBlock } from '@/components/copy-button'
 
 /**
@@ -17,13 +17,14 @@ export function SecretBox({
   label: string
   children?: ReactNode
 }) {
+  const titleId = useId()
   return (
     <section
-      aria-labelledby="secret-box-title"
+      aria-labelledby={titleId}
       role="status"
       className="grid gap-3 rounded-lg border-2 border-primary/60 bg-primary/5 p-4"
     >
-      <h3 id="secret-box-title" className="flex items-center gap-2 font-semibold">
+      <h3 id={titleId} className="flex items-center gap-2 font-semibold">
         <KeyRound aria-hidden className="size-4 text-primary" />
         {title}
       </h3>
