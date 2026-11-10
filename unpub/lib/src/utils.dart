@@ -25,3 +25,13 @@ List<String> getPackageTags(Map<String, dynamic> pubspec) {
     return ['flutter', 'web', 'other'];
   }
 }
+
+/// Whether [pubspec] is that of a Flutter package: it has a `flutter`
+/// section, an `environment.flutter` constraint or depends on `flutter`.
+bool isFlutterPubspec(Map<String, dynamic> pubspec) {
+  if (pubspec.containsKey('flutter')) return true;
+  final environment = pubspec['environment'];
+  if (environment is Map && environment.containsKey('flutter')) return true;
+  final dependencies = pubspec['dependencies'];
+  return dependencies is Map && dependencies.containsKey('flutter');
+}

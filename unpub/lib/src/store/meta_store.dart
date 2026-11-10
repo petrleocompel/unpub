@@ -1,6 +1,91 @@
 import 'package:unpub/src/models.dart';
 
+import '../utils.dart';
 import 'object_locks.dart';
+
+/// How a package search is ordered.
+enum PackageSort {
+  /// Best match first, for a search with text, then most downloaded.
+  relevance,
+
+  /// Most downloaded first.
+  downloads,
+
+  /// Most recently published first.
+  updated,
+
+  /// By name.
+  name,
+}
+
+/// The SDK a package is for. A package is a Flutter package if any of its
+/// versions has a `flutter` section, an `environment.flutter` constraint or a
+/// dependency on `flutter`.
+enum SdkFilter { dart, flutter }
+
+/// A search of the package list.
+class PackageSearch {
+  /// Words that must each appear in the name or the description.
+  final String? text;
+  final SdkFilter? sdk;
+  final bool includeDiscontinued;
+  final PackageSort sort;
+
+  /// Zero-based.
+  final int page;
+  final int size;
+
+  const PackageSearch({
+    this.text,
+    this.sdk,
+    this.includeDiscontinued = false,
+    this.sort = PackageSort.downloads,
+    this.page = 0,
+    this.size = 20,
+  });
+
+  /// The words of [text], lowercase, without duplicates and at most eight.
+  List<String> get words => {
+        for (final word in (text ?? '').toLowerCase().split(RegExp(r'\s+')))
+          if (word.isNotEmpty) word,
+      }.take(8).toList();
+
+  /// Whether [package] matches the text, SDK and discontinued filters.
+  bool matches(UnpubPackage package) {
+    if (!includeDiscontinued && package.isDiscontinued) return false;
+    if (sdk != null) {
+      final flutter =
+          package.versions.any((version) => isFlutterPubspec(version.pubspec));
+      if (flutter != (sdk == SdkFilter.flutter)) return false;
+    }
+    final name = package.name.toLowerCase();
+    final descriptions = [
+      for (final version in package.versions)
+        if (version.pubspec['description'] case final String description)
+          description.toLowerCase(),
+    ];
+    return words.every((word) =>
+        name.contains(word) ||
+        descriptions.any((description) => description.contains(word)));
+  }
+
+  /// Orders [a] before [b] as [sort] asks.
+  int compare(UnpubPackage a, UnpubPackage b) {
+    final order = switch (sort) {
+      PackageSort.relevance => _nameMatch(b).compareTo(_nameMatch(a)) != 0
+          ? _nameMatch(b).compareTo(_nameMatch(a))
+          : (b.download ?? 0).compareTo(a.download ?? 0),
+      PackageSort.downloads => (b.download ?? 0).compareTo(a.download ?? 0),
+      PackageSort.updated => b.updatedAt.compareTo(a.updatedAt),
+      PackageSort.name => 0,
+    };
+    return order != 0 ? order : a.name.compareTo(b.name);
+  }
+
+  /// How many of the words are in the name of [package].
+  int _nameMatch(UnpubPackage package) =>
+      words.where((word) => package.name.contains(word)).length;
+}
 
 /// The version being added is already published.
 class VersionExistsException implements Exception {
@@ -97,6 +182,24 @@ abstract class MetaStore {
     String? dependency,
     bool includeDiscontinued = true,
   });
+
+  /// The packages matching [search], and how many match in all.
+  ///
+  /// This implementation filters every package in memory, which suits a
+  /// small store. [MongoStore] runs the search in the database.
+  Future<UnpubQueryResult> searchPackages(PackageSearch search) async {
+    final all = await queryPackages(size: 1 << 20, page: 0, sort: 'name');
+    final matching = all.packages.where(search.matches).toList()
+      ..sort(search.compare);
+    return UnpubQueryResult(matching.length,
+        matching.skip(search.page * search.size).take(search.size).toList());
+  }
+
+  /// Which of [names] are packages in this store.
+  Future<Set<String>> existingPackageNames(Iterable<String> names) async => {
+        for (final name in names)
+          if (await queryPackage(name) != null) name,
+      };
 
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}

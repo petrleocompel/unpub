@@ -19,6 +19,35 @@ const _duplicateNamesReported = 20;
 
 final _log = Logger('unpub.mongo');
 
+/// The text index searching names and descriptions.
+const packageTextIndexName = 'name_description_text';
+
+/// Fields of a version the package list does not need.
+const _listExcludedFields = {
+  'versions.readme': 0,
+  'versions.changelog': 0,
+  'versions.pubspecYaml': 0,
+};
+
+/// Matches a package any of whose versions is for Flutter, see [SdkFilter].
+const _flutterSelector = {
+  'versions': {
+    r'$elemMatch': {
+      r'$or': [
+        {
+          'pubspec.flutter': {r'$exists': true}
+        },
+        {
+          'pubspec.environment.flutter': {r'$exists': true}
+        },
+        {
+          'pubspec.dependencies.flutter': {r'$exists': true}
+        },
+      ],
+    },
+  },
+};
+
 class MongoStore extends MetaStore {
   Db db;
 
@@ -63,6 +92,28 @@ class MongoStore extends MetaStore {
         'expireAfterSeconds': 0,
       },
     ]);
+    await _ensureTextIndex();
+  }
+
+  /// Creates the text index of the search. Search works without it, more
+  /// slowly, so failing to create it, for example because the collection
+  /// already has another text index, only logs a warning.
+  Future<void> _ensureTextIndex() async {
+    try {
+      await createIndexes(db, packageCollection, [
+        {
+          'key': {'name': 'text', 'versions.pubspec.description': 'text'},
+          'name': packageTextIndexName,
+          'weights': {'name': 10, 'versions.pubspec.description': 1},
+          'default_language': 'english',
+          // A pubspec field called `language` must not choose the language.
+          'language_override': 'unpubTextLanguage',
+        },
+      ]);
+    } catch (error) {
+      _log.warning('cannot create the text index of the package search, '
+          'searching without it: $error');
+    }
   }
 
   Future<void> _ensureUniquePackageNames() async {
@@ -408,6 +459,119 @@ class MongoStore extends MetaStore {
     }
 
     return _queryPackagesBySelector(selector);
+  }
+
+  @override
+  Future<UnpubQueryResult> searchPackages(PackageSearch search) async {
+    if (search.words.isEmpty) return _search(search, _filters(search));
+    try {
+      return await _search(
+          search,
+          [
+            _textClause(search),
+            ..._filters(search),
+          ],
+          textScore: true);
+    } catch (error) {
+      // An older server, or one where the index could not be created.
+      _log.fine('text search failed, matching patterns instead: $error');
+      return _search(search, [
+        ..._patternClauses(search),
+        ..._filters(search),
+      ]);
+    }
+  }
+
+  static List<Map<String, Object>> _filters(PackageSearch search) => [
+        if (!search.includeDiscontinued)
+          {
+            'isDiscontinued': {r'$ne': true}
+          },
+        if (search.sdk == SdkFilter.flutter) _flutterSelector,
+        if (search.sdk == SdkFilter.dart)
+          {
+            r'$nor': [_flutterSelector]
+          },
+      ];
+
+  /// Matches any of the words through the text index, or in a name, so that
+  /// a name can be found while it is being typed. The text index splits
+  /// words on spaces and punctuation, but not on `_`.
+  static Map<String, Object> _textClause(PackageSearch search) => {
+        r'$or': [
+          {
+            r'$text': {r'$search': search.words.join(' ')}
+          },
+          for (final word in search.words)
+            {
+              'name': {r'$regex': RegExp.escape(word)}
+            },
+        ],
+      };
+
+  /// Requires every word in the name or a description, ignoring case.
+  static List<Map<String, Object>> _patternClauses(PackageSearch search) => [
+        for (final word in search.words)
+          {
+            r'$or': [
+              for (final field in ['name', 'versions.pubspec.description'])
+                {
+                  field: {r'$regex': RegExp.escape(word), r'$options': 'i'}
+                },
+            ],
+          },
+      ];
+
+  Future<UnpubQueryResult> _search(
+      PackageSearch search, List<Map<String, Object>> clauses,
+      {bool textScore = false}) async {
+    final filter = clauses.isEmpty
+        ? <String, Object>{}
+        : clauses.length == 1
+            ? clauses.single
+            : {r'$and': clauses};
+    final collection = db.collection(packageCollection);
+    final count = await collection.modernCount(filter: filter);
+    final packages = await collection
+        .modernFind(
+          filter: filter,
+          sort: switch (search.sort) {
+            PackageSort.relevance when textScore => {
+                'score': {r'$meta': 'textScore'},
+                'download': -1,
+                'name': 1,
+              },
+            PackageSort.relevance || PackageSort.downloads => {
+                'download': -1,
+                'name': 1
+              },
+            PackageSort.updated => {'updatedAt': -1, 'name': 1},
+            PackageSort.name => {'name': 1},
+          },
+          projection: _listExcludedFields,
+          // The driver refuses a skip of 0.
+          skip: search.page > 0 ? search.page * search.size : null,
+          limit: search.size,
+        )
+        .map(UnpubPackage.fromJson)
+        .toList();
+    return UnpubQueryResult(count.count, packages);
+  }
+
+  @override
+  Future<Set<String>> existingPackageNames(Iterable<String> names) async {
+    final wanted = names.toSet().toList();
+    if (wanted.isEmpty) return {};
+    final found = await db
+        .collection(packageCollection)
+        .modernFind(filter: {
+          'name': {r'$in': wanted}
+        }, projection: {
+          'name': 1
+        })
+        .map((item) => item['name'] as String)
+        .toList();
+    return found.toSet();
   }
 
   /// Pings the server.
