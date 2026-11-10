@@ -90,7 +90,7 @@ describe('audit log', () => {
     )
 
     await user.click(screen.getByRole('button', { name: 'Show details' }))
-    expect(screen.getByText(/"sha256": "abc"/)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`"sha256": "${f.sha256}"`))).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: 'Page 3' }))
     expect(where(router)).toBe('/admin/audit?action=user.created&page=3')

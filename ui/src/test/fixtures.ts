@@ -12,6 +12,8 @@ import type {
 } from '@/api/types'
 
 const at = '2026-11-01T10:00:00.000Z'
+/** The archive hash of the examples in docs/openapi.yaml. */
+export const sha256 = '3b1f0c9e0d4a7b2c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d'
 
 export function config(overrides: Partial<Config> = {}): Config {
   return {
@@ -100,6 +102,8 @@ export function pkg(overrides: Partial<Package> = {}): Package {
     readmeHtml:
       '<h1 id="md-core">Core</h1><p>Hello.</p><h2 id="md-usage">Usage</h2><p>Use it.</p><h2 id="md-api">API</h2>',
     changelogHtml: '<h2 id="md-140">1.4.0</h2><ul><li>Faster.</li></ul>',
+    readme: '# Core\n\nHello.\n\n## Usage\n\nUse it.\n\n## API\n',
+    changelog: '## 1.4.0\n\n- Faster.\n',
     dependencies: [
       { name: 'http', constraint: '^1.0.0', hosted: true, local: false },
       { name: 'my_company_log', constraint: '^2.0.0', hosted: true, local: true },
@@ -112,7 +116,7 @@ export function pkg(overrides: Partial<Package> = {}): Package {
     isDiscontinued: false,
     replacedBy: null,
     discontinuedAt: null,
-    archiveSha256: 'a'.repeat(64),
+    archiveSha256: sha256,
     downloads: { version: 5, package: 1234 },
     private: true,
     isFlutter: false,
@@ -143,7 +147,7 @@ export function token(overrides: Partial<Token> = {}): Token {
     id: 't1',
     userId: 'admin',
     name: 'laptop',
-    prefix: 'abcd1234',
+    prefix: 'up_3f9a',
     scopes: ['read', 'publish'],
     expiresAt: null,
     lastUsedAt: null,
@@ -159,12 +163,12 @@ export function auditEvent(overrides: Partial<AuditEvent> = {}): AuditEvent {
     action: 'package.published',
     actor: 'jane.doe@company.example',
     actorKind: 'token',
-    token: 'abcd1234',
+    token: 'up_3f9a',
     package: 'my_company_core',
     version: '1.4.0',
     target: null,
-    ip: '10.0.0.1',
-    details: { sha256: 'abc' },
+    ip: '10.0.0.12',
+    details: { sha256 },
     ...overrides,
   }
 }
