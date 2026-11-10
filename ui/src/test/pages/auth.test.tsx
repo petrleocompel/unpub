@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as f from '../fixtures'
+import { formatCountdown } from '@/pages/login'
 import { renderApp, where } from '../render'
 import { capture, error, server, url } from '../server'
 
@@ -59,6 +60,41 @@ describe('login', () => {
     expect(within(alert).getByText('Try again in 2 minutes.')).toHaveClass('sr-only')
     expect(within(alert).getByText(/^Try again in [12]:\d\d\.$/)).toHaveAttribute('aria-hidden')
     expect(screen.getByRole('button', { name: 'Log in' })).toBeDisabled()
+  })
+
+  it('counts the wait down and lets the user try again at zero', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const attempts = capture('post', '/webapi/login', () =>
+        error(429, 'rate_limited', 'Too many attempts.', { 'Retry-After': '65' }),
+      )
+      const { user } = renderApp('/login')
+      await user.type(await screen.findByLabelText('Email'), 'a@b.example')
+      await user.type(screen.getByLabelText('Password'), 'whatever1')
+      await user.click(screen.getByRole('button', { name: 'Log in' }))
+      const alert = await screen.findByRole('alert')
+      expect(within(alert).getByText(/^Try again in 1:0[45]\.$/)).toBeInTheDocument()
+      expect(within(alert).getByText('Try again in 2 minutes.')).toHaveClass('sr-only')
+      const button = screen.getByRole('button', { name: 'Log in' })
+      expect(button).toBeDisabled()
+
+      act(() => vi.advanceTimersByTime(60_000))
+      expect(within(alert).getByText(/^Try again in 0:0[45]\.$/)).toBeInTheDocument()
+      expect(button).toBeDisabled()
+
+      act(() => vi.advanceTimersByTime(6_000))
+      expect(alert).toHaveTextContent('Too many attempts. You can try again now.')
+      expect(within(alert).queryByText(/Try again in/)).toBeNull()
+      expect(button).toBeEnabled()
+      act(() => vi.advanceTimersByTime(5_000))
+      expect(alert).toHaveTextContent('You can try again now.')
+
+      await user.type(screen.getByLabelText('Password'), 'whatever2')
+      await user.click(button)
+      await waitFor(() => expect(attempts).toHaveLength(2))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows and hides the password', async () => {
@@ -237,5 +273,16 @@ describe('admin pages', () => {
     renderApp('/admin/users', { me: f.me(f.user()) })
     expect(await screen.findByRole('heading', { name: 'Administrators only' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Log in as an administrator' })).toBeInTheDocument()
+  })
+})
+
+describe('formatCountdown', () => {
+  it('shows minutes and seconds, rounding up and stopping at zero', () => {
+    expect(formatCountdown(120)).toBe('2:00')
+    expect(formatCountdown(65)).toBe('1:05')
+    expect(formatCountdown(42)).toBe('0:42')
+    expect(formatCountdown(0.2)).toBe('0:01')
+    expect(formatCountdown(0)).toBe('0:00')
+    expect(formatCountdown(-3)).toBe('0:00')
   })
 })
