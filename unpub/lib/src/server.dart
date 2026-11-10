@@ -40,10 +40,11 @@ class UnpubServer {
   final UpstreamProxy? _upstreamProxy;
   final TemporaryReclaimer _reclaimer;
   final WebhookService _webhooks;
+  final App _app;
   Future<void>? _stopping;
 
   UnpubServer._(this._http, this._db, this._upstreamProxy, this._reclaimer,
-      this._webhooks);
+      this._webhooks, this._app);
 
   int get port => _http.port;
 
@@ -140,7 +141,7 @@ class UnpubServer {
           references: MongoArchiveReferences(db))
         ..start();
       webhooks.start();
-      return UnpubServer._(http, db, upstreamProxy, reclaimer, webhooks);
+      return UnpubServer._(http, db, upstreamProxy, reclaimer, webhooks, app);
     } catch (_) {
       await db.close().catchError((Object _) {});
       rethrow;
@@ -179,6 +180,10 @@ class UnpubServer {
     }
     _upstreamProxy?.close();
     _reclaimer.stop();
+    await _app.metricsSources.storage.close().timeout(_drainTimeout,
+        onTimeout: () {
+      _log.warning('dropping the package store measurement still running');
+    });
     await _webhooks.stop().timeout(_drainTimeout, onTimeout: () {
       _log.warning('dropping webhook deliveries still running');
     });

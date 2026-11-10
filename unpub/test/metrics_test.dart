@@ -402,6 +402,44 @@ void main() {
     expect(errors, hasLength(1));
   });
 
+  test('a background value recovers from a measurement that throws at once',
+      () async {
+    var computed = 0;
+    var fail = true;
+    final errors = <Object>[];
+    final value = BackgroundValue<int>(() {
+      if (fail) throw StateError('down');
+      return Future.value(++computed);
+    }, maxAge: const Duration(minutes: 10), onError: (e, _) => errors.add(e));
+    expect(value.current, isNull);
+    await value.idle;
+    expect(errors, hasLength(1));
+    fail = false;
+    expect(value.current, isNull, reason: 'the next measurement starts');
+    await value.idle;
+    expect(value.current!.value, 1);
+  });
+
+  test('a closed background value measures no more', () async {
+    var computed = 0;
+    final started = Completer<void>();
+    final finish = Completer<void>();
+    final value = BackgroundValue<int>(() async {
+      started.complete();
+      await finish.future;
+      return ++computed;
+    }, maxAge: Duration.zero);
+    expect(value.current, isNull);
+    await started.future;
+    final closed = value.close();
+    finish.complete();
+    await closed;
+    expect(value.current!.value, 1, reason: 'the last one is kept');
+    expect(value.current!.value, 1, reason: 'no new one starts');
+    await value.idle;
+    expect(computed, 1);
+  });
+
   test('a cached value is computed again only when old', () async {
     var now = DateTime(2026);
     var computed = 0;

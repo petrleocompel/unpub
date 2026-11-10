@@ -335,6 +335,8 @@ class BackgroundValue<T> {
   T? _value;
   DateTime? _at;
   Future<void>? _running;
+  bool _measuring = false;
+  bool _closed = false;
 
   BackgroundValue(this.compute,
       {required this.maxAge, this.clock = DateTime.now, this.onError});
@@ -352,9 +354,12 @@ class BackgroundValue<T> {
   /// Starts a measurement if the value is missing or old and none is under
   /// way.
   void refresh() {
-    if (_running != null) return;
+    if (_closed || _measuring) return;
     final at = _at;
     if (at != null && clock().difference(at) < maxAge) return;
+    // The flag, not the future: a [compute] that throws before its first
+    // await finishes the measurement before the future is even assigned.
+    _measuring = true;
     _running = _measure();
   }
 
@@ -366,12 +371,19 @@ class BackgroundValue<T> {
     } catch (error, stackTrace) {
       onError?.call(error, stackTrace);
     } finally {
-      _running = null;
+      _measuring = false;
     }
   }
 
   /// Completes when the measurement under way, if any, has.
   Future<void> get idle => _running ?? Future<void>.value();
+
+  /// Starts no further measurement, and completes when the one under way,
+  /// if any, has.
+  Future<void> close() {
+    _closed = true;
+    return idle;
+  }
 }
 
 /// A value that is computed again only once it is older than [maxAge].
