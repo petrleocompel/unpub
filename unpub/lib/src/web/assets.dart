@@ -211,6 +211,7 @@ td code, th code { overflow-wrap: anywhere; }
   .site-header .wrap { gap: .5rem; }
   .site-search { order: 3; flex-basis: 100%; }
   h1 { font-size: 1.35rem; }
+  td.actions { white-space: normal; }
 }
 ''';
 

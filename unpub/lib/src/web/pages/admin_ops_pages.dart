@@ -164,13 +164,20 @@ String webhookHref(String id) => '/admin/webhooks/${Uri.encodeComponent(id)}';
 
 /// A secret shown once, with the advice to keep it.
 Html _secretBox(String secret) => el('div', {
-      'class': 'notice',
+      'class': 'secret',
       'role': 'status'
     }, [
       el('p', const {},
           'The signing secret, shown only now. Keep it with the receiver:'),
-      el('pre', const {}, el('code', {'id': 'webhook-secret'}, secret)),
-      el('button', {'type': 'button', 'data-copy': 'webhook-secret'}, 'Copy'),
+      el('div', {
+        'class': 'snippet'
+      }, [
+        el('pre', const {}, el('code', {'id': 'webhook-secret'}, secret)),
+        el(
+            'button',
+            {'type': 'button', 'class': 'copy', 'data-copy': 'webhook-secret'},
+            'Copy'),
+      ]),
     ]);
 
 Html _eventChecks(List<String> checked) => el('fieldset', const {}, [

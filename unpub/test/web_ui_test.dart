@@ -846,6 +846,9 @@ void main() {}
       expect(css.headers['cache-control'], contains('max-age=31536000'));
       final etag = css.headers['etag']!;
       expect(css.body.split('\n').length, lessThan(400));
+      // Action cells wrap on a narrow screen instead of widening the table.
+      final narrow = css.body.substring(css.body.indexOf('(max-width: 760px)'));
+      expect(narrow, contains('td.actions { white-space: normal; }'));
 
       final again = await fetch('GET', '/static/app.css',
           headers: {'if-none-match': etag});

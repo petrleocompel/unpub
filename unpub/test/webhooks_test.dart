@@ -696,6 +696,8 @@ void main() {
       final shown = await h.page(created.location!, as: browser);
       expect(shown.status, HttpStatus.ok);
       expect(shown.body, contains(hook.secret));
+      expect(shown.body,
+          contains('<div class="secret" role="status"><p>The signing secret'));
       expect(shown.body, contains('The webhook was added.'));
       final reloaded = await h.page(created.location!, as: browser);
       expect(reloaded.status, HttpStatus.ok);
