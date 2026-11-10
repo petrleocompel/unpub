@@ -73,7 +73,8 @@ void main() {
       WebhookService(WebhookStore(h.db),
           config: config,
           audit: h.audit,
-          retryDelays: const [Duration(milliseconds: 40)],
+          // Retries fall due only when a test makes them due.
+          retryDelays: const [Duration(minutes: 1)],
           lookup: lookup);
 
   final h = Harness(builder: (h) {
@@ -111,13 +112,21 @@ void main() {
     return (hook, reply.json['secret'] as String);
   }
 
-  /// Delivers everything due with [using], then what falls due within
-  /// [wait].
-  Future<void> drain({WebhookService? using, Duration? wait}) async {
+  /// Makes every pending delivery due now, as if its retry delay had passed.
+  Future<void> makeDue() =>
+      h.db.collection(webhookDeliveryCollection).updateMany({
+        'status': DeliveryStatus.pending,
+      }, {
+        r'$set': {'nextAt': DateTime.utc(2000)},
+      });
+
+  /// Delivers everything due with [using], and then, if [retry], every
+  /// retry that is waiting.
+  Future<void> drain({WebhookService? using, bool retry = false}) async {
     final worker = using ?? service;
     while (await worker.deliverDue()) {}
-    if (wait != null) {
-      await Future<void>.delayed(wait);
+    if (retry) {
+      await makeDue();
       while (await worker.deliverDue()) {}
     }
   }
@@ -173,7 +182,7 @@ void main() {
 
       // Not due before the delay.
       expect(await service.deliverDue(), isFalse);
-      await drain(wait: const Duration(milliseconds: 150));
+      await drain(retry: true);
       delivery = (await deliveries(hook)).single;
       expect(delivery.status, DeliveryStatus.succeeded);
       expect(delivery.attempt, 2);
@@ -186,7 +195,7 @@ void main() {
       final (hook, _) = await addHook();
       await h.publish('alpha', '1.0.0', bearer: ownerToken);
       for (var i = 0; i < 4; i++) {
-        await drain(wait: const Duration(milliseconds: 150));
+        await drain(retry: true);
       }
       final delivery = (await deliveries(hook)).single;
       expect(delivery.status, DeliveryStatus.failed);

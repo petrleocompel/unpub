@@ -30,17 +30,18 @@ void main() {
     return (stats?['d${day(today)}'] as num?)?.toInt();
   }
 
-  /// Waits for the counting of a download, which does not hold up the
-  /// response.
-  Future<int?> settled() async {
-    int? last;
-    for (var i = 0; i < 20; i++) {
+  /// Waits up to 2 seconds for the counting of a download, which does not
+  /// hold up the response, to reach [expected], and then a little longer, so
+  /// that counting too much shows too.
+  Future<int?> settled([int? expected]) async {
+    final budget = Stopwatch()..start();
+    var counted = await countedToday();
+    while (counted != expected && budget.elapsed < const Duration(seconds: 2)) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
-      final now = await countedToday();
-      if (now == last && i > 4) return now;
-      last = now;
+      counted = await countedToday();
     }
-    return last;
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    return countedToday();
   }
 
   group('a download', () {
@@ -50,9 +51,9 @@ void main() {
     test('by the pub client counts for today', () async {
       final reply = await h.send('GET', path, headers: pub);
       expect(reply.status, HttpStatus.ok);
-      expect(await settled(), 1);
+      expect(await settled(1), 1);
       await h.send('GET', path, headers: pub);
-      expect(await settled(), 2);
+      expect(await settled(2), 2);
     });
 
     test('is not counted for a HEAD, a 304 or another client', () async {
