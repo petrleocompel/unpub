@@ -32,7 +32,7 @@ const checkNames: Record<string, { label: string; icon: LucideIcon }> = {
   storage: { label: 'Storage', icon: HardDrive },
 }
 
-/** A readiness check of the server as a badge: ready, or its error. */
+/** A readiness check of the server as a badge: ready, or not with its error beside it. */
 function ReadinessBadge({
   name,
   check,
@@ -44,11 +44,21 @@ function ReadinessBadge({
   const Icon = known?.icon ?? Database
   const label = known?.label ?? name
   const ok = check.status === 'ok'
-  return (
-    <Badge title={check.error} variant={ok ? 'success' : 'danger'}>
+  const badge = (
+    <Badge variant={ok ? 'success' : 'danger'}>
       {ok ? <Icon aria-hidden /> : <CircleAlert aria-hidden />}
       {ok ? `${label} ready` : `${label} not ready`}
     </Badge>
+  )
+  if (ok || !check.error) return badge
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5">
+      {badge}
+      <span className="min-w-0 text-xs break-words text-destructive">
+        <span className="sr-only">: </span>
+        {check.error}
+      </span>
+    </span>
   )
 }
 

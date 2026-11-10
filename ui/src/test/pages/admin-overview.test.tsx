@@ -25,7 +25,10 @@ describe('admin overview', () => {
     )
     renderApp('/admin', { me: f.me() })
     expect(await screen.findByText('MongoDB ready')).toBeInTheDocument()
-    expect(screen.getByText('Storage not ready')).toHaveAttribute('title', 'disk full')
+    const storage = screen.getByText('Storage not ready')
+    expect(storage).not.toHaveAttribute('title')
+    expect(storage.parentElement).toHaveTextContent(/^Storage not ready: disk full$/)
+    expect(screen.getByText('disk full')).toBeVisible()
     expect(screen.getByRole('link', { name: /Packages\s*12/ })).toHaveAttribute(
       'href',
       '/admin/packages',
