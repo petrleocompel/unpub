@@ -1,13 +1,15 @@
 import { useId, useState, type FormEvent } from 'react'
 import {
+  ArrowDown,
+  Ban,
+  Check,
   KeyRound,
   Loader2,
   MoreHorizontal,
-  Plus,
   Search,
-  ShieldCheck,
+  Shield,
   UserCheck,
-  UserX,
+  UserPlus,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { ApiError, errorMessage } from '@/api/client'
@@ -16,12 +18,13 @@ import { roles, type Role, type User } from '@/api/types'
 import { useSession } from '@/auth/session'
 import { DisabledBadge, RoleBadge } from '@/components/badges'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CompactTable } from '@/components/dashboard/compact-table'
+import { ToneBadge } from '@/components/dashboard/panel'
 import { Field, FormError } from '@/components/form'
 import { NativeSelect } from '@/components/native-select'
 import { intParam, Pager } from '@/components/pager'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/states'
 import { DateTime, RelativeTime } from '@/components/time'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -40,14 +43,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatNumber } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useDebouncedParam } from '@/lib/use-debounced-param'
 import { useTitle } from '@/lib/use-title'
@@ -59,6 +56,24 @@ export function userChangeError(error: unknown) {
     return `${error.message} Make another user an administrator first.`
   }
   return errorMessage(error)
+}
+
+/**
+ * Runs a change of a user. The last-administrator guard (409) is reported in
+ * a toast titled [title] and closes the dialog, nothing being left to do in
+ * it; other errors stay in the dialog.
+ */
+async function changeUser(title: string, change: () => Promise<unknown>) {
+  try {
+    await change()
+    return true
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'last_admin') {
+      toast.error(title, `${error.status} · ${userChangeError(error)}`)
+      return false
+    }
+    throw new Error(userChangeError(error))
+  }
 }
 
 export function UsersPage() {
@@ -73,21 +88,27 @@ export function UsersPage() {
   const [roleFor, setRoleFor] = useState<User | null>(null)
   const update = useUpdateUser()
   const { me } = useSession()
+  const total = users.data && !q ? users.data.total : null
 
   return (
     <>
       <AdminHeading
         title="Users"
-        description="There is no self sign-up or invitation email: create the account and hand over the password."
+        description={
+          <>
+            {total !== null && `${formatNumber(total)} account${total === 1 ? '' : 's'}. `}
+            There is no self sign-up and no invite email: hand new users their password yourself.
+          </>
+        }
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus aria-hidden />
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <UserPlus aria-hidden />
             Create user
           </Button>
         }
       />
       <div className="grid gap-4">
-        <div className="relative max-w-sm">
+        <div className="relative max-w-90 min-w-50">
           <label htmlFor="user-search" className="sr-only">
             Search users
           </label>
@@ -98,8 +119,8 @@ export function UsersPage() {
           <Input
             id="user-search"
             type="search"
-            placeholder="Search by email or name"
-            className="pl-8"
+            placeholder="Search email or name"
+            className="h-8 pl-8 text-[0.8125rem] md:text-[0.8125rem]"
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
@@ -120,11 +141,16 @@ export function UsersPage() {
           </EmptyState>
         ) : (
           <>
-            <Table containerClassName="rounded-lg border" stickyFirstColumn>
+            <CompactTable>
               <caption className="sr-only">Users, by email</caption>
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Email</TableHead>
+                  <TableHead scope="col" aria-sort="ascending">
+                    <span className="inline-flex items-center gap-1">
+                      Email
+                      <ArrowDown aria-hidden className="size-3" />
+                    </span>
+                  </TableHead>
                   <TableHead scope="col">Display name</TableHead>
                   <TableHead scope="col">Role</TableHead>
                   <TableHead scope="col">Status</TableHead>
@@ -137,11 +163,13 @@ export function UsersPage() {
               </TableHeader>
               <TableBody>
                 {users.data.items.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.id} data-muted={user.disabled || undefined}>
                     <TableCell className="font-medium">
                       {user.email}
                       {user.id === me?.user.id && (
-                        <span className="ml-2 text-xs text-muted-foreground">(you)</span>
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          (you)
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>{user.displayName || '–'}</TableCell>
@@ -149,38 +177,41 @@ export function UsersPage() {
                       <RoleBadge role={user.role} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {user.disabled ? (
                           <DisabledBadge />
                         ) : (
-                          <Badge variant="outline">Enabled</Badge>
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <Check aria-hidden className="size-3 text-success" />
+                            Enabled
+                          </span>
                         )}
-                        {!user.hasPassword && <Badge variant="outline">No password</Badge>}
+                        {!user.hasPassword && <ToneBadge tone="neutral">No password</ToneBadge>}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-muted-foreground">
                       <DateTime value={user.createdAt} date />
                     </TableCell>
-                    <TableCell>
-                      {user.lastLoginAt ? <RelativeTime value={user.lastLoginAt} /> : 'Never'}
+                    <TableCell className="text-muted-foreground">
+                      {user.lastLoginAt ? <RelativeTime value={user.lastLoginAt} /> : 'never'}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
-                            size="icon-sm"
+                            size="icon-xs"
                             aria-label={`Actions for ${user.email}`}
                           >
                             <MoreHorizontal aria-hidden />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuContent align="end" className="w-57.5">
                           <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
                             {user.email}
                           </DropdownMenuLabel>
                           <DropdownMenuItem onSelect={() => setRoleFor(user)}>
-                            <ShieldCheck aria-hidden />
+                            <Shield aria-hidden />
                             Change role…
                           </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setPasswordFor(user)}>
@@ -192,7 +223,7 @@ export function UsersPage() {
                             variant={user.disabled ? 'default' : 'destructive'}
                             onSelect={() => setToggling(user)}
                           >
-                            {user.disabled ? <UserCheck aria-hidden /> : <UserX aria-hidden />}
+                            {user.disabled ? <UserCheck aria-hidden /> : <Ban aria-hidden />}
                             {user.disabled ? 'Enable…' : 'Disable…'}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -201,7 +232,7 @@ export function UsersPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </CompactTable>
             <Pager
               page={users.data.page}
               size={users.data.size}
@@ -229,11 +260,11 @@ export function UsersPage() {
         destructive={!toggling?.disabled}
         onConfirm={async () => {
           if (!toggling) return
-          try {
-            await update.mutateAsync({ id: toggling.id, disabled: !toggling.disabled })
-          } catch (error) {
-            throw new Error(userChangeError(error))
-          }
+          const done = await changeUser(
+            toggling.disabled ? 'Could not enable the user' : 'Could not disable the user',
+            () => update.mutateAsync({ id: toggling.id, disabled: !toggling.disabled }),
+          )
+          if (!done) return
           toast.success(
             toggling.disabled ? `Enabled ${toggling.email}` : `Disabled ${toggling.email}`,
           )
@@ -435,11 +466,10 @@ function RoleDialog({ user, onClose }: { user: User | null; onClose: () => void 
       confirmLabel="Change role"
       onConfirm={async () => {
         if (!user || role === user.role) return
-        try {
-          await update.mutateAsync({ id: user.id, role })
-        } catch (error) {
-          throw new Error(userChangeError(error))
-        }
+        const done = await changeUser('Could not change the role', () =>
+          update.mutateAsync({ id: user.id, role }),
+        )
+        if (!done) return
         toast.success(`${user.email} is now ${role === 'admin' ? 'an' : 'a'} ${role}`)
       }}
     >
