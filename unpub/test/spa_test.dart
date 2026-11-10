@@ -34,11 +34,6 @@ void main() {
 
     test('moves the references of the build under the base path', () {
       final shell = shellFor(index, basePath: '/app', classicPath: '');
-      // A link to a page of the server is not one to the build.
-      expect(
-          shellFor('<head></head><a href="/classic/">x</a>',
-              basePath: '/app', classicPath: ''),
-          contains('href="/classic/"'));
       expect(shell, contains('<meta name="unpub-base" content="/app">'));
       expect(shell, contains('<meta name="unpub-classic" content="">'));
       expect(shell, contains('src="/app/assets/a.js"'));
@@ -46,6 +41,29 @@ void main() {
       // Other origins are left alone.
       expect(shell, contains('href="https://cdn.example/x.svg"'));
       expect(shell, contains('href="//other.example/"'));
+    });
+
+    test('moves the links to the classic pages to where they are', () {
+      const links =
+          '<head></head><noscript><a href="/classic/">x</a></noscript>'
+          '<a href="/classic/packages/alpha?tab=versions">a</a>'
+          "<a href='/classic'>b</a><a href=\"/classic?x=1\">c</a>"
+          '<a href="/classical/">d</a><img src="/classic/static/x.png">';
+      final spa = shellFor(links, basePath: '', classicPath: '/classic');
+      expect(spa, contains('<a href="/classic/">x</a>'));
+      expect(spa, contains('href="/classic/packages/alpha?tab=versions"'));
+      expect(spa, contains("href='/classic'"));
+      expect(spa, contains('href="/classical/"'));
+
+      final ssr = shellFor(links, basePath: '/app', classicPath: '');
+      // A link to a page of the server is not one to the build.
+      expect(ssr, contains('<a href="/">x</a>'));
+      expect(ssr, contains('href="/packages/alpha?tab=versions"'));
+      expect(ssr, contains("href='/'"));
+      expect(ssr, contains('href="/?x=1"'));
+      expect(ssr, contains('href="/classical/"'));
+      // Only links: a reference to a file is left alone.
+      expect(ssr, contains('src="/classic/static/x.png"'));
     });
 
     test('content types of a Vite build', () {
@@ -98,6 +116,10 @@ void main() {
         expectShell(reply);
         expect(reply.body,
             contains('<meta name="unpub-classic" content="/classic">'));
+        expect(
+            reply.body,
+            contains(
+                '<noscript><a href="/classic/">Use the classic pages</a>'));
       }
     });
 
@@ -367,6 +389,9 @@ void main() {
         final reply = await get(path, using: ssr);
         expectShell(reply, base: '/app');
         expect(reply.body, contains('<meta name="unpub-classic" content="">'));
+        expect(reply.body,
+            contains('<noscript><a href="/">Use the classic pages</a>'));
+        expect(reply.body, isNot(contains('/classic')));
       }
       final js = await get('/app$_script', html: false, using: ssr);
       expect(js.status, HttpStatus.ok);

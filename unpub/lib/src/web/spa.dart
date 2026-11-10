@@ -318,10 +318,17 @@ final _head = RegExp(r'<head(\s[^>]*)?>', caseSensitive: false);
 final _reference = RegExp(r'''(\s(?:src|href)=["'])(\./|/(?!/))([^/"'?#]*)''',
     caseSensitive: false);
 
+/// A link of the shell to the server-rendered pages, written `/classic/...`
+/// as they are with `ui.mode: spa` and in development.
+final _classicLink =
+    RegExp(r'''(\shref=["'])/classic(?=[/"'?#])''', caseSensitive: false);
+
 /// [index], the `index.html` of a build, as served under [basePath]: with the
 /// meta tags telling the client where it and the server-rendered pages are,
-/// and with the references to the build, `./x`, or `/x` for an `x` in
-/// [buildEntries], made `<basePath>/x`.
+/// with the references to the build, `./x`, or `/x` for an `x` in
+/// [buildEntries], made `<basePath>/x`, and with its links to the
+/// server-rendered pages, `href="/classic/..."`, moved to [classicPath], so
+/// that the `<noscript>` link leads to `/` with `ui.mode: ssr`.
 String shellFor(String index,
     {required String basePath,
     required String classicPath,
@@ -330,6 +337,11 @@ String shellFor(String index,
     final relative = match[2] == './';
     if (!relative && !buildEntries.contains(match[3])) return match[0]!;
     return '${match[1]}$basePath/${match[3]}';
+  }).replaceAllMapped(_classicLink, (match) {
+    final rest = match.input[match.end];
+    // `/classic` alone, or followed by a query or fragment, is the root.
+    final root = classicPath.isEmpty && rest != '/' ? '/' : classicPath;
+    return '${match[1]}${escapeHtml(root)}';
   });
   final meta = '\n<meta name="unpub-base" content="${escapeHtml(basePath)}">'
       '\n<meta name="unpub-classic" content="${escapeHtml(classicPath)}">';

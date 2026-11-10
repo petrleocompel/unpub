@@ -21,6 +21,7 @@ Prepares the server for the single-page web client of phase 6: the JSON API it n
 - The shell is served by the `q` values of `Accept`: the most specific range matching `text/html` decides, so `text/html;q=0` gets no shell while `*/*` does. `index.html` is read only if it resolves inside the build, checked when the client is built and on every read; otherwise the request gets a 500 and the reason is logged.
 - `page` is at most 100000 on every list route, so a huge one can no longer overflow the offset; a page past the end is an empty page. Digits too long for an integer count as out of range rather than as missing.
 - `SpaClient` and `spaContentSecurityPolicy` are exported.
+- Links of `index.html` to the server-rendered pages, `href="/classic/..."`, are moved to where the pages are, so the `<noscript>` link of the client leads to `/` with `ui.mode: ssr`.
 - Every item of `versions` in `GET /webapi/package/<name>[/<version>]` has `archiveSha256`, null when the hash of that archive is not known.
 - `GET /webapi/me` is open in every read mode and answers 200 with `{"user": null}` when nobody is logged in, instead of 401, so browsers log no failed request on every anonymous page. A session cookie that is not accepted any more, such as an expired one, is cleared. A token without the `read` scope still gets 403 with `auth.readAccess: authenticated`.
 - Serves `docs/openapi.yaml` at `GET /webapi/openapi.yaml`. A test checks it against the router, and CI lints it and builds and tests the client once `ui/package.json` exists.
