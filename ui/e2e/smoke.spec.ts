@@ -132,7 +132,10 @@ test('screenshot of the package list', async ({ page }) => {
   test.skip(!out, 'Set UNPUB_E2E_SCREENSHOT to the file to write')
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })
   await page.setViewportSize({ width: 1440, height: 900 })
+  // A theme chosen in a reused storage state would win over the media query.
+  await page.addInitScript(() => localStorage.removeItem('unpub-theme'))
   await page.goto('/')
+  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
   await expect(page.getByRole('link', { name: 'e2e_demo' })).toBeVisible()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: out, animations: 'disabled' })
