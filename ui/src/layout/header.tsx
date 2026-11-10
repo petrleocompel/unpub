@@ -1,4 +1,4 @@
-import { LogIn, LogOut, Shield, User } from 'lucide-react'
+import { Boxes, LogIn, LogOut, Shield, User } from 'lucide-react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { errorMessage } from '@/api/client'
 import { useLogout } from '@/api/queries'
@@ -31,7 +31,9 @@ export function Wordmark() {
       >
         u
       </span>
-      <span aria-hidden>unpub</span>
+      <span aria-hidden className="hidden min-[400px]:inline">
+        unpub
+      </span>
     </Link>
   )
 }
@@ -50,21 +52,23 @@ export function Header() {
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-6">
         <Wordmark />
         {!locked && (
-          <nav aria-label="Main" className="hidden sm:block">
+          <nav aria-label="Main" className="shrink-0">
             <NavLink
               to="/packages"
               className={({ isActive }) =>
                 cn(
-                  'rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground',
+                  'flex items-center rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground',
                   isActive && 'text-foreground',
                 )
               }
             >
-              Packages
+              {/* An icon below sm, where the search needs the room. */}
+              <Boxes aria-hidden className="size-4 sm:hidden" />
+              <span className="sr-only sm:not-sr-only">Packages</span>
             </NavLink>
           </nav>
         )}
-        {!locked && <SearchBox className="max-w-md flex-1" />}
+        {!locked && <SearchBox className="max-w-md min-w-0 flex-1" />}
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           {me ? (
@@ -120,7 +124,7 @@ export function Header() {
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
                 <LogIn aria-hidden />
-                Log in
+                <span className="sr-only sm:not-sr-only">Log in</span>
               </Link>
             )
           )}
