@@ -605,6 +605,10 @@ With `auth.readAccess: authenticated`, `index.html`, the files of the build, `GE
 
 **Building.** The Docker image builds the client in a `node:22-alpine` stage (`npm ci`, `npm run build` in `ui/`) when `ui/package.json` exists, and copies `ui/dist` to `/app/ui`. From source, build it in `ui/` and run the server from the repository root so that `ui/dist` is found, or set `ui.assetsDir`. Without a build the server logs a warning and serves the server-rendered pages only.
 
+**Developing.** The client lives in `ui/` (Node 22, npm). Run a server on port 4000, then `npm ci` and `npm run dev` in `ui/`: Vite serves the client on `http://localhost:5173` with hot reload and proxies `/webapi`, `/api`, the archives, `/badge`, `/static` and `/classic` to the server. The API types in `ui/src/api/schema.d.ts` are generated from `docs/openapi.yaml` with `npm run api:types`, and CI fails when they are out of date. `npm test` runs the page tests (Vitest, Testing Library, MSW), and `npm run test:e2e` builds the client, serves it from the Dart server with MongoDB and drives it with Playwright, failing on any console error such as a Content-Security-Policy violation. Colours, radii and fonts are CSS variables in `ui/src/index.css`, so a restyle is a change of theme. See [ui/README.md](ui/README.md).
+
+_Screenshot of the package page: to be added with the visual design (`docs/screenshots/package.png`)._
+
 ## Web UI
 
 The server renders every page itself. With `ui.mode: spa` these pages live under `/classic`, see [Web client](#web-client); the paths below are those of `ui.mode: ssr`. There is no frontend build and no third-party script, font or stylesheet: one stylesheet and one small script are served from `/static/`, and everything works without JavaScript.
