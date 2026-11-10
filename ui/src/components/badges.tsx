@@ -14,7 +14,16 @@ import { cn } from '@/lib/utils'
 
 export function SdkBadge({ flutter }: { flutter: boolean }) {
   return (
-    <Badge variant="secondary" className="font-normal">
+    <Badge variant="secondary" className="rounded-[5px] font-semibold">
+      <span
+        aria-hidden
+        className={cn(
+          'size-1.5',
+          flutter
+            ? 'rounded-full bg-[color-mix(in_oklab,var(--primary)_55%,var(--success))]'
+            : 'rounded-[2px] bg-primary',
+        )}
+      />
       {flutter ? 'Flutter' : 'Dart'}
     </Badge>
   )
@@ -22,7 +31,7 @@ export function SdkBadge({ flutter }: { flutter: boolean }) {
 
 export function DiscontinuedBadge() {
   return (
-    <Badge variant="outline" className="border-warning/60 text-foreground">
+    <Badge variant="outline" className="border-warning/40 bg-warning/13 text-foreground">
       <Archive aria-hidden className="text-warning" />
       Discontinued
     </Badge>
@@ -31,7 +40,7 @@ export function DiscontinuedBadge() {
 
 export function RetractedBadge() {
   return (
-    <Badge variant="outline" className="border-destructive/60 text-foreground">
+    <Badge variant="outline" className="border-destructive/35 bg-destructive/10 text-foreground">
       <Ban aria-hidden className="text-destructive" />
       Retracted
     </Badge>
@@ -49,7 +58,7 @@ export function PrereleaseBadge() {
 
 export function LatestBadge() {
   return (
-    <Badge variant="outline" className="border-primary/50">
+    <Badge variant="outline" className="border-primary/30 bg-primary/12">
       <Star aria-hidden className="text-primary" />
       Latest
     </Badge>
@@ -75,7 +84,7 @@ export function ReplacedByBadge({ name }: { name: string }) {
 
 export function DisabledBadge() {
   return (
-    <Badge variant="outline" className="border-destructive/60">
+    <Badge variant="outline" className="border-destructive/35 bg-destructive/10">
       <CircleAlert aria-hidden className="text-destructive" />
       Disabled
     </Badge>
@@ -93,7 +102,7 @@ export function RoleBadge({ role }: { role: Role }) {
 
 export function ScopeBadge({ scope }: { scope: Scope }) {
   return (
-    <Badge variant="outline" className="font-mono font-normal">
+    <Badge variant="outline" className="rounded-[5px] font-mono font-normal">
       {scope}
     </Badge>
   )
@@ -110,8 +119,9 @@ export function DeliveryStatusBadge({ status }: { status: string }) {
     <Badge
       variant="outline"
       className={cn(
-        status === 'succeeded' && 'border-success/60',
-        status === 'failed' && 'border-destructive/60',
+        status === 'succeeded' && 'border-success/35 bg-success/12',
+        status === 'failed' && 'border-destructive/35 bg-destructive/10',
+        status === 'pending' && 'border-warning/40 bg-warning/13',
       )}
     >
       <span

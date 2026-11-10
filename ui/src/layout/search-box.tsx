@@ -113,7 +113,7 @@ export function SearchBox({ className }: { className?: string }) {
         autoComplete="off"
         spellCheck={false}
         aria-keyshortcuts="/"
-        className="pr-14 pl-8 [&::-webkit-search-cancel-button]:hidden"
+        className="h-9.5 bg-surface pr-14 pl-8 [&::-webkit-search-cancel-button]:hidden"
         onChange={(event) => {
           const next = event.target.value
           setValue(next)

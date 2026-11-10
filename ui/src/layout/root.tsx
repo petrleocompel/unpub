@@ -142,7 +142,7 @@ export function Root() {
         </a>
         <Header />
         <OfflineBanner />
-        <div className="flex-1">
+        <div className="flex flex-1 flex-col">
           <Suspense
             fallback={
               <div className="mx-auto max-w-7xl p-4">
@@ -166,7 +166,7 @@ export function Page({ children, wide = false }: { children: React.ReactNode; wi
     <main
       id="main"
       tabIndex={-1}
-      className={`mx-auto w-full px-4 py-6 outline-none ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}
+      className={`mx-auto w-full px-4 py-6 outline-none sm:px-6 sm:py-8 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}
     >
       {children}
     </main>

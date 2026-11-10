@@ -120,7 +120,10 @@ export function PackagePage({ defaultTab = 'readme' }: { defaultTab?: PackageTab
             }}
             className="min-w-0"
           >
-            <TabsList className="w-full max-w-full flex-nowrap justify-start overflow-x-auto sm:w-auto">
+            <TabsList
+              variant="line"
+              className="w-full max-w-full flex-nowrap justify-start overflow-x-auto rounded-none border-b pb-[5px]"
+            >
               {packageTabs.map((value) => (
                 <TabsTrigger key={value} value={value}>
                   {tabLabels[value]}
@@ -195,9 +198,9 @@ function PackageHeader({ pkg }: { pkg: Package }) {
     <header className="grid gap-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-1">
-          <h1 className="flex flex-wrap items-baseline gap-x-3 text-3xl font-semibold break-all">
+          <h1 className="flex flex-wrap items-baseline gap-x-3 text-[1.875rem] leading-[2.375rem] font-[650] tracking-[-0.025em] break-all">
             {pkg.name}{' '}
-            <span className="font-mono text-xl font-normal text-muted-foreground">
+            <span className="font-mono text-lg font-normal tracking-normal text-muted-foreground">
               {pkg.version}
             </span>
           </h1>

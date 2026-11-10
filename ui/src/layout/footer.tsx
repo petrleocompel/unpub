@@ -8,8 +8,8 @@ export function Footer() {
   // A full page load: the classic pages are not routes of the client.
   const classic = `${classicUrl(config.ui.classicPath, location.pathname)}${location.search}`
   return (
-    <footer className="border-t">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-6 text-sm text-muted-foreground">
+    <footer className="border-t bg-surface">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-5 text-sm text-muted-foreground sm:px-6">
         <span className="font-mono">unpub {config.version}</span>
         <a
           className="hover:text-foreground hover:underline"

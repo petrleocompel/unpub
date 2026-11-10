@@ -18,19 +18,31 @@ import { cn } from '@/lib/utils'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 
+/** The mark: a package dropping into the "u". Colours follow the theme. */
+export function Mark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={cn('size-7 shrink-0', className)}>
+      <rect width="24" height="24" rx="6" className="fill-primary" />
+      <path
+        d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5"
+        fill="none"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        className="stroke-primary-foreground"
+      />
+      <rect x="10.25" y="9" width="3.5" height="3.5" rx="0.8" className="fill-primary-foreground" />
+    </svg>
+  )
+}
+
 export function Wordmark() {
   return (
     <Link
       to="/"
-      className="flex items-center gap-2 rounded-md font-mono text-lg font-semibold tracking-tight"
+      className="flex items-center gap-2 rounded-md text-[1.1875rem] font-[650] tracking-[-0.03em]"
       aria-label="unpub home"
     >
-      <span
-        aria-hidden
-        className="grid size-7 place-items-center rounded-md bg-primary text-sm text-primary-foreground"
-      >
-        u
-      </span>
+      <Mark />
       <span aria-hidden className="hidden min-[400px]:inline">
         unpub
       </span>
@@ -49,7 +61,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-6">
+      <div className="mx-auto flex h-15 max-w-7xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Wordmark />
         {!locked && (
           <nav aria-label="Main" className="shrink-0">
@@ -57,8 +69,8 @@ export function Header() {
               to="/packages"
               className={({ isActive }) =>
                 cn(
-                  'flex items-center rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground',
-                  isActive && 'text-foreground',
+                  'flex h-8 items-center rounded-md px-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground',
+                  isActive && 'bg-accent text-foreground',
                 )
               }
             >

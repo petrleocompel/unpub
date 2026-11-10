@@ -163,7 +163,7 @@ export function PackageListPage() {
           )
         ) : (
           <div className="grid gap-4" aria-busy={packages.isPlaceholderData}>
-            <ul className="divide-y rounded-lg border" aria-label="Packages">
+            <ul className="divide-y rounded-lg border bg-card" aria-label="Packages">
               {packages.data.items.map((item) => (
                 <PackageRow key={item.name} item={item} />
               ))}
@@ -184,12 +184,12 @@ export function PackageListPage() {
 
 function PackageRow({ item }: { item: PackageSummary }) {
   return (
-    <li className="grid gap-2 p-4 sm:grid-cols-[1fr_auto] sm:items-start">
+    <li className="grid gap-2 px-4 py-3.5 hover:bg-muted/60 sm:grid-cols-[1fr_auto] sm:items-start sm:gap-x-6 sm:px-5 sm:py-4">
       <div className="grid min-w-0 gap-1.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             to={`/packages/${encodeURIComponent(item.name)}`}
-            className="truncate text-lg font-semibold text-primary hover:underline"
+            className="truncate text-[1.0625rem] font-semibold tracking-tight text-primary hover:underline"
           >
             {item.name}
           </Link>
@@ -216,7 +216,9 @@ function PackageRow({ item }: { item: PackageSummary }) {
             <Download aria-hidden className="size-3.5" />
             <span className="sr-only">Downloads</span>
           </dt>
-          <dd>{formatNumber(item.downloads)}</dd>
+          <dd className="font-medium text-foreground tabular-nums">
+            {formatNumber(item.downloads)}
+          </dd>
         </div>
       </dl>
     </li>
