@@ -2,7 +2,7 @@
 
 Unpub is a self-hosted private Dart Pub server for teams, with a simple web interface to search and view package information. It is a single binary that stores metadata in MongoDB and package archives on disk or in S3.
 
-> **This is a modernization in progress.** User accounts, roles, personal API tokens, publishing policies, an upstream proxy and a server-rendered web UI with an admin panel are in place. What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
+> **This is a modernization in progress.** User accounts, roles, personal API tokens, publishing policies, an upstream proxy, a server-rendered web UI with an admin panel, and the server side of a single-page web client are in place. What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Quick start with Docker
 
@@ -43,7 +43,7 @@ dependencies:
 
 Packages not found locally redirect to the upstream, pub.dev by default, so setting `PUB_HOSTED_URL` to this server also works for mixed dependency trees. See [Upstream proxy](#upstream-proxy) to fetch and keep them here instead.
 
-Reading is public by default, and only publishing and uploader management need a token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz`, `/readyz`, the login form `/login` with the stylesheet and script under `/static/`, and `POST /webapi/login` then needs a token or session, which `dart pub get` provides once the token is added with `dart pub token add`. The web UI works in that mode: a browser asking for a page is sent to `/login` and reads with its session cookie once logged in. API clients, `/api`, `/webapi` and archives still answer 401 without a token, even to a browser. Badges under `/badge/...` answer 401 as well, so shields.io and similar scrapers cannot fetch them from a private registry without a token.
+Reading is public by default, and only publishing and uploader management need a token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz`, `/readyz`, the login form `/login` with the stylesheet and script under `/static/`, and `POST /webapi/login` then needs a token or session, which `dart pub get` provides once the token is added with `dart pub token add`. The web UI works in that mode: a browser asking for a server-rendered page is sent to its login page and reads with its session cookie once logged in, and the shell and files of the [web client](#web-client), as well as `GET /webapi/config` and `GET /webapi/openapi.yaml`, stay open so that the client can show its own login. API clients, `/api`, `/webapi` and archives still answer 401 without a token, even to a browser. Badges under `/badge/...` answer 401 as well, so shields.io and similar scrapers cannot fetch them from a private registry without a token.
 
 Dart clients only send tokens over HTTPS, except to localhost, so deploy behind TLS.
 
@@ -95,21 +95,33 @@ Each takes `--config <path>`. The last enabled administrator cannot be demoted o
 
 ### HTTP API
 
-JSON endpoints under `/webapi`, for scripts. The web UI does not use them. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409 or 429.
+JSON endpoints under `/webapi`, used by the [web client](#web-client) and by scripts. The contract is [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1), which every server also serves at `GET /webapi/openapi.yaml`. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400 (`invalid_request`), 401 (`unauthorized`), 403 (`forbidden`, `insufficient_scope`, `session_required`, `csrf_failed`), 404 (`not_found`), 409 (`conflict`, `last_admin`, `admin_change_in_progress`), 429 (`rate_limited`) or 502. List routes take a one-based `page` and a `size`, at most 100 unless said otherwise, and answer `{"items": [...], "page": 1, "size": 20, "total": 42}`.
+
+**CSRF.** A request authenticated by the session cookie that is not GET, HEAD or OPTIONS must carry the session's CSRF token in the `X-CSRF-Token` header, or, for a form post, the `csrf_token` field. Without it, or with a wrong one, it is refused with 403 and the code `csrf_failed`, and nothing changes. The token is in the answers of `POST /webapi/login` and `GET /webapi/me`. This applies to every change: the `/webapi` routes and the package management routes under `/api/packages` alike. Requests with `Authorization: Bearer` need no CSRF token.
 
 | Endpoint | Description |
 | --- | --- |
-| `POST /webapi/login` | `{email, password}`. Sets the session cookie and returns the user and `csrfToken`. |
+| `GET /webapi/config` | Open in every read mode: `version`, `publicUrl`, `readAccess`, `accounts`, `upstream {url, mode}`, `features {metrics, webhooks, spa, classic}` and `ui {mode, basePath, classicPath}`. No secrets. |
+| `GET /webapi/openapi.yaml` | This API, as OpenAPI 3.1. Open in every read mode. |
+| `POST /webapi/login` | `{email, password}`. Sets the session cookie (`HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `server.publicUrl` is https) and returns the `user` and `csrfToken`. |
 | `POST /webapi/logout` | Ends the session. |
 | `GET /webapi/me` | The current user and scopes, and `csrfToken` for a session. |
 | `POST /webapi/me/password` | Session only: `{currentPassword, newPassword}`. Ends the other sessions of the user. |
-| `GET`, `POST /webapi/tokens` | List or create your own tokens. Create takes `{name, scopes?, expiresIn?}` and returns the `secret` once. A token cannot create a token with more scopes or a later expiry than its own. |
+| `GET`, `POST /webapi/tokens` | List (paged, newest first) or create your own tokens. Create takes `{name, scopes?, expiresIn?}` and returns the `secret` once. A token cannot create a token with more scopes or a later expiry than its own. |
 | `DELETE /webapi/tokens/<id>` | Revoke your own token. An administrator logged in with a password can revoke any. A token or `auth.bootstrapToken` can only revoke tokens of its own user: revoking another user's token answers 403 `session_required` to an administrator's token and 404 to anyone else's. |
-| `GET`, `POST /webapi/users` | Administrators: list users, or with a session create one from `{email, role, displayName?, password?}`. |
+| `GET`, `POST /webapi/users` | Administrators: list users by email, paged, `q` searching the email and display name, or with a session create one from `{email, role, displayName?, password?}`. |
 | `PATCH /webapi/users/<id>` | Administrators, session only: change `role`, `disabled` or `displayName`. Answers 503 if another change to an administrator stays in progress. |
 | `POST /webapi/users/<id>/password` | Administrators, session only: `{password}`. |
+| `GET /webapi/v2/packages` | The package list: `q`, `sdk` (`dart` or `flutter`), `discontinued` (`true` to include them), `sort` (`relevance`, `downloads`, `updated`, `name`), `page`, `size`, with the semantics of the package list page. Items have `name`, `latest`, `description`, `updatedAt`, `downloads`, `isDiscontinued`, `replacedBy`, `isFlutter` and `private`. |
+| `GET /webapi/packages` | Deprecated, for scripts: the former list, `{"data": {"count", "packages"}}`, with a zero-based `page`. |
+| `GET /webapi/package/<name>`, `GET /webapi/package/<name>/<version>` | `{"data": ...}`: a package at its latest or the given version (or `latest`), with `readmeHtml` and `changelogHtml` rendered and sanitized as on the package page, `dependencies` and `devDependencies` as `{name, constraint, hosted, local}`, `environment {sdk, flutter}`, `platforms`, `uploaders`, `uploader`, `published`, `retracted`, `retractedAt`, `isDiscontinued`, `replacedBy`, `archiveSha256`, `downloads {version, package}`, `private`, the pubspec links and every version as `{version, published, uploader, retracted, prerelease, downloads}`, highest first. |
+| `GET /webapi/package/<name>/stats` | `{name, total, recent, days: [{day, count}], versions: [{version, downloads}]}`: the last 30 days, zero-filled, and every version, most downloaded first. |
+| `GET /webapi/settings` | Administrators with the `read` scope: the effective configuration of `/admin/settings`, secrets redacted, by section, each key with the environment variable that sets it. |
+| `GET /webapi/admin/overview` | Administrators with the `read` scope: counts of packages, versions, users and webhooks, the storage size as `/metrics` measures it, publishes and failed webhook deliveries of the last 24 hours, the last 10 publishes and the `/readyz` checks. |
 | `GET /webapi/audit` | Administrators with the `read` scope: the audit log, see [Audit log](#audit-log). |
 | `GET`, `POST /webapi/webhooks`, and `/webapi/webhooks/<id>...` | Administrators: manage webhooks, see [Webhooks](#webhooks). |
+
+The package management routes under `/api/packages/<name>` (retract, unretract, discontinue, uploaders, owner, delete) are described in [Retraction and discontinued](#retraction-and-discontinued) and [Package management](#package-management) and answer `{"success": {"message": ...}}`.
 
 After 10 failed attempts within 15 minutes, for one email or one client address, login answers 429 with `Retry-After`. The count is kept per process, so several instances each allow their own attempts. Each process tracks up to 50 000 addresses and emails. When that is full it forgets only expired counters and those below half the limit, and if that frees nothing it answers 429 to addresses and emails it does not know yet and logs a warning. Sessions last 24 hours.
 
@@ -225,7 +237,7 @@ Actions: `package.published`, `version.retracted`, `version.unretracted`, `versi
 | `page`, `size` | One-based page, and up to 200 events per page, 50 by default. |
 
 ```json
-{"events": [{"at": "2026-11-10T09:12:00.000Z", "action": "version.deleted", "actor": "admin@example.com", "actorKind": "session", "token": null, "package": "my_package", "version": "1.2.0", "target": null, "ip": "203.0.113.9", "details": {"sha256": "…", "archiveDeleted": true}}], "count": 1, "page": 1, "size": 50}
+{"items": [{"at": "2026-11-10T09:12:00.000Z", "action": "version.deleted", "actor": "admin@example.com", "actorKind": "session", "token": null, "package": "my_package", "version": "1.2.0", "target": null, "ip": "203.0.113.9", "details": {"sha256": "…", "archiveDeleted": true}}], "page": 1, "size": 50, "total": 1}
 ```
 
 The admin page `/admin/audit` shows the same with a filter form and pages, and the admin page of each package links to its events. The queries use indexes on `at` and on `package`, `actor` and `action` with `at`.
@@ -291,13 +303,13 @@ printf 'sha256=%s\n' "$(openssl dgst -sha256 -hmac "$SECRET" -hex < body.json | 
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /webapi/webhooks` | List webhooks, without secrets. |
+| `GET /webapi/webhooks` | List webhooks, without secrets, as a page with `enabled`, the value of `webhooks.enabled`. |
 | `POST /webapi/webhooks` | `{url, events, description?}`. Returns 201 with the `webhook` and its `secret`. |
 | `GET /webapi/webhooks/<id>` | The webhook and its delivery counts by status. |
 | `PATCH /webapi/webhooks/<id>` | Change `url`, `events`, `description` or `enabled`. |
 | `POST /webapi/webhooks/<id>/secret` | Replace the secret, and return the new one. |
 | `DELETE /webapi/webhooks/<id>` | Delete the webhook and its deliveries. |
-| `GET /webapi/webhooks/<id>/deliveries` | The last 50 deliveries. |
+| `GET /webapi/webhooks/<id>/deliveries` | The deliveries, newest first, paged. |
 | `POST /webapi/webhooks/<id>/deliveries/<delivery>/redeliver` | Queue a delivery again, as a new delivery with the same body. |
 
 They are for administrators, reading with the `read` scope and changing with the `publish` scope, from a token or a session with its CSRF token.
@@ -416,6 +428,8 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `webhooks.retentionDays` | `UNPUB_WEBHOOKS_RETENTION_DAYS` | `30` | Days finished deliveries are kept. `0` keeps them. |
 | `metrics.enabled` | `UNPUB_METRICS_ENABLED` | `true` | Serve `/metrics`. |
 | `metrics.token` | `UNPUB_METRICS_TOKEN` | | Bearer token for scrapers. When set, `/metrics` needs it or an administrator, also in `public` mode. |
+| `ui.assetsDir` | `UNPUB_UI_ASSETS_DIR` | `/app/ui`, else `ui/dist`, if they hold `index.html` | The built [web client](#web-client). When set it must hold `index.html`. |
+| `ui.mode` | `UNPUB_UI_MODE` | `spa` with a client, `ssr` without | `spa`: the web client at `/` and the server-rendered pages under `/classic`. `ssr`: the pages at `/` and the client, if built, under `/app`. `spa` without a client is a startup error. |
 | `logging.level` | `UNPUB_LOGGING_LEVEL` | `info` | `fine`, `info`, `warning`, `severe` and other `package:logging` levels, or `off`. |
 | `logging.format` | `UNPUB_LOGGING_FORMAT` | `text` | `text` or `json`. |
 
@@ -567,13 +581,33 @@ Future<void> main() async {
 }
 ```
 
-`PublishPolicy` applies the `publish` settings, `UpstreamProxy` turns on proxy mode, and `WebhookService` (with a `WebhookStore` and its `start()` and `stop()`) adds webhooks. `App.metrics` holds the counters of `/metrics`. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints, and the login, account and admin pages of the web UI, are added by passing an `AccountApi`. The web UI is always part of `App.handler`; pass `config` to fill the admin settings page. `S3Store` and `FileStore` are included.
+`PublishPolicy` applies the `publish` settings, `UpstreamProxy` turns on proxy mode, and `WebhookService` (with a `WebhookStore` and its `start()` and `stop()`) adds webhooks. `App.metrics` holds the counters of `/metrics`. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints, and the login, account and admin pages of the web UI, are added by passing an `AccountApi`. The web UI is always part of `App.handler`; pass `config` to fill the admin settings page, and `ui` (a `UiConfig`) to serve a built web client and choose which UI is at `/`. `S3Store` and `FileStore` are included.
 
 `ensureIndexes` creates the unique indexes that concurrent publishes rely on, and throws if `packages` already holds a name twice. To get reclamation as `unpub serve` does it, start a `TemporaryReclaimer` with `MongoArchiveReferences` too, which shares the `object_locks` of `MongoStore`.
 
+## Web client
+
+The web client is a single-page application in `ui/` (React, TypeScript, Vite), built into static files that this server serves; there is no second service and no CORS. It talks only to the [HTTP API](#http-api) with the session cookie and the `X-CSRF-Token` header, and has a page for everything the server-rendered UI does. The server-rendered pages stay, as the version without JavaScript and the fallback.
+
+**Which UI is where.** With `ui.mode: spa`, the default when a built client is found, the client is at `/` and the server-rendered pages are under `/classic` (`/classic/packages/<name>`, `/classic/login`, `/classic/admin/...`): their links, forms, redirects and login cookie carry the prefix. `/static/` stays at the root as well. With `ui.mode: ssr`, the default without a client, the server-rendered pages are at `/` and the client, if built, under `/app`. The client routes mirror the server-rendered URLs, so `/packages/<name>` and `/classic/packages/<name>` show the same package.
+
+**Serving.** Files under `assets/`, which Vite names by a hash of their content, are sent with `Cache-Control: public, max-age=31536000, immutable` and an `ETag`, other files of the build (favicon, manifest) for an hour, and `index.html` with `no-store`. Every GET or HEAD that accepts `text/html` and is not a path of the server (`/api`, `/webapi`, archives, `/badge`, `/static`, `/healthz`, `/readyz`, `/metrics`, `/classic`) gets `index.html`, so the client can route it. A missing file under `assets/` is a 404, and so is anything that does not accept HTML. Paths are resolved inside `ui.assetsDir`, dot segments, encoded slashes and hidden files are refused, and links out of it are not followed.
+
+**Base path.** The server adds `<meta name="unpub-base" content="">` (or `/app`) and `<meta name="unpub-classic" content="/classic">` (or empty) to `index.html`, and rewrites its `./` references, and root-relative ones to files of the build, under the base path. Build the client with Vite's `base: './'` and read the base from the meta tag for the router, and one build works at `/` and under `/app`. `<base href>` cannot be used: the policy below forbids it.
+
+**Security.** `index.html` is sent with the page policy plus `font-src 'self'`, so fonts and icons are bundled and nothing is inline:
+
+```
+Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; font-src 'self'
+```
+
+With `auth.readAccess: authenticated`, `index.html`, the files of the build, `GET /webapi/config` and `GET /webapi/openapi.yaml` stay open, so the client can show its own login, while the API answers 401. The server-rendered pages keep redirecting to their own login.
+
+**Building.** The Docker image builds the client in a `node:22-alpine` stage (`npm ci`, `npm run build` in `ui/`) when `ui/package.json` exists, and copies `ui/dist` to `/app/ui`. From source, build it in `ui/` and run the server from the repository root so that `ui/dist` is found, or set `ui.assetsDir`. Without a build the server logs a warning and serves the server-rendered pages only.
+
 ## Web UI
 
-The server renders every page itself. There is no frontend build and no third-party script, font or stylesheet: one stylesheet and one small script are served from `/static/`, and everything works without JavaScript.
+The server renders every page itself. With `ui.mode: spa` these pages live under `/classic`, see [Web client](#web-client); the paths below are those of `ui.mode: ssr`. There is no frontend build and no third-party script, font or stylesheet: one stylesheet and one small script are served from `/static/`, and everything works without JavaScript.
 
 | Page | Description |
 | --- | --- |
@@ -634,7 +668,9 @@ dart test
 
 Set `UNPUB_TEST_MONGO_URI` to use another database. The S3 tests run when `UNPUB_TEST_S3_ENDPOINT` points to an S3 compatible service. Run `make generate` after changing the JSON models. Commits follow [Conventional Commits](https://www.conventionalcommits.org).
 
-The web UI needs no build step. Routes are registered by hand in `lib/src/routes/` and `lib/src/web/web_ui.dart`. Pages are plain Dart functions in `lib/src/web/pages/` built with the `el` helper of `lib/src/web/html.dart`, which escapes all text and attribute values; unescaped markup only goes through `Html.trusted`, used for the sanitized markdown. The stylesheet and script are string constants in `lib/src/web/assets.dart`.
+`docs/openapi.yaml` is served from a copy in `lib/src/routes/openapi_document.dart`: run `dart run tool/embed_openapi.dart` in `unpub/` after changing it, a test checks both and that every documented route exists and every `/webapi` route is documented. CI lints it with `npx @redocly/cli lint docs/openapi.yaml`, configured by `redocly.yaml`.
+
+The server-rendered web UI needs no build step. Routes are registered by hand in `lib/src/routes/` and `lib/src/web/web_ui.dart`. Pages are plain Dart functions in `lib/src/web/pages/` built with the `el` helper of `lib/src/web/html.dart`, which escapes all text and attribute values; unescaped markup only goes through `Html.trusted`, used for the sanitized markdown. The stylesheet and script are string constants in `lib/src/web/assets.dart`.
 
 ## Credits
 

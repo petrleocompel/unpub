@@ -143,6 +143,16 @@ metrics:
   # UNPUB_METRICS_TOKEN.
   # token: replace-with-a-long-random-token
 
+ui:
+  # The built web client, a directory holding index.html. By default /app/ui
+  # (the Docker image) or ui/dist relative to the working directory, if they
+  # hold one.
+  # assetsDir: ui/dist
+  # spa: the web client at / and the server-rendered pages under /classic.
+  # ssr: the server-rendered pages at / and the web client under /app.
+  # Defaults to spa when a client is found, ssr otherwise.
+  # mode: spa
+
 logging:
   # finest, finer, fine (debug), config, info, warning, severe (error), shout, off
   level: info

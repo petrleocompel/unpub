@@ -30,6 +30,7 @@ export 'src/store/temporary_reclaimer.dart';
 export 'src/store/upstream_cache_store.dart';
 export 'src/upstream/upstream_proxy.dart';
 export 'src/version.dart';
+export 'src/web/spa.dart' show SpaClient, spaContentSecurityPolicy;
 export 'src/web/web_ui.dart' show contentSecurityPolicy, loginCookieName;
 export 'src/webhooks/address_policy.dart';
 export 'src/webhooks/webhook_service.dart';
