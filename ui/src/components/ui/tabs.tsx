@@ -63,8 +63,9 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
         "relative inline-flex items-center justify-center gap-1.5 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         // The pill.
         'group-data-[variant=default]/tabs-list:h-[calc(100%-1px)] group-data-[variant=default]/tabs-list:flex-1 group-data-[variant=default]/tabs-list:rounded-md group-data-[variant=default]/tabs-list:px-3 group-data-[variant=default]/tabs-list:data-[state=active]:bg-background group-data-[variant=default]/tabs-list:data-[state=active]:shadow-xs',
-        // The line.
-        'group-data-[variant=line]/tabs-list:-mb-px group-data-[variant=line]/tabs-list:h-10.5 group-data-[variant=line]/tabs-list:border-b-2 group-data-[variant=line]/tabs-list:border-transparent group-data-[variant=line]/tabs-list:px-3 group-data-[variant=line]/tabs-list:data-[state=active]:border-primary',
+        // The line. The list scrolls, which clips anything outside it, so the
+        // focus ring is drawn inside the tab.
+        'group-data-[variant=line]/tabs-list:-mb-px group-data-[variant=line]/tabs-list:h-10.5 group-data-[variant=line]/tabs-list:border-b-2 group-data-[variant=line]/tabs-list:border-transparent group-data-[variant=line]/tabs-list:px-3 group-data-[variant=line]/tabs-list:focus-visible:-outline-offset-2 group-data-[variant=line]/tabs-list:data-[state=active]:border-primary',
         'group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start',
         className,
       )}
