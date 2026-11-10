@@ -166,7 +166,7 @@ Uploaders of a package and administrators can change these, with a credential th
 
 A retracted version stays downloadable, so a project with it in its lockfile still resolves, but new resolutions avoid it and it is left out of `latest`. If every version of a package is retracted, `latest` is the highest version anyway, the same as pub.dev, because a listing has to name one. The only version of a package can be retracted too, and then stays `latest`. A non-administrator can retract only within `publish.retractionWindow` of publishing, 7 days by default, and is answered 403 after that. The window does not limit `unretract`.
 
-A discontinued package keeps serving everything, with the flag set. `/webapi/packages` leaves discontinued packages out unless called with `?discontinued=true`. `/webapi/packages` and `/webapi/package/<name>/<version>` include the flags, and the latter `discontinuedAt`.
+A discontinued package keeps serving everything, with the flag set. `/webapi/v2/packages` and the deprecated `/webapi/packages` leave discontinued packages out unless called with `?discontinued=true`. Both lists and `/webapi/package/<name>/<version>` include the flags (`isDiscontinued`, `replacedBy`), and the latter `discontinuedAt`.
 
 ## Package management
 
@@ -360,7 +360,7 @@ A local package always wins over the upstream. For the others:
 - **Upstream failures** answer 502 with a JSON error for metadata, also when a stale copy exists, and for archives that are not stored yet. Archives already stored keep being served.
 - **Publishing** a new name needs a definitive answer. A fresh listing refuses the name. Otherwise the upstream is asked: a 200 refuses it, a 404 accepts it, and anything else answers 503 with "upstream registry unavailable, cannot verify that <name> is free, try again", unless `upstream.allowPublishWhenUnavailable` is on. During an outage `dart pub publish` usually stops earlier, at its own listing request, with a 502.
 - **Reading** follows `auth.readAccess`, so clients need their token for proxied packages in `authenticated` mode. Client credentials are never sent to the upstream.
-- Proxied downloads are not counted, and proxied packages do not appear in `/webapi/packages` or the web UI.
+- Proxied downloads are not counted, and proxied packages do not appear in `/webapi/v2/packages`, `/webapi/packages`, `/webapi/package/<name>` (404) or the web UI: the web API only knows packages published here, so their `private` is always true.
 
 ## Running from source
 

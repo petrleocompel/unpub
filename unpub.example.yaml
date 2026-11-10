@@ -97,10 +97,14 @@ auth:
   # admin:
   #   email: you@example.com
   #   password: at-least-8-characters
-  # public: anyone can read. authenticated: every route except /healthz,
-  # /readyz, /login, /static/* and POST /webapi/login needs a token or
-  # session. Browsers are sent to /login and read with the session once
-  # logged in. API clients still get a 401, and badges need a token too.
+  # public: anyone can read. authenticated: every route needs a token or
+  # session except /healthz, /readyz, POST /webapi/login, GET /webapi/config,
+  # GET /webapi/openapi.yaml, the login page and /static/* of the
+  # server-rendered pages (under /classic with ui.mode spa), and the shell
+  # and files of the web client (index.html for its routes, /assets/*, the
+  # favicon and manifest), which hold no data. Browsers on the
+  # server-rendered pages are sent to their login; the web client shows its
+  # own. API clients still get a 401, and badges need a token too.
   readAccess: public
   # Deprecated, use personal tokens from `unpub admin create-token`.
   # A static Bearer token that acts as an administrator with bootstrapEmail.
