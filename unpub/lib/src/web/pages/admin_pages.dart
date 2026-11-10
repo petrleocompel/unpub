@@ -182,62 +182,86 @@ Html _userRow(PageContext context, User user) {
   ]);
 }
 
+/// The address of the page [page] of the packages matching [query].
+String _adminPackagesHref(String? query, int page, int size) {
+  final parameters = {
+    if (query != null) 'q': query,
+    if (size != maxPageSize) 'size': '$size',
+    if (page != 1) 'page': '$page',
+  };
+  return parameters.isEmpty
+      ? '/admin/packages'
+      : '/admin/packages?${Uri(queryParameters: parameters).query}';
+}
+
 Html adminPackagesPage(
-        PageContext context, String? query, UnpubQueryResult result) =>
-    _adminLayout(context, 'Packages', [
-      el('h2', const {}, 'Packages'),
-      el('form', {
-        'class': 'filters',
-        'method': 'get',
-        'action': '/admin/packages',
-      }, [
-        el('label', const {}, [
-          'Name or description',
-          el('input', {'type': 'search', 'name': 'q', 'value': query ?? ''}),
-        ]),
-        el('button', {'type': 'submit'}, 'Search'),
+    PageContext context, String? query, UnpubQueryResult result,
+    {int page = 1, int size = maxPageSize}) {
+  final first = (page - 1) * size + 1;
+  return _adminLayout(context, 'Packages', [
+    el('h2', const {}, 'Packages'),
+    el('form', {
+      'class': 'filters',
+      'method': 'get',
+      'action': '/admin/packages',
+    }, [
+      el('label', const {}, [
+        'Name or description',
+        el('input', {'type': 'search', 'name': 'q', 'value': query ?? ''}),
       ]),
-      el(
-          'p',
-          {'class': 'muted'},
-          '${result.count} ${result.count == 1 ? 'package' : 'packages'}'
-              '${result.count > result.packages.length ? ', showing the first ${result.packages.length}' : ''}.'),
-      el('div', {
-        'class': 'table-scroll'
-      }, [
-        el('table', const {}, [
-          el('thead', const {}, [
+      if (size != maxPageSize)
+        el('input', {'type': 'hidden', 'name': 'size', 'value': '$size'}),
+      el('button', {'type': 'submit'}, 'Search'),
+    ]),
+    el(
+        'p',
+        {'class': 'muted', 'role': 'status'},
+        result.packages.isEmpty
+            ? '${result.count} ${result.count == 1 ? 'package' : 'packages'}'
+                '${result.count > 0 ? ', none on page $page' : ''}.'
+            : 'Showing $first–${first + result.packages.length - 1} of '
+                '${result.count} '
+                '${result.count == 1 ? 'package' : 'packages'}.'),
+    el('div', {
+      'class': 'table-scroll'
+    }, [
+      el('table', const {}, [
+        el('thead', const {}, [
+          el('tr', const {}, [
+            for (final heading in [
+              'Name',
+              'Latest',
+              'Versions',
+              'Uploaders',
+              'State'
+            ])
+              el('th', {'scope': 'col'}, heading),
+          ]),
+        ]),
+        el('tbody', const {}, [
+          for (final package in result.packages)
             el('tr', const {}, [
-              for (final heading in [
-                'Name',
-                'Latest',
-                'Versions',
-                'Uploaders',
-                'State'
-              ])
-                el('th', {'scope': 'col'}, heading),
+              el(
+                  'td',
+                  const {},
+                  el('a', {'href': '/admin/packages/${segment(package.name)}'},
+                      package.name)),
+              el('td', const {}, package.latest.version),
+              el('td', const {}, '${package.versions.length}'),
+              el('td', const {}, (package.uploaders ?? const []).join(', ')),
+              el('td', const {},
+                  package.isDiscontinued ? 'Discontinued' : 'Active'),
             ]),
-          ]),
-          el('tbody', const {}, [
-            for (final package in result.packages)
-              el('tr', const {}, [
-                el(
-                    'td',
-                    const {},
-                    el(
-                        'a',
-                        {'href': '/admin/packages/${segment(package.name)}'},
-                        package.name)),
-                el('td', const {}, package.latest.version),
-                el('td', const {}, '${package.versions.length}'),
-                el('td', const {}, (package.uploaders ?? const []).join(', ')),
-                el('td', const {},
-                    package.isDiscontinued ? 'Discontinued' : 'Active'),
-              ]),
-          ]),
         ]),
       ]),
-    ]);
+    ]),
+    pagination(
+        current: page,
+        count: result.count,
+        size: size,
+        href: (target) => _adminPackagesHref(query, target, size)),
+  ]);
+}
 
 Html adminPackagePage(
     PageContext context, UnpubPackage package, List<UnpubVersion> versions,

@@ -1309,6 +1309,57 @@ void main() {}
       expect(retraction['target'], 'alpha@1.0.0');
     });
 
+    test('pages through the packages', () async {
+      for (final name in ['bravo', 'charlie', 'delta', 'echo']) {
+        await publish(name, '1.0.0',
+            description: name == 'echo' ? 'Discontinued.' : 'Kept.');
+      }
+      await MongoStore(db).setDiscontinued('echo', discontinued: true);
+      final browser = await logIn('admin@example.com');
+      List<String> names(Page page) => [
+            for (final match in RegExp(r'<a href="/admin/packages/([a-z]+)">')
+                .allMatches(page.body))
+              match.group(1)!,
+          ];
+      List<String?> links(Page page) => [
+            for (final link in html_parser
+                .parse(page.body)
+                .querySelectorAll('.pagination a'))
+              link.attributes['href'],
+          ];
+
+      final all = await fetch('GET', '/admin/packages', as: browser);
+      expect(names(all), ['alpha', 'bravo', 'charlie', 'delta', 'echo']);
+      expect(links(all), isEmpty);
+
+      final first = await fetch('GET', '/admin/packages?size=2', as: browser);
+      expect(names(first), ['alpha', 'bravo']);
+      expect(first.body, contains('Showing 1–2 of 5 packages.'));
+      expect(links(first), contains('/admin/packages?size=2&page=3'));
+      final last =
+          await fetch('GET', '/admin/packages?size=2&page=3', as: browser);
+      expect(names(last), ['echo']);
+      expect(links(last), contains('/admin/packages?size=2&page=2'));
+
+      final searched =
+          await fetch('GET', '/admin/packages?q=kept&size=1', as: browser);
+      expect(names(searched), ['bravo']);
+      expect(searched.body, contains('Showing 1–1 of 3 packages.'));
+      expect(
+          links(searched),
+          everyElement(allOf(startsWith('/admin/packages?q=kept&size=1'),
+              isNot(contains('sort=')))));
+      expect(
+          names(await fetch('GET', '/admin/packages?q=kept&size=1&page=3',
+              as: browser)),
+          ['delta']);
+      final beyond = await fetch(
+          'GET', '/admin/packages?page=9223372036854775807',
+          as: browser);
+      expect(beyond.status, HttpStatus.ok);
+      expect(beyond.body, contains('5 packages, none on page 100000.'));
+    });
+
     test('shows the settings without secrets', () async {
       final config = Config.parse('''
 mongo:

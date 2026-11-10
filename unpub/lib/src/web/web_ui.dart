@@ -816,15 +816,22 @@ class WebUi {
 
   Future<shelf.Response> adminPackages(shelf.Request req) async {
     _administrator(req);
-    final query = req.url.queryParameters['q']?.trim();
-    final text = query == null || query.isEmpty ? null : query;
+    // Every package by name, with the search and paging of the list.
+    final list = PackageListRequest.fromQuery({
+      ...req.url.queryParameters,
+      'size': req.url.queryParameters['size'] ?? '$maxPageSize',
+    });
     final result = await app.metaStore.searchPackages(PackageSearch(
-      text: text,
+      text: list.query,
       includeDiscontinued: true,
       sort: PackageSort.name,
-      size: maxPageSize,
+      page: list.page - 1,
+      size: list.size,
     ));
-    return _html(req, adminPackagesPage(_context(req), text, result));
+    return _html(
+        req,
+        adminPackagesPage(_context(req), list.query, result,
+            page: list.page, size: list.size));
   }
 
   Future<shelf.Response> _adminPackagePage(shelf.Request req, String name,

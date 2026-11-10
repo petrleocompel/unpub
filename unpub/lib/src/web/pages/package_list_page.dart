@@ -184,10 +184,22 @@ Html _packageItem(UnpubPackage package) {
   ]);
 }
 
-Html _pagination(PackageListRequest request, int count) {
-  final pages = (count / request.size).ceil();
-  if (pages <= 1 && request.page == 1) return Html.empty;
-  final current = request.page;
+Html _pagination(PackageListRequest request, int count) => pagination(
+    current: request.page,
+    count: count,
+    size: request.size,
+    href: (page) => '/packages${request.queryFor(page: page)}');
+
+/// Links to the pages of a list of [count] items, [size] on a page, the
+/// address of each from [href], one-based.
+Html pagination({
+  required int current,
+  required int count,
+  required int size,
+  required String Function(int page) href,
+}) {
+  final pages = (count / size).ceil();
+  if (pages <= 1 && current == 1) return Html.empty;
   // The first, the last and a window around the current page.
   final shown = <int>{
     1,
@@ -198,13 +210,7 @@ Html _pagination(PackageListRequest request, int count) {
     ..sort();
   final links = <Html>[];
   if (current > 1) {
-    links.add(el(
-        'a',
-        {
-          'href': '/packages${request.queryFor(page: current - 1)}',
-          'rel': 'prev'
-        },
-        'Previous'));
+    links.add(el('a', {'href': href(current - 1), 'rel': 'prev'}, 'Previous'));
   }
   int? previous;
   for (final page in shown) {
@@ -215,20 +221,14 @@ Html _pagination(PackageListRequest request, int count) {
     links.add(el(
         'a',
         {
-          'href': '/packages${request.queryFor(page: page)}',
+          'href': href(page),
           'aria-current': page == current ? 'page' : null,
         },
         '$page'));
     previous = page;
   }
   if (current < pages) {
-    links.add(el(
-        'a',
-        {
-          'href': '/packages${request.queryFor(page: current + 1)}',
-          'rel': 'next'
-        },
-        'Next'));
+    links.add(el('a', {'href': href(current + 1), 'rel': 'next'}, 'Next'));
   }
   return el('nav', {'class': 'pagination', 'aria-label': 'Pages'}, links);
 }
