@@ -1433,6 +1433,88 @@ auth:
     });
   });
 
+  group('CSRF', () {
+    test('every form refuses a missing, wrong or foreign token', () async {
+      final admin = await user('admin@example.com', Role.admin);
+      await user('other@example.com', Role.admin);
+      final target = await user('target@example.com', Role.publisher);
+      await publish('alpha', '1.0.0');
+      await publish('alpha', '1.1.0');
+      await MongoStore(db)
+          .setVersionRetracted('alpha', '1.1.0', retracted: true);
+      final token = await accounts.createToken(admin, name: 'mine');
+      final browser = await logIn('admin@example.com');
+      final other = await logIn('other@example.com');
+      expect(other.csrf, isNot(browser.csrf));
+
+      final forms = <String, Map<String, Object>>{
+        '/admin/users': {'email': 'new@example.com', 'role': 'admin'},
+        '/admin/users/${target.id}': {'role': 'admin', 'disabled': 'true'},
+        '/admin/users/${target.id}/password': {'password': 'replaced-password'},
+        '/admin/packages/alpha/discontinue': {'discontinued': '1'},
+        '/admin/packages/alpha/versions/1.0.0/retract': {},
+        '/admin/packages/alpha/versions/1.1.0/unretract': {},
+        '/admin/packages/alpha/uploaders': {'email': 'helper@example.com'},
+        '/admin/packages/alpha/uploaders/remove': {
+          'email': 'owner@example.com'
+        },
+        '/account/password': {
+          'currentPassword': _password,
+          'newPassword': 'another-password'
+        },
+        '/account/tokens': {
+          'name': 'x',
+          'scope': ['read']
+        },
+        '/account/tokens/${token.token.id}/revoke': {},
+        '/logout': {},
+      };
+
+      Future<String> state() async => json.encode([
+            for (final name in [
+              userCollection,
+              tokenCollection,
+              packageCollection,
+              auditCollection,
+            ])
+              await db
+                  .collection(name)
+                  .find(where.sortBy('_id'))
+                  .map((item) => item.toString())
+                  .toList(),
+          ]);
+      final before = await state();
+
+      for (final MapEntry(key: path, value: fields) in forms.entries) {
+        for (final (kind, csrf, headers) in [
+          ('missing', null, const <String, String>{}),
+          ('empty', '', const <String, String>{}),
+          ('wrong', 'x' * 43, const <String, String>{}),
+          ('of another session', other.csrf, const <String, String>{}),
+          ('in a wrong header', null, {'x-csrf-token': other.csrf}),
+        ]) {
+          final reply = await fetch('POST', path,
+              as: browser,
+              csrf: false,
+              headers: headers,
+              form: {if (csrf != null) 'csrf_token': csrf, ...fields});
+          expect(reply.status, HttpStatus.forbidden, reason: '$path $kind');
+          expect(reply.headers['content-type'], startsWith('text/html'));
+          expect(reply.body, contains('security token'), reason: path);
+          expect(reply.headersAll['set-cookie'], isNull, reason: path);
+        }
+      }
+      expect(await state(), before);
+      // Nothing logged out or replaced either session.
+      for (final session in [browser, other]) {
+        expect((await fetch('GET', '/account', as: session)).status,
+            HttpStatus.ok);
+      }
+      expect((await submitLogin('admin@example.com', _password)).status,
+          HttpStatus.seeOther);
+    });
+  });
+
   group('authenticated read access', () {
     setUp(() async {
       app = buildApp(readAccess: ReadAccess.authenticated);
