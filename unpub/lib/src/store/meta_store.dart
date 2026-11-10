@@ -159,21 +159,34 @@ abstract class MetaStore {
   /// tell, whose objects deletion then leaves alone.
   ArchiveReferences? get archiveReferences => null;
 
-  /// Removes [version] from the package [name], with its download counts,
-  /// unless it is the only version left.
+  /// Removes [version] from the package [name], unless it is the only
+  /// version left. Its download counts go with [removeVersionData].
   ///
   /// Returns false, changing nothing, if the package no longer has that
   /// version or has no other one.
   Future<bool> removeVersion(String name, String version) =>
       throw UnsupportedError('this store cannot delete versions');
 
-  /// Deletes the package [name] with its download counts, if its versions are
-  /// still exactly [versions].
+  /// Removes what is left of [version] of [name], such as its download
+  /// counts, after [removeVersion] removed it.
+  ///
+  /// The deletion has already happened when this runs: a failure is logged
+  /// and audited, and leaves stale data behind but does not undo it.
+  Future<void> removeVersionData(String name, String version) async {}
+
+  /// Deletes the package [name], if its versions are still exactly
+  /// [versions]. Its download counts go with [removePackageData].
   ///
   /// Returns false, changing nothing, if they are not, so that a version
   /// published meanwhile is never deleted without its archive.
   Future<bool> deletePackage(String name, Set<String> versions) =>
       throw UnsupportedError('this store cannot delete packages');
+
+  /// Removes what is left of the package [name], such as its download counts
+  /// and stale upload reservations, after [deletePackage] deleted it.
+  ///
+  /// As with [removeVersionData], a failure does not undo the deletion.
+  Future<void> removePackageData(String name) async {}
 
   /// Replaces the uploaders of [name].
   Future<void> setUploaders(String name, List<String> uploaders) =>

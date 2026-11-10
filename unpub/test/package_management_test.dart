@@ -378,6 +378,85 @@ void main() {
       expect((await h.packageDocument('alpha'))!['uploaders'], ['owner@b.c']);
     });
   });
+
+  group('cleanup after a deletion', () {
+    late App failing;
+    late WebhookStore hooks;
+
+    setUp(() async {
+      hooks = WebhookStore(h.db);
+      await hooks.ensureIndexes();
+      await hooks.insert(
+          url: Uri.parse('https://hooks.example/x'),
+          events: webhookEvents,
+          description: '',
+          secret: 's');
+      failing = h.buildApp(
+          meta: _FailingCleanupStore(h.db), webhooks: WebhookService(hooks));
+      await h.publish('alpha', '1.0.0', bearer: ownerToken, using: failing);
+      await h.publish('alpha', '1.1.0', bearer: ownerToken, using: failing);
+    });
+
+    Future<List<String>> queued() async => [
+          for (final item in await h.db
+              .collection(webhookDeliveryCollection)
+              .find()
+              .toList())
+            item['event'] as String,
+        ];
+
+    test('that fails still deletes, audits and notifies a version', () async {
+      final reply = await h.send('DELETE', '/api/packages/alpha/versions/1.1.0',
+          bearer: adminToken, using: failing);
+      expect(reply.status, HttpStatus.ok, reason: reply.body);
+      expect(versionsOf(await h.packageDocument('alpha')), ['1.0.0']);
+      final event = (await h.auditEvents('version.deleted')).single;
+      expect(event['details']['cleanupError'], contains('stats are down'));
+      expect(event['details']['archiveDeleted'], isTrue);
+      expect(await queued(), contains('version.deleted'));
+      // A retry finds nothing left to delete.
+      expect(
+          (await h.send('DELETE', '/api/packages/alpha/versions/1.1.0',
+                  bearer: adminToken, using: failing))
+              .status,
+          HttpStatus.notFound);
+    });
+
+    test('that fails still deletes, audits and notifies a package', () async {
+      final reply = await h.send('DELETE', '/api/packages/alpha',
+          bearer: adminToken, using: failing);
+      expect(reply.status, HttpStatus.ok, reason: reply.body);
+      expect(await h.packageDocument('alpha'), isNull);
+      final event = (await h.auditEvents('package.deleted')).single;
+      expect(event['details']['cleanupError'], contains('stats are down'));
+      expect(event['details']['archivesDeleted'], 2);
+      expect(h.storedArchives(), isEmpty);
+      expect(await queued(), contains('package.deleted'));
+    });
+
+    test('through the admin page also succeeds', () async {
+      final browser = await h.logIn('admin@b.c', using: failing);
+      final reply = await h.post('/admin/packages/alpha/versions/1.1.0/delete',
+          as: browser, using: failing);
+      expect(reply.status, HttpStatus.seeOther, reason: reply.body);
+      expect(versionsOf(await h.packageDocument('alpha')), ['1.0.0']);
+      expect((await h.auditEvents('version.deleted')).single['details'],
+          contains('cleanupError'));
+    });
+  });
+}
+
+/// A store whose cleanup after a deletion always fails.
+class _FailingCleanupStore extends MongoStore {
+  _FailingCleanupStore(super.db);
+
+  @override
+  Future<void> removeVersionData(String name, String version) async =>
+      throw StateError('stats are down');
+
+  @override
+  Future<void> removePackageData(String name) async =>
+      throw StateError('stats are down');
 }
 
 /// A store that runs [onDelete] once, right before the first attempt to

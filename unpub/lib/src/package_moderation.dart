@@ -221,6 +221,7 @@ class PackageModeration {
     final claim = await app.metaStore.reserveUpload(name, version);
     if (claim == null) throw _publishInProgress(name, version);
     final UnpubVersion target;
+    final cleanupErrors = <String>[];
     final bool archiveDeleted;
     try {
       // A publish may have replaced the version before the reservation.
@@ -229,7 +230,13 @@ class PackageModeration {
       if (!await app.metaStore.removeVersion(name, version)) {
         throw _lastVersion(name, version);
       }
-      archiveDeleted = await _deleteArchive(name, target);
+      // The version is gone: from here on nothing fails the deletion.
+      await _cleanUp(
+          cleanupErrors,
+          'download counts',
+          {'name': name, 'version': version},
+          () => app.metaStore.removeVersionData(name, version));
+      archiveDeleted = await _deleteArchive(name, target, cleanupErrors);
     } finally {
       await _release(name, version, claim);
     }
@@ -239,6 +246,8 @@ class PackageModeration {
         details: {
           if (target.sha256 != null) 'sha256': target.sha256,
           'archiveDeleted': archiveDeleted,
+          if (cleanupErrors.isNotEmpty)
+            'cleanupError': cleanupErrors.join('; '),
         });
     await app.notify(principal, 'version.deleted',
         package: name,
@@ -304,15 +313,23 @@ class PackageModeration {
         final versions = {for (final item in current.versions) item.version};
         if (!versions.every(claims.containsKey)) continue;
         if (!await app.metaStore.deletePackage(name, versions)) continue;
+        // The package is gone: from here on nothing fails the deletion.
+        final cleanupErrors = <String>[];
+        await _cleanUp(cleanupErrors, 'download counts and reservations',
+            {'name': name}, () => app.metaStore.removePackageData(name));
         var archivesDeleted = 0;
         for (final item in current.versions) {
-          if (await _deleteArchive(name, item)) archivesDeleted++;
+          if (await _deleteArchive(name, item, cleanupErrors)) {
+            archivesDeleted++;
+          }
         }
         await app
             .audit(req, principal, 'package.deleted', package: name, details: {
           'versions': [for (final item in current.versions) item.version],
           'uploaders': current.uploaders ?? const <String>[],
           'archivesDeleted': archivesDeleted,
+          if (cleanupErrors.isNotEmpty)
+            'cleanupError': cleanupErrors.join('; '),
         });
         await app.notify(principal, 'package.deleted', package: name, data: {
           'versions': [for (final item in current.versions) item.version],
@@ -330,14 +347,31 @@ class PackageModeration {
         'again');
   }
 
+  /// Runs [step] of the cleanup after a deletion, logging a failure and
+  /// adding it to [errors] instead of throwing, as the deletion has happened.
+  static Future<void> _cleanUp(List<String> errors, String what,
+      Map<String, Object?> context, Future<void> Function() step) async {
+    try {
+      await step();
+    } catch (error, stackTrace) {
+      errors.add('$what: $error');
+      _log.warning(
+          LogEvent('failed to remove the $what of a deleted package', context),
+          error,
+          stackTrace);
+    }
+  }
+
   /// Deletes the archive of [version], whose metadata is gone, and returns
   /// whether it did.
   ///
   /// An object named by its digest goes only under the lock of that digest,
   /// and only if nothing else names the digest any more. One that cannot be
   /// deleted now is an orphan that reclamation removes later. A failure is
-  /// logged and does not undo the deletion of the metadata.
-  Future<bool> _deleteArchive(String name, UnpubVersion version) async {
+  /// logged, added to [errors], and does not undo the deletion of the
+  /// metadata.
+  Future<bool> _deleteArchive(
+      String name, UnpubVersion version, List<String> errors) async {
     final store = app.packageStore;
     var deleted = false;
     try {
@@ -368,6 +402,7 @@ class PackageModeration {
         deleted = true;
       }
     } catch (error, stackTrace) {
+      errors.add('archive of ${version.version}: $error');
       _log.warning(
           LogEvent('failed to delete the archive of a deleted version',
               {'name': name, 'version': version.version}),

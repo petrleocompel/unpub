@@ -307,11 +307,14 @@ class MongoStore extends MetaStore {
       },
     });
     _checkWrite(result, 'delete version');
-    if (result.nModified != 1) return false;
+    return result.nModified == 1;
+  }
+
+  @override
+  Future<void> removeVersionData(String name, String version) async {
     await db
         .collection(versionStatsCollection)
         .deleteOne(where.eq('name', name).eq('version', version));
-    return true;
   }
 
   @override
@@ -324,7 +327,11 @@ class MongoStore extends MetaStore {
     if (result.hasWriteErrors || !result.success) {
       throw StateError('cannot delete package: ${result.writeError?.errmsg}');
     }
-    if (result.nRemoved != 1) return false;
+    return result.nRemoved == 1;
+  }
+
+  @override
+  Future<void> removePackageData(String name) async {
     await db.collection(statsCollection).deleteMany(where.eq('name', name));
     await db
         .collection(versionStatsCollection)
@@ -335,7 +342,6 @@ class MongoStore extends MetaStore {
       'name': name,
       'expiresAt': {r'$lt': DateTime.now()},
     });
-    return true;
   }
 
   @override
