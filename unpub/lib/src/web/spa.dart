@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:http_parser/http_parser.dart' show MediaType;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart' as mime;
 import 'package:path/path.dart' as p;
@@ -49,6 +50,40 @@ const _contentTypes = {
   '.wasm': 'application/wasm',
 };
 
+/// The quality the `Accept` header [accept] gives `text/html`, from 0 to 1.
+///
+/// It is the `q` of the most specific media range matching `text/html`:
+/// `text/html`, else `text/*`, else `*/*`; 0 if none does or if there is no
+/// header. Ranges that cannot be read, or whose `q` cannot, are ignored.
+double htmlQuality(String? accept) {
+  if (accept == null) return 0;
+  var specificity = -1;
+  var quality = 0.0;
+  for (final raw in accept.split(',')) {
+    if (raw.trim().isEmpty) continue;
+    final MediaType range;
+    try {
+      range = MediaType.parse(raw.trim());
+    } on FormatException {
+      continue;
+    }
+    final rank =
+        switch ((range.type.toLowerCase(), range.subtype.toLowerCase())) {
+      ('text', 'html') => 2,
+      ('text', '*') => 1,
+      ('*', '*') => 0,
+      _ => -1,
+    };
+    if (rank <= specificity) continue;
+    final q = range.parameters['q'];
+    final parsed = q == null ? 1.0 : double.tryParse(q);
+    if (parsed == null || parsed.isNaN || parsed < 0 || parsed > 1) continue;
+    specificity = rank;
+    quality = parsed;
+  }
+  return quality;
+}
+
 /// The shell could not be read safely.
 class _ShellUnavailable implements Exception {
   final String reason;
@@ -79,8 +114,8 @@ final class SpaShell extends SpaTarget {
 /// Serves the built single-page client from [directory] under [basePath].
 ///
 /// Requests for files of the build get them, `assets/` cached for good and
-/// the rest for an hour. Every other GET or HEAD that accepts HTML and is
-/// not for the server gets `index.html`, the shell,
+/// the rest for an hour. Every other GET or HEAD that accepts HTML, by
+/// [htmlQuality], and is not for the server gets `index.html`, the shell,
 /// so that the client can
 /// route it. The shell gets the meta tags `unpub-base`, with [basePath], and
 /// `unpub-classic`, with [classicPath], and its relative references to the
@@ -166,8 +201,8 @@ class SpaClient {
       // A missing file of the build is a 404, not the shell.
       if (segments.first == 'assets') return null;
     }
-    final accept = request.headers[HttpHeaders.acceptHeader] ?? '';
-    return accept.contains('text/html') ? const SpaShell() : null;
+    final accept = request.headers[HttpHeaders.acceptHeader];
+    return htmlQuality(accept) > 0 ? const SpaShell() : null;
   }
 
   /// The file at [segments] if it is a file inside [directory].

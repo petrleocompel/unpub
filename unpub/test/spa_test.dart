@@ -114,6 +114,33 @@ void main() {
       expect(reply.body, 'Route not found');
     });
 
+    test('the Accept header is negotiated with its q values', () async {
+      for (final accept in [
+        'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        '*/*',
+        'text/*',
+        'TEXT/HTML',
+        'application/json, */*;q=0.1',
+      ]) {
+        final reply = await get('/packages/alpha',
+            html: false, headers: {'accept': accept});
+        expectShell(reply);
+      }
+      for (final accept in [
+        'text/html;q=0, application/json',
+        'application/json',
+        'text/html;q=0, */*',
+        '*/*;q=0',
+        'text/*;q=0',
+        'text/html;q=x',
+      ]) {
+        final reply = await get('/packages/alpha',
+            html: false, headers: {'accept': accept});
+        expect(reply.status, HttpStatus.notFound, reason: accept);
+        expect(reply.body, isNot(contains('unpub-base')), reason: accept);
+      }
+    });
+
     test('hashed assets are cached for good, with a validator', () async {
       final js = await get(_script, html: false);
       expect(js.status, HttpStatus.ok);
