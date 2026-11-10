@@ -2,6 +2,7 @@ import type {
   AuditEvent,
   Config,
   Me,
+  Overview,
   Package,
   PackageSummary,
   Stats,
@@ -190,4 +191,20 @@ export function webhook(overrides: Partial<Webhook> = {}): Webhook {
 
 export function page<T>(items: T[], page = 1, size = 20, total = items.length) {
   return { items, page, size, total }
+}
+
+export function overview(overrides: Partial<Overview> = {}): Overview {
+  return {
+    packages: 12,
+    versions: 87,
+    users: 5,
+    webhooks: 2,
+    storageBytes: 3_400_000,
+    storageMeasuredAt: at,
+    publishesLast24h: 3,
+    failedDeliveriesLast24h: 0,
+    recentPublishes: [auditEvent()],
+    readiness: { status: 'ok', checks: { mongo: { status: 'ok' }, storage: { status: 'ok' } } },
+    ...overrides,
+  }
 }

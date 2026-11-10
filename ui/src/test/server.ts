@@ -23,7 +23,11 @@ export function sessionHandlers(me: Me | null, config: Config = f.config()) {
   ]
 }
 
-export const server = setupServer(...sessionHandlers(null))
+export const server = setupServer(
+  ...sessionHandlers(null),
+  // The dashboard sidebar counts failed deliveries from the overview.
+  http.get(url('/webapi/admin/overview'), () => HttpResponse.json(f.overview())),
+)
 
 /** Records the requests to [path] answered with [body]. */
 export function capture(
