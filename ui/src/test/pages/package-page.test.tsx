@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import * as f from '../fixtures'
@@ -84,6 +84,37 @@ describe('package page', () => {
 
     await user.click(screen.getByRole('tab', { name: 'README' }))
     expect(where(router)).toBe('/packages/my_company_core')
+  })
+
+  it('goes back to the previous tab', async () => {
+    packageHandlers()
+    const { user, router } = renderApp('/packages/my_company_core')
+    await screen.findByRole('heading', { level: 1, name: /^my_company_core/ })
+    await user.click(screen.getByRole('tab', { name: 'Versions' }))
+    await user.click(screen.getByRole('tab', { name: 'Install' }))
+    expect(where(router)).toBe('/packages/my_company_core?tab=install')
+
+    await act(() => router.navigate(-1))
+    expect(where(router)).toBe('/packages/my_company_core?tab=versions')
+    expect(screen.getByRole('tab', { name: 'Versions', selected: true })).toBeInTheDocument()
+    await act(() => router.navigate(-1))
+    expect(screen.getByRole('tab', { name: 'README', selected: true })).toBeInTheDocument()
+  })
+
+  it('leaves the stats address for the other tabs', async () => {
+    packageHandlers()
+    const { user, router } = renderApp('/packages/my_company_core/stats')
+    expect(await screen.findByRole('tab', { name: 'Stats', selected: true })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'README' }))
+    expect(where(router)).toBe('/packages/my_company_core')
+    expect(screen.getByRole('tab', { name: 'README', selected: true })).toBeInTheDocument()
+    expect(screen.getByRole('document', { name: 'README' })).toBeInTheDocument()
+
+    await act(() => router.navigate(-1))
+    expect(await screen.findByRole('tab', { name: 'Stats', selected: true })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Install' }))
+    expect(where(router)).toBe('/packages/my_company_core?tab=install')
   })
 
   it('opens a tab from the URL', async () => {

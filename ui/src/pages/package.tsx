@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Archive, Ban, CloudDownload, Download, ExternalLink, FlaskConical } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { usePackage, usePackageStats } from '@/api/queries'
@@ -51,13 +52,18 @@ export function packagePath(name: string, version?: string) {
 
 export function PackagePage({ defaultTab = 'readme' }: { defaultTab?: PackageTab }) {
   const { name = '', version } = useParams()
-  const [params, setParams] = useSearchParams()
+  const [params] = useSearchParams()
+  const navigate = useNavigate()
   const pkg = usePackage(name, version)
   const { config } = useSession()
   useTitle(version ? `${name} ${version}` : name)
 
   const tabParam = params.get('tab') as PackageTab | null
   const tab: PackageTab = tabParam && packageTabs.includes(tabParam) ? tabParam : defaultTab
+  const shownTab = useRef(tab)
+  useEffect(() => {
+    shownTab.current = tab
+  })
 
   if (pkg.isPending) return <PackageSkeleton />
   if (pkg.isError) {
@@ -98,10 +104,19 @@ export function PackagePage({ defaultTab = 'readme' }: { defaultTab?: PackageTab
           <Tabs
             value={tab}
             onValueChange={(value) => {
+              // A click reports the tab twice, on press and on focus.
+              if (value === shownTab.current) return
+              shownTab.current = value as PackageTab
               const next = new URLSearchParams(params)
               if (value === 'readme') next.delete('tab')
               else next.set('tab', value)
-              setParams(next, { replace: true })
+              const search = next.toString()
+              // The package URL, also from the stats alias; a new entry, so Back
+              // returns to the previous tab.
+              navigate({
+                pathname: packagePath(name, version),
+                search: search ? `?${search}` : '',
+              })
             }}
             className="min-w-0"
           >
