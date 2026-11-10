@@ -173,7 +173,11 @@ auth:
             'replacedBy',
             'isFlutter',
             'private',
+            'versionCount',
+            'uploaders',
           ]));
+      expect(alpha['versionCount'], 2);
+      expect(alpha['uploaders'], ['owner@example.com']);
       expect(alpha['latest'], '1.0.0');
       expect(alpha['description'], 'First');
       expect(alpha['updatedAt'], '2026-01-02T03:04:05.000Z');

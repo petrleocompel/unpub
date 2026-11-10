@@ -109,6 +109,8 @@ class WebapiRoutes {
       'isFlutter':
           package.versions.any((version) => isFlutterPubspec(version.pubspec)),
       'private': package.private,
+      'versionCount': package.versions.length,
+      'uploaders': package.uploaders ?? const <String>[],
     };
   }
 

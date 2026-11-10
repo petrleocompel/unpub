@@ -1433,7 +1433,22 @@ components:
               description: Where the server-rendered pages are, `""` for `/`, else `/classic`.
     PackageSummary:
       type: object
-      required: [name, latest, description, updatedAt, downloads, isDiscontinued, replacedBy, isFlutter, private]
+      description: >-
+        A package of the list. Only packages published here are listed, never
+        ones only proxied from the upstream.
+      required: [name, latest, description, updatedAt, downloads, isDiscontinued, replacedBy, isFlutter, private, versionCount, uploaders]
+      examples:
+        - name: alpha_client
+          latest: 1.4.0
+          description: A client for the Alpha service.
+          updatedAt: '2026-11-02T09:14:00.000Z'
+          downloads: 1287
+          isDiscontinued: false
+          replacedBy: null
+          isFlutter: false
+          private: true
+          versionCount: 12
+          uploaders: [dev@example.com, lead@example.com]
       properties:
         name:
           type: string
@@ -1455,7 +1470,18 @@ components:
           description: Any version has a `flutter` section, an `environment.flutter` constraint or depends on `flutter`.
         private:
           type: boolean
-          description: Published here, rather than proxied from the upstream.
+          description: >-
+            Published here, rather than proxied from the upstream. Always true,
+            since proxied packages are not listed.
+        versionCount:
+          type: integer
+          minimum: 1
+          description: How many versions the package has, retracted ones included.
+        uploaders:
+          type: array
+          description: The emails that may publish and manage the package, in their stored order.
+          items:
+            type: string
     PackagePage:
       allOf:
         - $ref: '#/components/schemas/PageInfo'

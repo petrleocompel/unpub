@@ -13,6 +13,7 @@ Prepares the server for the single-page web client of phase 6: the JSON API it n
 - `GET /webapi/users` searches with `q` and is paged. Every list route takes a one-based `page` and `size` and answers `{items, page, size, total}`.
 - `POST /api/packages/<name>/uploaders` also takes `{"email": ...}` as JSON.
 - Every JSON error has a `code` next to its `message`: `invalid_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `bad_gateway` and the codes the account routes had.
+- Package summaries of `GET /webapi/v2/packages` have `versionCount` and `uploaders`, so the admin package table needs one call. Only packages published here are listed, so `private` is always true.
 - `SpaClient` and `spaContentSecurityPolicy` are exported.
 - Serves `docs/openapi.yaml` at `GET /webapi/openapi.yaml`. A test checks it against the router, and CI lints it and builds and tests the client once `ui/package.json` exists.
 - The Docker image builds the client in a `node:22-alpine` stage when `ui/package.json` exists and copies it to `/app/ui`.
