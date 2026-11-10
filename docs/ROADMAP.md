@@ -125,6 +125,17 @@ Part B, client in `ui/`:
 - Tests: Vitest with Testing Library and MSW for the pages, a Playwright smoke run against the real server in CI (build, serve with Mongo, login, list, detail, token create, admin user create) in its own job.
 - README section "Web client" and the `ui/README.md` for development (`npm run dev` proxies `/webapi` and `/api` to a local server).
 
+## Phase 7: applying the design
+
+Goal: the client in `ui/` looks like `docs/design`, screen for screen, in light and dark, at 1440 px and 390 px, without changing the API or the behaviour the tests cover.
+
+- Source of truth: `docs/design/html/*.html` for markup, spacing and copy, `docs/design/screens/*.png` for the result, `docs/design/README.md` for the direction and its deliberate changes from the brief. The tokens are already in `ui/src/index.css`; the first screens (header, badges, tabs, dashboard sidebar, list rows) were applied with them.
+- Part A, public pages and shared components: header, footer, search, theme toggle; buttons, inputs, selects, switches, badges, tabs, tables, dialogs, menus, toasts, skeletons, empty and error states (boards 00 to 02); package list with the segmented SDK control (03); package page as a band with tabs, table of contents, sidebar, notices above the tabs and one grouped Actions menu (04 to 07); login with its wrong password, rate limited and empty states (08); not found (09, the "did you mean" suggestion can ship later).
+- Part B, dashboard: one shell for Account and Admin (boards 10 to 18): sidebar with the failed-deliveries count, headings, tiles, compact tables with a sticky first column on phones, row menus, dialogs, the one-shot secret box, settings with the environment variable under every key and muted defaults, webhook detail with verification explained next to the secret.
+- No new runtime dependencies, no inline styles, no raw colours: everything through the tokens. CSP unchanged. Accessibility as drawn: roles, labels, `aria-current`, `aria-sort`, `aria-busy`, the focus ring everywhere.
+- Tests stay green and follow the markup where roles or labels change; the Playwright smoke run stays. `assets/screenshot.png` is replaced with the new package list.
+- Review: Codex and Cursor on each part, fixes, Codex re-check, as in phase 6.
+
 ## Out of scope
 
 - dartdoc generation.
