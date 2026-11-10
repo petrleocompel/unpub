@@ -10,6 +10,44 @@ import 'harness.dart';
 
 const _methods = {'get', 'post', 'put', 'patch', 'delete'};
 
+/// The routes under `/api` that `dart pub` speaks, described by the pub
+/// repository specification rather than by docs/openapi.yaml. Every other
+/// `/api` route is one of the client and must be documented.
+const _pubProtocolRoutes = {
+  'GET /api/packages/<name>',
+  'GET /api/packages/<name>/advisories',
+  'GET /api/packages/<name>/versions/<version>',
+  'GET /api/packages/versions/new',
+  'POST /api/packages/versions/newUpload',
+  'GET /api/packages/versions/newUploadFinish',
+};
+
+/// The error codes in the sources: those given to `badRequest`, the account
+/// and auth exceptions and helpers, and the defaults of [errorCodeFor].
+Set<String> _emittedErrorCodes() {
+  final patterns = [
+    RegExp(r"\bcode(?:: | = )'([a-z_]+)'"),
+    RegExp(r"'code': '([a-z_]+)'"),
+    RegExp(r"_error\(\s*HttpStatus\.\w+,\s*'([a-z_]+)'"),
+    RegExp(r"HttpStatus\.\w+ => '([a-z_]+)'"),
+    RegExp(r"status >= 500 \? '([a-z_]+)' : '([a-z_]+)'"),
+  ];
+  final codes = <String>{};
+  for (final file in Directory('lib').listSync(recursive: true)) {
+    if (file is! File || !file.path.endsWith('.dart')) continue;
+    if (file.path.endsWith('openapi_document.dart')) continue;
+    final source = file.readAsStringSync();
+    for (final pattern in patterns) {
+      for (final match in pattern.allMatches(source)) {
+        for (var group = 1; group <= match.groupCount; group++) {
+          codes.add(match[group]!);
+        }
+      }
+    }
+  }
+  return codes;
+}
+
 /// docs/openapi.yaml against the routes the app registers.
 void main() {
   final file = File(embed.source);
@@ -87,18 +125,27 @@ void main() {
       }
     });
 
-    test('the management routes of the client are documented', () {
-      for (final route in [
-        'POST /api/packages/<name>/versions/<version>/retract',
-        'POST /api/packages/<name>/versions/<version>/unretract',
-        'PUT /api/packages/<name>/discontinue',
-        'POST /api/packages/<name>/uploaders',
-        'DELETE /api/packages/<name>/uploaders/<email>',
-        'PUT /api/packages/<name>/owner',
-        'DELETE /api/packages/<name>/versions/<version>',
-        'DELETE /api/packages/<name>',
-      ]) {
-        expect(documented, contains(route));
+    test('every /api route is documented, but the pub protocol', () {
+      final api = {
+        for (final route in registered())
+          if (route.split(' ').last.startsWith('/api/')) route,
+      };
+      expect(api, containsAll(_pubProtocolRoutes),
+          reason: 'an allowlisted route is no longer registered');
+      final management = api.difference(_pubProtocolRoutes);
+      final documentedApi = {
+        for (final route in documented)
+          if (route.split(' ').last.startsWith('/api/')) route,
+      };
+      expect(documentedApi, management,
+          reason: 'registered and documented /api routes differ');
+      expect(management, isNotEmpty);
+    });
+
+    test('lists every error code the server emits', () {
+      final intro = document['info']['description'] as String;
+      for (final code in _emittedErrorCodes()) {
+        expect(intro, contains('`$code`'), reason: 'undocumented code');
       }
     });
 
