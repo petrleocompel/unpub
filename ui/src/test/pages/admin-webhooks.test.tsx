@@ -230,6 +230,26 @@ describe('webhooks', () => {
     expect(buttons[1]).toHaveFocus()
   })
 
+  it('clears the payload and keeps the focus when a refetch drops its delivery', async () => {
+    twoDeliveries()
+    let items = [failed]
+    server.use(
+      http.get(url('/webapi/webhooks/:id/deliveries'), () => HttpResponse.json(f.page(items))),
+    )
+    const { user, queryClient } = renderApp('/admin/webhooks/w1', { me: f.me() })
+    await user.click(await screen.findByRole('button', { name: /show the payload/ }))
+    expect(document.getElementById('payload-d1')).toHaveFocus()
+
+    // Newer deliveries push the open one off the page.
+    items = [{ ...failed, id: 'd3', eventId: 'e3', version: '1.5.0', payload: '{"id":"e3"}' }]
+    await queryClient.invalidateQueries()
+    await waitFor(() => expect(document.getElementById('payload-d1')).toBeNull())
+    const next = document.getElementById('delivery-d3')!
+    expect(next).toHaveAttribute('aria-expanded', 'false')
+    expect(next).toHaveFocus()
+    expect(document.getElementById('payload-d3')).toBeNull()
+  })
+
   it('shows the attempts out of the maximum and a retention of 0 as forever', async () => {
     twoDeliveries()
     renderApp('/admin/webhooks/w1', { me: f.me() })

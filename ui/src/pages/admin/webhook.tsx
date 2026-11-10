@@ -302,6 +302,19 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
     setOpen(null)
     document.getElementById(`delivery-${id}`)?.focus()
   }
+  // A refetch can drop the open delivery, for example when newer ones push
+  // it off the page. Its panel goes with it, so the selection is cleared and
+  // the focus lands on the first delivery left, or on the Refresh button.
+  useEffect(() => {
+    if (open === null || !deliveries.data) return
+    if (deliveries.data.items.some((delivery) => delivery.id === open)) return
+    setOpen(null)
+    if (document.activeElement !== document.body) return
+    const next =
+      document.querySelector<HTMLElement>('button[id^="delivery-"]') ??
+      document.getElementById('deliveries-refresh')
+    next?.focus()
+  }, [open, deliveries.data])
 
   return (
     <>
@@ -317,6 +330,7 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
             <Button
               variant="ghost"
               size="sm"
+              id="deliveries-refresh"
               onClick={() => void deliveries.refetch()}
               disabled={deliveries.isFetching}
             >

@@ -265,13 +265,35 @@ function Target({ event }: { event: AuditEvent }) {
   return <span className="font-mono">{event.target}</span>
 }
 
+/**
+ * Audit events carry no id, so the identity of one is every field but its
+ * details. Keyed on that, an expanded event stays expanded when a refetch
+ * puts newer events above it, instead of the expansion moving to whatever
+ * row took its index.
+ */
+function identity(event: AuditEvent): string {
+  return [
+    event.at,
+    event.action,
+    event.actor,
+    event.actorKind,
+    event.token,
+    event.package,
+    event.version,
+    event.target,
+    event.ip,
+  ]
+    .map((value) => value ?? '')
+    .join('\u0000')
+}
+
 function AuditTable({ events }: { events: AuditEvent[] }) {
-  const [open, setOpen] = useState<Set<number>>(new Set())
-  const toggle = (index: number) =>
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const toggle = (id: string) =>
     setOpen((current) => {
       const next = new Set(current)
-      if (next.has(index)) next.delete(index)
-      else next.add(index)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
 
@@ -292,11 +314,12 @@ function AuditTable({ events }: { events: AuditEvent[] }) {
       </TableHeader>
       <TableBody>
         {events.map((event, index) => {
+          const id = identity(event)
           const hasDetails = Object.keys(event.details).length > 0
-          const expanded = hasDetails && open.has(index)
+          const expanded = hasDetails && open.has(id)
           const detailsId = `audit-details-${index}`
           return (
-            <Fragment key={`${event.at}-${index}`}>
+            <Fragment key={`${id}-${index}`}>
               <TableRow data-expanded={expanded || undefined}>
                 <TableCell>
                   <div className="grid">
@@ -337,7 +360,7 @@ function AuditTable({ events }: { events: AuditEvent[] }) {
                       aria-expanded={expanded}
                       aria-controls={detailsId}
                       aria-label={expanded ? 'Hide details' : 'Show details'}
-                      onClick={() => toggle(index)}
+                      onClick={() => toggle(id)}
                     >
                       <ChevronDown
                         aria-hidden

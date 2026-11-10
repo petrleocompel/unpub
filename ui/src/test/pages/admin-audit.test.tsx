@@ -127,4 +127,45 @@ describe('audit log', () => {
       expect(screen.queryByRole('button', { name: 'Hide details' })).not.toBeInTheDocument(),
     )
   })
+
+  it('keeps the expanded event when a refetch puts a newer one above it', async () => {
+    auditApi()
+    const events = [
+      f.auditEvent(),
+      f.auditEvent({
+        action: 'user.created',
+        package: null,
+        version: null,
+        target: 'new@company.example',
+        details: {},
+      }),
+    ]
+    server.use(
+      http.get(url('/webapi/audit'), () => HttpResponse.json(f.page(events, 1, 50, events.length))),
+    )
+    const { user, queryClient } = renderApp('/admin/audit', { me: f.me() })
+    await screen.findByRole('cell', { name: 'user.created' })
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByText(/"sha256"/)).toBeInTheDocument()
+
+    events.unshift(
+      f.auditEvent({
+        at: '2026-11-09T12:00:00.000Z',
+        action: 'user.login',
+        package: null,
+        version: null,
+        target: 'ada@company.example',
+        details: { method: 'password' },
+      }),
+    )
+    await queryClient.invalidateQueries()
+    await screen.findByRole('cell', { name: 'user.login' })
+
+    // The newer event arrives collapsed; the one opened before stays open.
+    const buttons = screen.getAllByRole('button', { name: /details/ })
+    expect(buttons[0]).toHaveAttribute('aria-expanded', 'false')
+    expect(buttons[1]).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText(/"sha256"/)).toBeInTheDocument()
+    expect(screen.queryByText(/"method"/)).not.toBeInTheDocument()
+  })
 })
