@@ -339,22 +339,27 @@ function VersionsTable({ pkg }: { pkg: Package }) {
               {formatNumber(version.downloads)}
             </TableCell>
             <TableCell>
-              {version.version === pkg.version && pkg.archiveSha256 ? (
-                <HashText hash={pkg.archiveSha256} label={`SHA-256 of ${version.version}`} />
-              ) : (
-                <Link
-                  to={`${packagePath(pkg.name, version.version)}?tab=versions`}
-                  className="text-xs text-muted-foreground hover:underline"
-                >
-                  Show
-                </Link>
-              )}
+              <VersionHash pkg={pkg} version={version} />
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
   )
+}
+
+/** The short hash of the archive of [version] with a copy button, or a dash
+ * when the server does not know it. */
+function VersionHash({ pkg, version }: { pkg: Package; version: Package['versions'][number] }) {
+  const hash = version.archiveSha256 ?? (version.version === pkg.version ? pkg.archiveSha256 : null)
+  if (!hash) {
+    return (
+      <span className="text-muted-foreground" title="Not known">
+        –<span className="sr-only">Not known</span>
+      </span>
+    )
+  }
+  return <HashText hash={hash} label={`SHA-256 of ${version.version}`} />
 }
 
 function InstallTab({ pkg }: { pkg: Package }) {

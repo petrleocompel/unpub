@@ -72,6 +72,12 @@ describe('package page', () => {
     expect(rows).toHaveLength(4)
     expect(within(rows[3]!).getByText('Retracted')).toBeInTheDocument()
     expect(within(rows[1]!).getByText('Prerelease')).toBeInTheDocument()
+    expect(within(rows[2]!).getByText(f.sha256.slice(0, 12))).toBeInTheDocument()
+    expect(
+      within(rows[2]!).getByRole('button', { name: 'Copy SHA-256 of 1.4.0' }),
+    ).toBeInTheDocument()
+    expect(within(rows[1]!).getByText('Not known')).toBeInTheDocument()
+    expect(within(table).queryByRole('link', { name: 'Show' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Install' }))
     expect(
@@ -84,6 +90,30 @@ describe('package page', () => {
 
     await user.click(screen.getByRole('tab', { name: 'README' }))
     expect(where(router)).toBe('/packages/my_company_core')
+  })
+
+  it('shows the hash of every version that has one', async () => {
+    const other = 'a1b2c3d4e5f6'.padEnd(64, '0')
+    packageHandlers(
+      f.pkg({
+        versions: [
+          f.version('2.0.0-beta.3', { archiveSha256: other }),
+          f.version('1.4.0', { archiveSha256: f.sha256 }),
+          f.version('1.0.0', { retracted: true }),
+        ],
+      }),
+    )
+    renderApp('/packages/my_company_core?tab=versions')
+    const table = await screen.findByRole('table', { name: /Versions of my_company_core/ })
+    const rows = within(table).getAllByRole('row')
+    expect(within(rows[1]!).getByText('a1b2c3d4e5f6')).toHaveAttribute('title', other)
+    expect(
+      within(rows[1]!).getByRole('button', { name: 'Copy SHA-256 of 2.0.0-beta.3' }),
+    ).toBeInTheDocument()
+    expect(within(rows[2]!).getByText(f.sha256.slice(0, 12))).toHaveAttribute('title', f.sha256)
+    expect(within(rows[3]!).getByText('Not known')).toBeInTheDocument()
+    expect(within(rows[3]!).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(table).queryByRole('link', { name: 'Show' })).not.toBeInTheDocument()
   })
 
   it('goes back to the previous tab', async () => {
