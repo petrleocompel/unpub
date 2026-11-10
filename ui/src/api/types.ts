@@ -4,6 +4,7 @@ type Schemas = components['schemas']
 
 export type Config = Schemas['Config']
 export type Me = Schemas['Me']
+export type Anonymous = Schemas['Anonymous']
 export type User = Schemas['User']
 export type Role = Schemas['Role']
 export type Scope = Schemas['Scope']

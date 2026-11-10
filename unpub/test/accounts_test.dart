@@ -24,6 +24,12 @@ class Reply {
   String? get errorCode => body['error']?['code'] as String?;
 }
 
+/// Expects the answer of `GET /webapi/me` when nobody is logged in.
+void expectNobody(Reply reply) {
+  expect(reply.status, HttpStatus.ok, reason: '${reply.body}');
+  expect(reply.body, {'user': null});
+}
+
 /// What a browser holds after logging in.
 class Browser {
   final String cookie;
@@ -544,21 +550,21 @@ void main() {
           where.eq('hash', created.token.hash),
           modify.set('expiresAt',
               DateTime.now().subtract(const Duration(seconds: 1))));
-      expect((await me(created.secret)).status, HttpStatus.unauthorized);
+      expectNobody(await me(created.secret));
     });
 
     test('a revoked token is anonymous', () async {
       final reader = await user('r@b.c', Role.reader);
       final created = await accounts.createToken(reader, name: 'old');
       await accounts.revokeToken(created.token);
-      expect((await me(created.secret)).status, HttpStatus.unauthorized);
+      expectNobody(await me(created.secret));
     });
 
     test('a token of a disabled user is anonymous', () async {
       final publisher = await user('p@b.c', Role.publisher);
       final secret = await token(publisher);
       await store.updateUser(publisher.id, DateTime.now(), disabled: true);
-      expect((await me(secret)).status, HttpStatus.unauthorized);
+      expectNobody(await me(secret));
     });
 
     test('demoting a user takes effect on existing tokens', () async {
@@ -944,16 +950,16 @@ void main() {
           where.eq('_id', hashSecret(browser.cookie)),
           modify.set('expiresAt',
               DateTime.now().subtract(const Duration(seconds: 1))));
-      expect((await send('GET', '/webapi/me', browser: browser)).status,
-          HttpStatus.unauthorized);
+      final reply = await send('GET', '/webapi/me', browser: browser);
+      expectNobody(reply);
+      expect(reply.headers['set-cookie'], contains('Max-Age=0'));
     });
 
     test('a session of a disabled user is anonymous', () async {
       final reader = await user('r@b.c', Role.reader);
       final browser = await login(reader);
       await store.updateUser(reader.id, DateTime.now(), disabled: true);
-      expect((await send('GET', '/webapi/me', browser: browser)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: browser));
     });
 
     test('logout ends the session and clears the cookie', () async {
@@ -961,8 +967,7 @@ void main() {
       final reply = await send('POST', '/webapi/logout', browser: browser);
       expect(reply.status, HttpStatus.ok);
       expect(reply.headers['set-cookie'], contains('Max-Age=0'));
-      expect((await send('GET', '/webapi/me', browser: browser)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: browser));
     });
 
     test('logout needs the CSRF token', () async {
@@ -978,8 +983,7 @@ void main() {
       await send('POST', '/webapi/login',
           headers: {'cookie': '$sessionCookieName=${first.cookie}'},
           body: {'email': 'r@b.c', 'password': _password});
-      expect((await send('GET', '/webapi/me', browser: first)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: first));
     });
 
     for (final (role, scopes) in [
@@ -1031,10 +1035,26 @@ void main() {
           HttpStatus.ok);
     });
 
-    test('me without credentials is unauthorized in public mode', () async {
-      final reply = await send('GET', '/webapi/me');
-      expect(reply.status, HttpStatus.unauthorized);
-      expect(reply.errorCode, 'unauthorized');
+    test('me without credentials answers that nobody is logged in', () async {
+      final private = buildApp(readAccess: ReadAccess.authenticated);
+      for (final using in [app, private]) {
+        final reply = await send('GET', '/webapi/me', using: using);
+        expectNobody(reply);
+        expect(reply.headers['set-cookie'], isNull);
+        expect(reply.headers['cache-control'], 'no-store');
+        expectNobody(
+            await send('GET', '/webapi/me', bearer: 'stale', using: using));
+      }
+    });
+
+    test('me clears a session cookie that is not accepted', () async {
+      final private = buildApp(readAccess: ReadAccess.authenticated);
+      for (final using in [app, private]) {
+        final reply = await send('GET', '/webapi/me',
+            browser: const Browser('unknown', 'csrf'), using: using);
+        expectNobody(reply);
+        expect(reply.headers['set-cookie'], contains('Max-Age=0'));
+      }
     });
   });
 
@@ -1374,8 +1394,7 @@ void main() {
 
       expect((await send('GET', '/webapi/me', browser: browser)).status,
           HttpStatus.ok);
-      expect((await send('GET', '/webapi/me', browser: other)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: other));
 
       expect(
           (await send('POST', '/webapi/login',
@@ -1725,8 +1744,7 @@ void main() {
       final reply = await send('POST', '/webapi/users/${other.id}/password',
           browser: browser, body: {'password': 'set-by-admin'});
       expect(reply.status, HttpStatus.ok);
-      expect((await send('GET', '/webapi/me', browser: session)).status,
-          HttpStatus.unauthorized);
+      expectNobody(await send('GET', '/webapi/me', browser: session));
       expect(
           (await send('POST', '/webapi/login',
                   body: {'email': 'o@b.c', 'password': 'set-by-admin'}))

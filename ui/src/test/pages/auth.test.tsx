@@ -18,11 +18,9 @@ describe('login', () => {
       }),
     )
     const { user, router } = renderApp('/login?next=%2Fpackages%3Fq%3Dcore')
-    // The session handler of renderApp answers 401 until the login succeeds.
+    // Nobody is logged in until the login succeeds.
     server.use(
-      http.get(url('/webapi/me'), () =>
-        loggedIn ? HttpResponse.json(f.me()) : error(401, 'unauthorized', 'No session.'),
-      ),
+      http.get(url('/webapi/me'), () => HttpResponse.json(loggedIn ? f.me() : { user: null })),
       http.get(url('/webapi/v2/packages'), () => HttpResponse.json(f.page([]))),
     )
 

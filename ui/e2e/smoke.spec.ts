@@ -10,14 +10,6 @@ test.beforeEach(({ page }) => {
   problems = []
   page.on('console', (message: ConsoleMessage) => {
     if (message.type() !== 'error') return
-    // Anonymous visitors ask who they are: GET /webapi/me answers 401, which
-    // Chrome logs as a failed resource. Nothing else may fail.
-    if (
-      message.text().includes('status of 401') &&
-      new URL(message.location().url).pathname === '/webapi/me'
-    ) {
-      return
-    }
     problems.push(`${message.text()} (${message.location().url})`)
   })
   page.on('pageerror', (error) => problems.push(error.message))

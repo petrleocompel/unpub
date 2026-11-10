@@ -68,6 +68,11 @@ bool _isLoginRequest(shelf.Request request, String pagesPath) =>
 /// learn whether to show its login. They hold no data.
 const _openReads = {'webapi/config', 'webapi/openapi.yaml'};
 
+/// Whether [request] asks who is logged in, which an anonymous visitor may
+/// ask in every read mode: the answer is that nobody is.
+bool _isWhoAmIRequest(shelf.Request request) =>
+    _readMethods.contains(request.method) && request.url.path == 'webapi/me';
+
 /// Whether [request] reads a page that stays open in every read mode: the
 /// login form and the stylesheet and script it needs. [pagesPath] is where
 /// the pages are, `''` for `/`.
@@ -141,8 +146,10 @@ shelf.Middleware authMiddleware(
       try {
         final principal = await authenticator.authenticate(request);
         if (!isMetricsRequest(request)) {
+          final openToAnyone =
+              open(request) || (principal == null && _isWhoAmIRequest(request));
           _authorize(request, principal,
-              open(request) ? ReadAccess.public : readAccess, pagesPath);
+              openToAnyone ? ReadAccess.public : readAccess, pagesPath);
         }
         var authorized = request;
         final session = principal?.session;

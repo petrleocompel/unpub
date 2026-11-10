@@ -47,6 +47,13 @@ void main() {
         [contains('oneOf')]);
   });
 
+  test('an anonymous visitor is told that nobody is logged in', () async {
+    final reply = await harness.send('GET', '/webapi/me');
+    expect(reply.status, HttpStatus.ok, reason: reply.body);
+    expectSchema(reply.json, 'Anonymous');
+    expect(schemaProblems(reply.json, 'Me'), isNotEmpty);
+  });
+
   test('every main object has the documented shape', () async {
     final admin = await harness.user('admin@example.com', Role.admin);
     final login = await harness.send('POST', '/webapi/login',

@@ -19,9 +19,7 @@ export function error(
 export function sessionHandlers(me: Me | null, config: Config = f.config()) {
   return [
     http.get(url('/webapi/config'), () => HttpResponse.json(config)),
-    http.get(url('/webapi/me'), () =>
-      me ? HttpResponse.json(me) : error(401, 'unauthorized', 'Credentials are missing.'),
-    ),
+    http.get(url('/webapi/me'), () => HttpResponse.json(me ?? { user: null })),
   ]
 }
 

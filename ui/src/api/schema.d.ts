@@ -85,7 +85,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** Who is logged in. */
+    /**
+     * Who is logged in.
+     * @description Open in every read mode. Without a credential that is accepted, the answer is `{"user": null}`, and a session cookie that is not accepted any more, such as an expired one, is cleared.
+     */
     get: operations['getMe']
     put?: never
     post?: never
@@ -1116,6 +1119,15 @@ export interface components {
       /** @description Only for a session. */
       csrfToken?: string
     }
+    /**
+     * @description The answer of `GET /webapi/me` when nobody is logged in.
+     * @example {
+     *       "user": null
+     *     }
+     */
+    Anonymous: {
+      user: null
+    }
     LoginResult: {
       user: components['schemas']['User']
       csrfToken: string
@@ -1568,16 +1580,16 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description The current user, the scopes of the credential, and the CSRF token of a session. */
+      /** @description The current user, the scopes of the credential, and the CSRF token of a session; or `{"user": null}` when nobody is logged in. */
       200: {
         headers: {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['Me']
+          'application/json': components['schemas']['Me'] | components['schemas']['Anonymous']
         }
       }
-      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
     }
   }
   changeOwnPassword: {

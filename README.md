@@ -43,7 +43,7 @@ dependencies:
 
 Packages not found locally redirect to the upstream, pub.dev by default, so setting `PUB_HOSTED_URL` to this server also works for mixed dependency trees. See [Upstream proxy](#upstream-proxy) to fetch and keep them here instead.
 
-Reading is public by default, and only publishing and uploader management need a token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz`, `/readyz`, the login form `/login` with the stylesheet and script under `/static/`, and `POST /webapi/login` then needs a token or session, which `dart pub get` provides once the token is added with `dart pub token add`. The web UI works in that mode: a browser asking for a server-rendered page is sent to its login page and reads with its session cookie once logged in, and the shell and files of the [web client](#web-client), as well as `GET /webapi/config` and `GET /webapi/openapi.yaml`, stay open so that the client can show its own login. API clients, `/api`, `/webapi` and archives still answer 401 without a token, even to a browser. Badges under `/badge/...` answer 401 as well, so shields.io and similar scrapers cannot fetch them from a private registry without a token.
+Reading is public by default, and only publishing and uploader management need a token. To make the registry private, set `auth.readAccess: authenticated`. Every route except `/healthz`, `/readyz`, the login form `/login` with the stylesheet and script under `/static/`, and `POST /webapi/login` then needs a token or session, which `dart pub get` provides once the token is added with `dart pub token add`. The web UI works in that mode: a browser asking for a server-rendered page is sent to its login page and reads with its session cookie once logged in, and the shell and files of the [web client](#web-client), as well as `GET /webapi/config`, `GET /webapi/openapi.yaml` and `GET /webapi/me`, which answers `{"user": null}` to an anonymous visitor, stay open so that the client can show its own login. API clients, `/api`, `/webapi` and archives still answer 401 without a token, even to a browser. Badges under `/badge/...` answer 401 as well, so shields.io and similar scrapers cannot fetch them from a private registry without a token.
 
 Dart clients only send tokens over HTTPS, except to localhost, so deploy behind TLS.
 
@@ -105,7 +105,7 @@ JSON endpoints under `/webapi`, used by the [web client](#web-client) and by scr
 | `GET /webapi/openapi.yaml` | This API, as OpenAPI 3.1. Open in every read mode. |
 | `POST /webapi/login` | `{email, password}`. Sets the session cookie (`HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `server.publicUrl` is https) and returns the `user` and `csrfToken`. |
 | `POST /webapi/logout` | Ends the session. |
-| `GET /webapi/me` | The current user and scopes, and `csrfToken` for a session. |
+| `GET /webapi/me` | The current user and scopes, and `csrfToken` for a session. Open in every read mode: when nobody is logged in it answers 200 with `{"user": null}`, and clears a session cookie that is not accepted any more, such as an expired one. |
 | `POST /webapi/me/password` | Session only: `{currentPassword, newPassword}`. Ends the other sessions of the user. |
 | `GET`, `POST /webapi/tokens` | List (paged, newest first) or create your own tokens. Create takes `{name, scopes?, expiresIn?}` and returns the `secret` once. A token cannot create a token with more scopes or a later expiry than its own. |
 | `DELETE /webapi/tokens/<id>` | Revoke your own token. An administrator logged in with a password can revoke any. A token or `auth.bootstrapToken` can only revoke tokens of its own user: revoking another user's token answers 403 `session_required` to an administrator's token and 404 to anyone else's. |
@@ -601,7 +601,7 @@ The web client is a single-page application in `ui/` (React, TypeScript, Vite), 
 Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; font-src 'self'
 ```
 
-With `auth.readAccess: authenticated`, `index.html`, the files of the build, `GET /webapi/config` and `GET /webapi/openapi.yaml` stay open, so the client can show its own login, while the API answers 401. The server-rendered pages keep redirecting to their own login.
+With `auth.readAccess: authenticated`, `index.html`, the files of the build, `GET /webapi/config`, `GET /webapi/openapi.yaml` and, for anonymous visitors, `GET /webapi/me` stay open, so the client can show its own login, while the API answers 401. The server-rendered pages keep redirecting to their own login.
 
 **Building.** The Docker image builds the client in a `node:22-alpine` stage (`npm ci`, `npm run build` in `ui/`) when `ui/package.json` exists, and copies `ui/dist` to `/app/ui`. From source, build it in `ui/` and run the server from the repository root so that `ui/dist` is found, or set `ui.assetsDir`. Without a build the server logs a warning and serves the server-rendered pages only.
 

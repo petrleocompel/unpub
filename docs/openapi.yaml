@@ -16,8 +16,9 @@ info:
     token is in the answers of `POST /webapi/login` and `GET /webapi/me`.
 
     **Read access.** With `auth.readAccess: authenticated` every route needs
-    credentials, except `GET /webapi/config`, `GET /webapi/openapi.yaml` and
-    `POST /webapi/login`, and answers 401 otherwise.
+    credentials, except `GET /webapi/config`, `GET /webapi/openapi.yaml`,
+    `POST /webapi/login` and, for anonymous visitors, `GET /webapi/me`, and
+    answers 401 otherwise.
 
     **Errors** have the form `{"error": {"code": "...", "message": "..."}}`.
     Branch on `code`, never on `message`, which is for people. The codes:
@@ -175,18 +176,27 @@ paths:
       tags: [session]
       operationId: getMe
       summary: Who is logged in.
+      description: >-
+        Open in every read mode. Without a credential that is accepted, the
+        answer is `{"user": null}`, and a session cookie that is not accepted
+        any more, such as an expired one, is cleared.
       security:
         - cookieAuth: []
         - bearerAuth: []
+        - {}
       responses:
         '200':
-          description: The current user, the scopes of the credential, and the CSRF token of a session.
+          description: >-
+            The current user, the scopes of the credential, and the CSRF token
+            of a session; or `{"user": null}` when nobody is logged in.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Me'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                oneOf:
+                  - $ref: '#/components/schemas/Me'
+                  - $ref: '#/components/schemas/Anonymous'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /webapi/me/password:
     post:
       tags: [account]
@@ -1918,6 +1928,16 @@ components:
         csrfToken:
           type: string
           description: Only for a session.
+    Anonymous:
+      type: object
+      description: The answer of `GET /webapi/me` when nobody is logged in.
+      required: [user]
+      additionalProperties: false
+      properties:
+        user:
+          type: 'null'
+      examples:
+        - user: null
     LoginResult:
       type: object
       required: [user, csrfToken]

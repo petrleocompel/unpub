@@ -7,7 +7,7 @@ import {
   type QueryKey,
 } from '@tanstack/react-query'
 import { api, ApiError, setCsrfToken, unwrap } from './client'
-import type { Me, Role, Scope, WebhookEvent, WebhookInput } from './types'
+import type { Anonymous, Me, Role, Scope, WebhookEvent, WebhookInput } from './types'
 
 // ---------------------------------------------------------------- session
 
@@ -22,11 +22,19 @@ export const meQuery = queryOptions({
   queryKey: ['me'],
   queryFn: async (): Promise<Me | null> => {
     try {
-      // openapi-fetch drops the null `id` of a static token's user.
-      const me = (await unwrap(api.GET('/webapi/me'))) as Me
+      // openapi-fetch drops the null `user` of Anonymous and the null `id`
+      // of a static token's user.
+      const answer = (await unwrap(api.GET('/webapi/me'))) as Me | Anonymous
+      // Nobody is logged in: the server answers {"user": null}.
+      if (answer.user === null) {
+        setCsrfToken(null)
+        return null
+      }
+      const me = answer
       setCsrfToken(me.csrfToken)
       return me
     } catch (error) {
+      // An older server answers 401 when nobody is logged in.
       if (error instanceof ApiError && error.status === 401) {
         setCsrfToken(null)
         return null

@@ -234,7 +234,18 @@ class AccountApi {
   }
 
   Future<shelf.Response> _me(shelf.Request request) async {
-    final principal = _principal(request);
+    final principal = principalOf(request);
+    if (principal == null) {
+      // Nobody is logged in, which is an answer rather than a failure. A
+      // session cookie that was not accepted, expired or ended, is cleared.
+      return _json(HttpStatus.ok, {
+        'user': null
+      }, headers: {
+        if (sessionCookie(request) != null)
+          HttpHeaders.setCookieHeader:
+              clearedSessionCookieHeader(secure: secureCookies),
+      });
+    }
     final id = principal.userId;
     return _json(HttpStatus.ok, {
       'user': id == null

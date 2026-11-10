@@ -143,8 +143,19 @@ void main() {
     test('other account routes are not open', () async {
       expect((await handler(request('POST', 'webapi/logout'))).statusCode,
           HttpStatus.unauthorized);
-      expect((await handler(request('GET', 'webapi/me'))).statusCode,
+      expect((await handler(request('POST', 'webapi/me'))).statusCode,
           HttpStatus.unauthorized);
+    });
+
+    test('an anonymous visitor may ask who is logged in', () async {
+      for (final authorization in [null, 'Bearer wrong']) {
+        expect(
+            (await handler(
+                    request('GET', 'webapi/me', authorization: authorization)))
+                .statusCode,
+            HttpStatus.ok);
+        expect(seen, isNull);
+      }
     });
 
     for (var route in const [

@@ -320,7 +320,6 @@ void main() {
     test('the API still answers 401', () async {
       for (final path in [
         '/webapi/v2/packages',
-        '/webapi/me',
         '/api/packages/alpha',
         '/packages/alpha.json',
         '/packages/alpha/versions/1.0.0.tar.gz',
@@ -330,6 +329,15 @@ void main() {
           expect(reply.status, HttpStatus.unauthorized, reason: path);
           expect(reply.headers['content-type'], contains('json'));
         }
+      }
+    });
+
+    test('tells an anonymous visitor that nobody is logged in', () async {
+      for (final html in [true, false]) {
+        final reply = await get('/webapi/me', html: html, using: private);
+        expect(reply.status, HttpStatus.ok);
+        expect(reply.headers['content-type'], contains('json'));
+        expect(reply.json, {'user': null});
       }
     });
 
@@ -466,7 +474,9 @@ void main() {
       expect(done.cookie(sessionCookieName), '');
       final me = await harness.send('GET', '/webapi/me',
           headers: {'cookie': '$sessionCookieName=${browser.cookie}'});
-      expect(me.status, HttpStatus.unauthorized);
+      expect(me.status, HttpStatus.ok);
+      expect(me.json, {'user': null});
+      expect(me.cookie(sessionCookieName), '');
     });
   });
 }
