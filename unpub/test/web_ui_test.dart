@@ -663,7 +663,7 @@ void main() {}
           .setVersionRetracted('alpha', '1.1.0', retracted: true);
 
       final changelog = await fetch('GET', '/packages/alpha?tab=changelog');
-      expect(changelog.body, contains('<h2>1.0.0</h2>'));
+      expect(changelog.body, contains('<h2 id="md-100">1.0.0</h2>'));
       expect(changelog.body, contains('aria-current="page">Changelog'));
 
       final versions = await fetch('GET', '/packages/alpha?tab=versions');
@@ -1223,6 +1223,24 @@ void main() {}
             HttpStatus.ok,
             reason: path);
       }
+    });
+
+    test('starts at the users page, for an administrator only', () async {
+      expect((await fetch('GET', '/admin')).location, '/login?next=%2Fadmin');
+      await user('pub@example.com', Role.publisher);
+      final publisher = await logIn('pub@example.com');
+      expect((await fetch('GET', '/admin', as: publisher)).status,
+          HttpStatus.forbidden);
+      final secret = (await accounts.createToken(admin, name: 'all')).secret;
+      expect(
+          (await fetch('GET', '/admin',
+                  headers: {'authorization': 'Bearer $secret'}))
+              .status,
+          HttpStatus.forbidden);
+      final browser = await logIn('admin@example.com');
+      final start = await fetch('GET', '/admin', as: browser);
+      expect(start.status, HttpStatus.seeOther);
+      expect(start.location, '/admin/users');
     });
 
     test('manages users', () async {

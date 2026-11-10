@@ -112,7 +112,7 @@ Html renderMarkdown(String source, {MarkdownLinks? links}) {
 /// the id of an element of the page.
 const markdownIdPrefix = 'md-';
 
-final _idPattern = RegExp(r'^[a-zA-Z][\w.-]{0,127}$');
+final _idPattern = RegExp(r'^[a-zA-Z0-9][\w.-]{0,127}$');
 
 /// Elements kept, each with the attributes it may keep.
 const _allowed = <String, Set<String>>{
@@ -190,6 +190,11 @@ final _codeClass = RegExp(r'^language-[a-zA-Z0-9_+#.-]{1,40}$');
 final _dimension = RegExp(r'^\d{1,4}%?$');
 final _scheme = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.-]*):');
 final _ignoredInUrl = RegExp(r'[\x00-\x20\x7f]');
+
+/// An `http` or `https` URL with a host, so `https:evil` and `https:/evil`,
+/// which browsers resolve against the page, do not pass as absolute.
+final _absoluteHttp =
+    RegExp(r'^https?://[^/?#@\\]+(?:[/?#]|$)', caseSensitive: false);
 
 /// [markup] with only the elements and attributes of an allowlist kept.
 ///
@@ -329,7 +334,15 @@ String? _safeUrl(String url, {required Set<String> schemes}) {
   if (compact.isEmpty) return null;
   final scheme = _scheme.firstMatch(compact);
   if (scheme != null) {
-    return schemes.contains(scheme[1]!.toLowerCase()) ? url.trim() : null;
+    final name = scheme[1]!.toLowerCase();
+    if (!schemes.contains(name)) return null;
+    // A backslash is a slash to browsers, so `https:\\evil` is absolute to
+    // them, and `https:evil` is relative to the page. Both are refused.
+    if ((name == 'http' || name == 'https') &&
+        (compact.contains('\\') || !_absoluteHttp.hasMatch(compact))) {
+      return null;
+    }
+    return url.trim();
   }
   // `//host/path` is relative to the scheme only, so it is an absolute URL.
   if (compact.startsWith('//')) return null;

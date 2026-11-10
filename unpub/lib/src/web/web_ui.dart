@@ -124,7 +124,7 @@ class WebUi {
       ..post('/account/password', _guard(changePassword))
       ..post('/account/tokens', _guard(createToken))
       ..post('/account/tokens/<id>/revoke', _guard1(revokeToken))
-      ..get('/admin', (shelf.Request req) => _redirect('/admin/users'))
+      ..get('/admin', _guard(adminIndex))
       ..get('/admin/users', _guard(adminUsers))
       ..post('/admin/users', _guard(adminCreateUser))
       ..post('/admin/users/<id>', _guard1(adminUpdateUser))
@@ -889,8 +889,15 @@ class WebUi {
         return 'package-saved';
       });
 
+  /// Where the administration starts, for an administrator only.
+  Future<shelf.Response> adminIndex(shelf.Request req) async {
+    _administrator(req);
+    return _redirect('/admin/users');
+  }
+
   Future<shelf.Response> adminRetraction(
       shelf.Request req, String name, String version, String action) async {
+    _administrator(req);
     final retracted = switch (action) {
       'retract' => true,
       'unretract' => false,

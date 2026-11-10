@@ -8,7 +8,8 @@ import 'package:unpub/src/web/pages/package_page.dart' show markdownLinks;
 List<dom.Element> _elements(String markup) =>
     html_parser.parseFragment(markup).querySelectorAll('*');
 
-final _allowedUrl = RegExp(r'^(https?:|mailto:|#md-)', caseSensitive: false);
+final _allowedUrl =
+    RegExp(r'^(https?://[^/?#@\\]+|mailto:|#md-)', caseSensitive: false);
 
 /// Fails unless no element of [markup] can run script or leave the allowed
 /// URLs, whatever it looks like as text.
@@ -71,6 +72,13 @@ void main() {
           'rel="opener">x</a>',
       'target on a fragment': '<a href="#usage" target="_blank">x</a>',
       'protocol relative': '<a href="//evil.example/">x</a>',
+      'scheme without host': '<a href="https:evil">x</a>',
+      'scheme with one slash': '<img src="https:/evil/a.png" alt="x">',
+      'markdown scheme without host': '[x](https:evil) ![y](HTTPS:evil.png)',
+      'backslash host': '<a href="https:\\\\evil.example/">x</a>',
+      'backslash after the host': '<a href="https://ok.example\\@evil">x</a>',
+      'empty host': '<a href="https:///evil.example/">x</a>',
+      'userinfo': '<a href="https://ok.example@evil.example/">x</a>',
       'base': '<base href="https://evil.example/">x',
       'form': '<form action="https://evil.example"><button formaction="x">',
       'style': '<p style="background:url(javascript:alert(1))">x</p>',
@@ -230,6 +238,8 @@ Setext heading
 
 <h3 id="content">Raw</h3>
 <h3 id="1digit">Digit</h3>
+
+## 2.0.0
 <h3 id='a"b'>Quote</h3>
 <h3 id="${'x' * 200}">Long</h3>
 <p id="usage">Not a heading</p>
@@ -246,6 +256,8 @@ Setext heading
         'Usage': 'md-usage',
         'Setext heading': 'md-setext-heading',
         'Raw': 'md-content',
+        'Digit': 'md-1digit',
+        '2.0.0': 'md-200',
       });
       final hrefs = [
         for (final link in _elements(markup).where((e) => e.localName == 'a'))
