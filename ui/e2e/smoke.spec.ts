@@ -72,7 +72,9 @@ test('lists, searches and shows a package', async ({ page }) => {
   expect(copied).toMatch(/^dart pub add e2e_demo --hosted-url http/)
 
   await page.getByRole('tab', { name: 'Versions' }).click()
-  await expect(page.getByRole('link', { name: '1.2.0' })).toBeVisible()
+  await expect(
+    page.getByRole('tabpanel', { name: 'Versions' }).getByRole('link', { name: '1.2.0' }),
+  ).toBeVisible()
 })
 
 test('logs in, creates a token, creates a user and reads the audit log', async ({ page }) => {
