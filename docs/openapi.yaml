@@ -20,11 +20,30 @@ info:
     `POST /webapi/login`, and answers 401 otherwise.
 
     **Errors** have the form `{"error": {"code": "...", "message": "..."}}`.
-    The codes are `invalid_request` (400), `unauthorized` (401), `forbidden`,
-    `insufficient_scope`, `session_required` or `csrf_failed` (403),
-    `not_found` (404), `conflict`, `last_admin` or `admin_change_in_progress`
-    (409), `rate_limited` (429), `bad_gateway` (502) and `unavailable` (503).
-    A path that no route matches answers 404 with the text `Route not found`.
+    Branch on `code`, never on `message`, which is for people. The codes:
+
+    | Status | Code | When |
+    | --- | --- | --- |
+    | 400 | `invalid_request` | A parameter or body is invalid: the validation code of every route, there is no other. |
+    | 401 | `unauthorized` | Credentials are missing, unknown, expired or revoked; with `WWW-Authenticate`. |
+    | 401 | `invalid_credentials` | `POST /webapi/login`: wrong email or password. |
+    | 403 | `invalid_credentials` | `POST /webapi/me/password`: the current password is wrong. |
+    | 403 | `forbidden` | The role does not allow it. |
+    | 403 | `insufficient_scope` | The token lacks the `read` or `publish` scope. |
+    | 403 | `session_required` | Only a password login, not a token, may make this change. |
+    | 403 | `csrf_failed` | A session request without a valid `X-CSRF-Token`. |
+    | 404 | `not_found` | No such package, version, user, token, webhook or delivery. |
+    | 409 | `conflict` | In conflict with the current state, such as an email in use. |
+    | 409 | `last_admin` | The change would leave no enabled administrator. |
+    | 409 | `admin_change_in_progress` | Another change of this administrator is under way; try again. |
+    | 413 | `too_large` | Reserved; a JSON body over 64 KiB is currently refused with 400 `invalid_request`. |
+    | 429 | `rate_limited` | Too many failed logins or password checks; `Retry-After` gives the seconds to wait. |
+    | 500 | `server_error` | Anything unexpected; the server logs it. |
+    | 502 | `bad_gateway` | The upstream repository failed. |
+    | 503 | `unavailable` | A dependency, such as the database, is unavailable. |
+
+    A path that no route matches answers 404 with the text `Route not found`,
+    not JSON.
 
     **Lists** take `page`, one-based, and `size`, and answer
     `{"items": [...], "page": 1, "size": 20, "total": 42}`. Both are bounded
@@ -1282,13 +1301,17 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Conflict:
-      description: In conflict with the current state, code `conflict` or `last_admin`.
+      description: >-
+        In conflict with the current state, code `conflict`, `last_admin` or
+        `admin_change_in_progress`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     RateLimited:
-      description: Too many failed attempts, code `rate_limited`.
+      description: >-
+        Too many failed attempts, code `rate_limited`. `Retry-After` gives the
+        seconds to wait.
       headers:
         Retry-After:
           schema:
