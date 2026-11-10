@@ -120,7 +120,8 @@ export function AuditPage() {
           </EmptyState>
         ) : (
           <>
-            <AuditTable events={audit.data.items} />
+            {/* Keyed by the query so no row stays expanded on another page or filter. */}
+            <AuditTable key={params.toString()} events={audit.data.items} />
             <Pager
               page={audit.data.page}
               size={audit.data.size}
@@ -291,8 +292,8 @@ function AuditTable({ events }: { events: AuditEvent[] }) {
       </TableHeader>
       <TableBody>
         {events.map((event, index) => {
-          const expanded = open.has(index)
           const hasDetails = Object.keys(event.details).length > 0
+          const expanded = hasDetails && open.has(index)
           const detailsId = `audit-details-${index}`
           return (
             <Fragment key={`${event.at}-${index}`}>
