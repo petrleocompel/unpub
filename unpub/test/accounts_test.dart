@@ -2676,6 +2676,19 @@ storage:
       expect(reply.headers['access-control-allow-credentials'], 'false');
     });
 
+    test('exposes X-Request-Id to a cross-origin script', () async {
+      for (final method in ['GET', 'OPTIONS']) {
+        final reply = await decode(await app.handler(shelf.Request(
+          method,
+          Uri.parse('http://internal:4000/webapi/packages'),
+          headers: {'origin': 'https://other.example.com'},
+        )));
+        expect(reply.headers['access-control-expose-headers'], 'X-Request-Id',
+            reason: method);
+        expect(reply.headers[requestIdHeader], isNotEmpty, reason: method);
+      }
+    });
+
     test('does not let a preflight send the CSRF header', () async {
       final reply = await decode(await app.handler(shelf.Request(
         'OPTIONS',

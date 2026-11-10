@@ -132,8 +132,11 @@ class App {
         .addMiddleware(metrics.middleware(router))
         // Bearer tokens work cross-origin, but a session cookie must not: this
         // middleware echoes the origin, so credentialed requests stay disabled.
-        .addMiddleware(
-            corsHeaders(headers: {'Access-Control-Allow-Credentials': 'false'}))
+        // X-Request-Id is exposed so that a script can quote it in a report.
+        .addMiddleware(corsHeaders(headers: {
+          'Access-Control-Allow-Credentials': 'false',
+          'Access-Control-Expose-Headers': 'X-Request-Id',
+        }))
         .addMiddleware(requestLogger())
         .addMiddleware(authMiddleware(authenticator,
             readAccess: readAccess,
