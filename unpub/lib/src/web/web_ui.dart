@@ -676,7 +676,7 @@ class WebUi {
             _field(form, 'expiresIn'), principal, api.accounts.clock()),
         by: _by(req, api, principal),
       );
-      return _accountPage(req, api, principal,
+      return await _accountPage(req, api, principal,
           created: created, status: HttpStatus.created);
     } on AccountException catch (error) {
       return _accountPage(req, api, principal,
