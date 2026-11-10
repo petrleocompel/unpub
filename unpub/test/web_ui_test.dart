@@ -93,11 +93,16 @@ void main() {
     MetaStore? metaStore,
     UpstreamProxy? upstreamProxy,
     bool withAccounts = true,
+    String? bootstrapToken,
   }) =>
       App(
         metaStore: metaStore ?? MongoStore(db),
         packageStore: FileStore(storage.path),
         authenticator: ChainAuthenticator([
+          if (bootstrapToken != null)
+            StaticTokenAuthenticator(
+                bootstrapToken: bootstrapToken,
+                bootstrapEmail: 'admin@example.com'),
           ApiTokenAuthenticator(store),
           SessionAuthenticator(store),
         ]),
@@ -888,6 +893,13 @@ void main() {}
   group('admin', () {
     late User admin;
 
+    const adminPages = [
+      '/admin/users',
+      '/admin/packages',
+      '/admin/packages/alpha',
+      '/admin/settings',
+    ];
+
     setUp(() async {
       admin = await user('admin@example.com', Role.admin);
       await publish('alpha', '1.0.0');
@@ -899,12 +911,7 @@ void main() {}
       await user('reader@example.com', Role.reader);
       for (final email in ['pub@example.com', 'reader@example.com']) {
         final browser = await logIn(email);
-        for (final path in [
-          '/admin/users',
-          '/admin/packages',
-          '/admin/packages/alpha',
-          '/admin/settings',
-        ]) {
+        for (final path in adminPages) {
           final page = await fetch('GET', path, as: browser);
           expect(page.status, HttpStatus.forbidden, reason: '$email $path');
           expect(page.headers['content-type'], startsWith('text/html'));
@@ -922,6 +929,64 @@ void main() {}
       expect(await store.findUserByEmail('new@example.com'), isNull);
       expect((await fetch('GET', '/admin/users')).location,
           '/login?next=%2Fadmin%2Fusers');
+    });
+
+    test('needs a password session, whatever the token', () async {
+      final tokenApp = buildApp(bootstrapToken: 'bootstrap-secret-token');
+      final secrets = {
+        'publish only': (await accounts
+                .createToken(admin, name: 'publish', scopes: {Scope.publish}))
+            .secret,
+        'read only': (await accounts
+                .createToken(admin, name: 'read', scopes: {Scope.read}))
+            .secret,
+        'all scopes': (await accounts.createToken(admin, name: 'all')).secret,
+        'bootstrap': 'bootstrap-secret-token',
+      };
+      // The JSON API refuses a token without the read scope already.
+      expect(
+          (await fetch('GET', '/webapi/users',
+                  html: false,
+                  headers: {
+                    'authorization': 'Bearer ${secrets['publish only']}'
+                  },
+                  using: tokenApp))
+              .status,
+          HttpStatus.forbidden);
+      for (final MapEntry(key: kind, value: secret) in secrets.entries) {
+        final bearer = {'authorization': 'Bearer $secret'};
+        for (final path in adminPages) {
+          final page =
+              await fetch('GET', path, headers: bearer, using: tokenApp);
+          expect(page.status, HttpStatus.forbidden, reason: '$kind $path');
+          expect(page.headers['content-type'], startsWith('text/html'));
+          expect(page.body, isNot(contains('href="/admin/packages/alpha"')));
+          expect(page.body, isNot(contains('<td>admin@example.com')));
+        }
+        final created = await fetch('POST', '/admin/users',
+            headers: bearer,
+            using: tokenApp,
+            form: {'email': 'new@example.com', 'role': 'admin'});
+        expect(created.status, HttpStatus.forbidden, reason: kind);
+        final retracted = await fetch(
+            'POST', '/admin/packages/alpha/versions/1.0.0/retract',
+            headers: bearer, using: tokenApp);
+        expect(retracted.status, HttpStatus.forbidden, reason: kind);
+      }
+      expect(await store.findUserByEmail('new@example.com'), isNull);
+      expect(
+          (await MongoStore(db).queryPackage('alpha'))!
+              .versions
+              .first
+              .isRetracted,
+          isFalse);
+
+      final browser = await logIn('admin@example.com', using: tokenApp);
+      for (final path in adminPages) {
+        expect((await fetch('GET', path, as: browser, using: tokenApp)).status,
+            HttpStatus.ok,
+            reason: path);
+      }
     });
 
     test('manages users', () async {

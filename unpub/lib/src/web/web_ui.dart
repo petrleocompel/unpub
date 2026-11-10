@@ -697,7 +697,11 @@ class WebUi {
 
   // Administration.
 
-  /// The principal of an administrator, refusing everyone else.
+  /// The principal of an administrator with a password session, refusing
+  /// everyone else.
+  ///
+  /// The pages show users, settings and packages whatever the scopes of a
+  /// token, so no token opens them, as no token changes credentials or roles.
   Principal _administrator(shelf.Request req) {
     final principal = principalOf(req);
     if (principal == null) {
@@ -707,13 +711,13 @@ class WebUi {
       throw const AuthException.forbidden(
           'Only administrators can see this page.');
     }
+    if (principal.credentialKind != CredentialKind.session) {
+      throw const AuthException.forbidden(
+          'Log in with a password to see this page. API tokens cannot open '
+          'the administration pages.',
+          code: 'session_required');
+    }
     return principal;
-  }
-
-  /// An administrator with a password session, for every change.
-  (AccountApi?, Principal) _adminSession(shelf.Request req) {
-    final principal = requirePasswordSession(_administrator(req));
-    return (_accountApi, principal);
   }
 
   AccountApi _requireAccounts() {
@@ -744,7 +748,7 @@ class WebUi {
       shelf.Request req,
       Future<String> Function(AccountApi, Principal, Map<String, List<String>>)
           change) async {
-    final (_, principal) = _adminSession(req);
+    final principal = _administrator(req);
     final api = _requireAccounts();
     final form = await _form(req);
     try {
@@ -852,7 +856,7 @@ class WebUi {
       String name,
       Future<String> Function(Principal, Map<String, List<String>>)
           change) async {
-    final (_, principal) = _adminSession(req);
+    final principal = _administrator(req);
     if (!isValidPackageName(name)) return _notFoundPage(req);
     final form = await _form(req);
     try {
