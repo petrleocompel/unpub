@@ -61,7 +61,8 @@ export function PackageListPage() {
     if (value === null || value === '') next.delete(name)
     else next.set(name, value)
     next.delete('page')
-    setParams(next, { replace: true })
+    // A choice, not typing: a history entry, so Back undoes it.
+    setParams(next)
   }
   const filtered = !!(query.q || query.sdk || query.discontinued)
 
@@ -141,11 +142,7 @@ export function PackageListPage() {
                   'No package matches these filters.'
                 )}
               </p>
-              <Button
-                variant="outline"
-                className="mt-3"
-                onClick={() => setParams({}, { replace: false })}
-              >
+              <Button variant="outline" className="mt-3" onClick={() => setParams({})}>
                 <RotateCcw aria-hidden />
                 Reset the search
               </Button>

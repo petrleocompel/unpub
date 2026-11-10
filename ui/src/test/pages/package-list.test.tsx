@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import * as f from '../fixtures'
@@ -86,6 +86,22 @@ describe('package list', () => {
       expect(last?.get('discontinued')).toBe('true')
       expect(last?.get('sort')).toBe('updated')
     })
+  })
+
+  it('goes back to the previous filters', async () => {
+    packages()
+    const { user, router } = renderApp('/packages')
+    await screen.findByRole('link', { name: 'my_company_core' })
+    await user.selectOptions(screen.getByRole('combobox', { name: 'SDK' }), 'flutter')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort' }), 'name')
+    expect(where(router)).toBe('/packages?sdk=flutter&sort=name')
+
+    await act(() => router.navigate(-1))
+    expect(where(router)).toBe('/packages?sdk=flutter')
+    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveValue('downloads')
+    await act(() => router.navigate(-1))
+    expect(where(router)).toBe('/packages')
+    expect(screen.getByRole('combobox', { name: 'SDK' })).toHaveValue('')
   })
 
   it('pages through the results and changes the page size', async () => {
