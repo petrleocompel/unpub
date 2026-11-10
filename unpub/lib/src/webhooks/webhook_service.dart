@@ -412,11 +412,14 @@ class WebhookService {
     final number = delivery.attempt + 1;
     final hook = await store.find(delivery.webhookId);
     _Outcome outcome;
+    Duration? duration;
     if (hook == null || !hook.enabled) {
       outcome = _Outcome.refused(
           hook == null ? 'the webhook was deleted' : 'the webhook is disabled');
     } else {
+      final clock = Stopwatch()..start();
       outcome = await _send(hook, delivery);
+      duration = clock.elapsed;
     }
 
     final String status;
@@ -440,6 +443,7 @@ class WebhookService {
         status: status,
         attempt: number,
         nextAt: nextAt,
+        duration: duration,
         responseStatus: outcome.status,
         responseBody: outcome.body,
         error: outcome.error);

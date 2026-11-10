@@ -104,6 +104,10 @@ class Delivery {
   final DateTime? lastAttemptAt;
   final DateTime? finishedAt;
 
+  /// How long the last attempt took, null before one was sent and for
+  /// attempts recorded before this was stored.
+  final int? durationMs;
+
   /// The status code of the last answer, if there was one.
   final int? responseStatus;
 
@@ -132,6 +136,7 @@ class Delivery {
     required this.createdAt,
     this.lastAttemptAt,
     this.finishedAt,
+    this.durationMs,
     this.responseStatus,
     this.responseBody,
     this.error,
@@ -155,6 +160,7 @@ class Delivery {
       createdAt: document['createdAt'] as DateTime,
       lastAttemptAt: document['lastAttemptAt'] as DateTime?,
       finishedAt: document['finishedAt'] as DateTime?,
+      durationMs: (document['durationMs'] as num?)?.toInt(),
       responseStatus: (response?['status'] as num?)?.toInt(),
       responseBody: response?['body'] as String?,
       error: document['error'] as String?,
@@ -170,6 +176,7 @@ class Delivery {
         'eventId': eventId,
         'package': package,
         'version': version,
+        'payload': payload,
         'status': status,
         'attempt': attempt,
         'nextAt': status == DeliveryStatus.pending
@@ -178,6 +185,7 @@ class Delivery {
         'createdAt': createdAt.toUtc().toIso8601String(),
         'lastAttemptAt': lastAttemptAt?.toUtc().toIso8601String(),
         'finishedAt': finishedAt?.toUtc().toIso8601String(),
+        'durationMs': durationMs,
         'response': responseStatus == null && responseBody == null
             ? null
             : {'status': responseStatus, 'body': responseBody},
@@ -433,6 +441,7 @@ class WebhookStore {
     required String status,
     required int attempt,
     DateTime? nextAt,
+    Duration? duration,
     int? responseStatus,
     String? responseBody,
     String? error,
@@ -450,6 +459,7 @@ class WebhookStore {
         'lastAttemptAt': now,
         if (nextAt != null) 'nextAt': nextAt,
         if (status != DeliveryStatus.pending) 'finishedAt': now,
+        'durationMs': duration?.inMilliseconds,
         'response': responseStatus == null && responseBody == null
             ? null
             : {'status': responseStatus, 'body': responseBody},

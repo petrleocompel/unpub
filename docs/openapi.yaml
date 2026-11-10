@@ -1983,7 +1983,35 @@ components:
         type: integer
     Delivery:
       type: object
-      required: [id, webhookId, event, eventId, package, version, status, attempt, nextAt, createdAt, lastAttemptAt, finishedAt, response, error, redeliveryOf]
+      description: >-
+        One event sent to one webhook, with its attempts so far. Each attempt
+        POSTs `payload` as the body, with `Content-Type: application/json`,
+        `X-Unpub-Event`, `X-Unpub-Delivery` (the `id`) and
+        `X-Unpub-Signature: sha256=<hex>`, the HMAC-SHA256 with the secret
+        of the webhook as key over exactly the bytes of `payload` (UTF-8).
+        Verify the signature over the raw body before parsing it. `status`
+        `succeeded` means an answer in 2xx.
+      required: [id, webhookId, event, eventId, package, version, payload, status, attempt, nextAt, createdAt, lastAttemptAt, finishedAt, durationMs, response, error, redeliveryOf]
+      examples:
+        - id: 6730c1f2a9d3e4b5c6d7e8f9
+          webhookId: 6730b0e1a9d3e4b5c6d7e8a1
+          event: package.published
+          eventId: 0f8e4c2a-1b3d-4e5f-9a7b-6c5d4e3f2a1b
+          package: alpha_client
+          version: 1.4.0
+          payload: '{"id":"0f8e4c2a-1b3d-4e5f-9a7b-6c5d4e3f2a1b","event":"package.published","at":"2026-11-02T09:14:00.000Z","package":"alpha_client","version":"1.4.0","actor":"dev@example.com","data":{}}'
+          status: succeeded
+          attempt: 1
+          nextAt: null
+          createdAt: '2026-11-02T09:14:00.120Z'
+          lastAttemptAt: '2026-11-02T09:14:00.480Z'
+          finishedAt: '2026-11-02T09:14:00.480Z'
+          durationMs: 312
+          response:
+            status: 200
+            body: ok
+          error: null
+          redeliveryOf: null
       properties:
         id:
           type: string
@@ -1998,6 +2026,11 @@ components:
           type: [string, 'null']
         version:
           type: [string, 'null']
+        payload:
+          type: string
+          description: >-
+            The JSON body sent, as the exact string that was signed: the same on
+            every attempt and redelivery of this delivery.
         status:
           type: string
           enum: [pending, succeeded, failed]
@@ -2019,6 +2052,14 @@ components:
           oneOf:
             - $ref: '#/components/schemas/DateTime'
             - type: 'null'
+        durationMs:
+          type: [integer, 'null']
+          minimum: 0
+          description: >-
+            How long the last attempt took, from resolving the host to reading
+            the answer or failing. Null before the first attempt, when the
+            webhook was deleted or disabled at the last attempt, and for
+            attempts recorded before the field was added.
         response:
           description: The status and the start, at most 1 KiB, of the last answer.
           oneOf:

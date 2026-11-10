@@ -346,6 +346,9 @@ metrics:
       expect(
           page.json.keys, unorderedEquals(['items', 'page', 'size', 'total']));
       expect(page.json['items'], hasLength(1));
+      // Not attempted yet, as a document stored before durationMs existed.
+      expect(page.json['items'].single['durationMs'], isNull);
+      expect(page.json['items'].single['payload'], '{}');
       expect(page.json['total'], 3);
       expect(page.json['page'], 2);
 
