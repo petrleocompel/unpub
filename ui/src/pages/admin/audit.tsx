@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { useTitle } from '@/lib/use-title'
 import { packagePath } from '@/pages/package'
 import { AdminHeading } from './layout'
+import { settingDays } from './settings'
 
 /** The actions the server records, see README "Audit log". */
 export const auditActions = [
@@ -67,9 +68,7 @@ export function AuditPage() {
   const filters = filtersFrom(params)
   const audit = useAudit(filters)
   const settings = useSettings()
-  const retention = settings.data?.sections
-    .flatMap((section) => section.settings)
-    .find((setting) => setting.key === 'audit.retentionDays')?.value
+  const retention = settingDays(settings.data, 'audit.retentionDays')
   const active = filterNames.some((name) => filters[name])
 
   return (
@@ -77,12 +76,12 @@ export function AuditPage() {
       <AdminHeading
         title="Audit log"
         description={
-          retention === undefined ? (
+          retention === null ? (
             'Who changed what, newest first.'
           ) : (
             <span className="flex items-center gap-1">
               <Clock aria-hidden className="size-3 shrink-0" />
-              {retention === '0' ? (
+              {retention === 0 ? (
                 <span>
                   Every entry is kept (<span className="font-mono">audit.retentionDays</span> is 0).
                 </span>

@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { keyInSection } from '@/pages/admin/settings'
+import { keyInSection, settingDays } from '@/pages/admin/settings'
 import * as f from '../fixtures'
 import { renderApp } from '../render'
 import { server, url } from '../server'
@@ -60,5 +60,21 @@ describe('admin settings', () => {
     expect(keyInSection('server', 'server.publicUrl')).toBe('publicUrl')
     expect(keyInSection('storage', 'storage.s3.bucket')).toBe('s3.bucket')
     expect(keyInSection('auth', 'other.key')).toBe('other.key')
+  })
+
+  it('reads a number of days from the settings', () => {
+    const settings = (value: string) => ({
+      configured: true,
+      sections: [
+        {
+          name: 'audit',
+          settings: [{ key: 'audit.retentionDays', value, env: 'UNPUB_AUDIT_RETENTION_DAYS' }],
+        },
+      ],
+    })
+    expect(settingDays(settings('90'), 'audit.retentionDays')).toBe(90)
+    expect(settingDays(settings('0 (kept forever)'), 'audit.retentionDays')).toBe(0)
+    expect(settingDays(settings('90'), 'webhooks.retentionDays')).toBeNull()
+    expect(settingDays(undefined, 'audit.retentionDays')).toBeNull()
   })
 })

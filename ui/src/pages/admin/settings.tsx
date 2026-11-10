@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Lock } from 'lucide-react'
 import { useSettings } from '@/api/queries'
 import type { Settings } from '@/api/types'
@@ -9,6 +10,36 @@ import { useTitle } from '@/lib/use-title'
 import { AdminHeading } from './layout'
 
 type Section = Settings['sections'][number]
+
+/**
+ * A number of days from the settings, such as `audit.retentionDays`, whose
+ * value reads `30` or `0 (kept forever)`. Null while unknown.
+ */
+export function settingDays(settings: Settings | undefined, key: string) {
+  const value = settings?.sections
+    .flatMap((section) => section.settings)
+    .find((setting) => setting.key === key)?.value
+  const days = value === undefined ? NaN : Number.parseInt(value, 10)
+  return Number.isInteger(days) ? days : null
+}
+
+/** The environment variable, breakable after each underscore. */
+function EnvName({ name }: { name: string }) {
+  return (
+    <span>
+      {name.split('_').map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && (
+            <>
+              _<wbr />
+            </>
+          )}
+          {part}
+        </Fragment>
+      ))}
+    </span>
+  )
+}
 
 /** The key without its section: `publicUrl` in the `server` section. */
 export function keyInSection(section: string, key: string) {
@@ -38,7 +69,7 @@ function SettingsSection({ section }: { section: Section }) {
                 </span>
                 <span className="flex min-w-0 items-center gap-1 font-mono text-[0.6875rem] text-muted-foreground">
                   <span className="sr-only">Environment variable </span>
-                  <span className="break-all">{setting.env}</span>
+                  <EnvName name={setting.env} />
                   <CopyButton
                     text={setting.env}
                     label={setting.env}

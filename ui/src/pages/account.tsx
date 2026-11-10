@@ -193,12 +193,12 @@ function PasswordForm() {
             </div>
             <FormError id={`${id}-error`} message={error} />
           </PanelBody>
-          <PanelFooter className="justify-between">
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          <PanelFooter className="flex-nowrap justify-between">
+            <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
               <Info aria-hidden className="size-3 shrink-0" />
               Saving logs out your other sessions.
             </p>
-            <Button type="submit" size="sm" disabled={change.isPending}>
+            <Button type="submit" size="sm" className="shrink-0" disabled={change.isPending}>
               {change.isPending && <Loader2 aria-hidden className="animate-spin" />}
               Change password
             </Button>

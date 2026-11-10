@@ -37,6 +37,7 @@ import { formatDate, formatDateTime, formatRelative } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useTitle } from '@/lib/use-title'
 import { AdminHeading } from './layout'
+import { settingDays } from './settings'
 import { DeliveryCounts, WebhookFields } from './webhooks'
 
 function Breadcrumb({ label }: { label: string }) {
@@ -294,9 +295,7 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
   const redeliver = useRedeliver()
   const settings = useSettings()
   const [open, setOpen] = useState<string | null>(null)
-  const retention = settings.data?.sections
-    .flatMap((section) => section.settings)
-    .find((setting) => setting.key === 'webhooks.retentionDays')?.value
+  const retention = settingDays(settings.data, 'webhooks.retentionDays')
   const selected = deliveries.data?.items.find((delivery) => delivery.id === open)
 
   return (
@@ -304,7 +303,7 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
       <Panel aria-labelledby="deliveries-title">
         <PanelHeader title="Deliveries" titleId="deliveries-title">
           <div className="flex flex-wrap items-center gap-3">
-            {retention && retention !== '0' && (
+            {!!retention && (
               <span className="text-xs text-muted-foreground">Kept {retention} days</span>
             )}
             <DeliveryCounts counts={counts} />
