@@ -349,13 +349,38 @@ void main() {
       expect(list.body, contains('The package was deleted.'));
     });
 
-    test('transfer the ownership', () async {
-      final done = await h.post('/admin/packages/alpha/owner',
+    test('transfer the ownership after asking', () async {
+      final package = await h.page('/admin/packages/alpha', as: browser);
+      expect(package.body,
+          contains('<form method="get" action="/admin/packages/alpha/owner"'));
+      final confirm = await h.page(
+          '/admin/packages/alpha/owner?email=${Uri.encodeQueryComponent('New@b.c')}',
+          as: browser);
+      expect(confirm.status, HttpStatus.ok);
+      expect(
+          confirm.body, contains('Make new@b.c the only uploader of alpha?'));
+      expect(confirm.body, contains('This removes owner@b.c.'));
+      expect(confirm.body, contains('name="confirm" value="yes"'));
+      expect(confirm.body, contains('name="email" value="new@b.c"'));
+      final invalid =
+          await h.page('/admin/packages/alpha/owner?email=nope', as: browser);
+      expect(invalid.status, HttpStatus.badRequest);
+
+      // A post without the confirmation, as from the old form, changes
+      // nothing.
+      final unconfirmed = await h.post('/admin/packages/alpha/owner',
           as: browser, form: {'email': 'new@b.c'});
+      expect(unconfirmed.status, HttpStatus.badRequest);
+      expect(unconfirmed.body, contains('confirmation page'));
+      expect((await h.packageDocument('alpha'))!['uploaders'], ['owner@b.c']);
+      expect(await h.auditEvents('uploader.transferred'), isEmpty);
+
+      final done = await h.post('/admin/packages/alpha/owner',
+          as: browser, form: {'email': 'new@b.c', 'confirm': 'yes'});
       expect(done.status, HttpStatus.seeOther);
       expect((await h.packageDocument('alpha'))!['uploaders'], ['new@b.c']);
       final unknown = await h.post('/admin/packages/alpha/owner',
-          as: browser, form: {'email': 'ghost@b.c'});
+          as: browser, form: {'email': 'ghost@b.c', 'confirm': 'yes'});
       expect(unknown.status, HttpStatus.notFound);
       expect(unknown.body, contains('no user with the email ghost@b.c'));
     });
@@ -366,7 +391,12 @@ void main() {
         ('GET', '/admin/packages/alpha/versions/1.1.0/delete', null),
         ('POST', '/admin/packages/alpha/versions/1.1.0/delete', null),
         ('POST', '/admin/packages/alpha/delete', {'confirm_name': 'alpha'}),
-        ('POST', '/admin/packages/alpha/owner', {'email': 'new@b.c'}),
+        ('GET', '/admin/packages/alpha/owner?email=new@b.c', null),
+        (
+          'POST',
+          '/admin/packages/alpha/owner',
+          {'email': 'new@b.c', 'confirm': 'yes'}
+        ),
       ]) {
         final reply = method == 'GET'
             ? await h.page(path, as: publisher)

@@ -686,10 +686,34 @@ void main() {
         'events': ['package.published', 'package.deleted'],
         'description': 'CI <builds>',
       });
-      expect(created.status, HttpStatus.created, reason: created.body);
+      expect(created.status, HttpStatus.seeOther, reason: created.body);
       final hook = (await store.list()).single;
-      expect(created.body, contains(hook.secret));
+      expect(created.location, '/admin/webhooks/${hook.id}?done=created');
+      expect(created.body, isNot(contains(hook.secret)));
       expect(hook.events, ['package.published', 'package.deleted']);
+
+      // The page after the redirect shows the secret, once.
+      final shown = await h.page(created.location!, as: browser);
+      expect(shown.status, HttpStatus.ok);
+      expect(shown.body, contains(hook.secret));
+      expect(shown.body, contains('The webhook was added.'));
+      final reloaded = await h.page(created.location!, as: browser);
+      expect(reloaded.status, HttpStatus.ok);
+      expect(reloaded.body, isNot(contains(hook.secret)));
+      expect(reloaded.body, contains('shown only once'));
+      expect(await store.list(), hasLength(1));
+
+      // Another session never sees it.
+      final again = await h.post('/admin/webhooks', as: browser, form: {
+        'url': '${receiver.url('/second')}',
+        'events': 'package.published',
+      });
+      final second = (await store.list()).last;
+      final other = await h.logIn('admin@b.c');
+      final elsewhere = await h.page(again.location!, as: other);
+      expect(elsewhere.body, isNot(contains(second.secret)));
+      expect((await h.page(again.location!, as: browser)).body,
+          contains(second.secret));
 
       final page = await h.page('/admin/webhooks/${hook.id}', as: browser);
       expect(page.body, isNot(contains(hook.secret)));
@@ -710,11 +734,28 @@ void main() {
       await h.post('$base/enabled', as: browser, form: {'enabled': 'true'});
       expect((await store.find(hook.id))!.enabled, isTrue);
 
-      final rotated = await h.post('$base/secret', as: browser);
-      expect(rotated.status, HttpStatus.ok);
+      // Without the checkbox, as a browser without JavaScript can send it.
+      final unconfirmed = await h.post('$base/secret', as: browser);
+      expect(unconfirmed.status, HttpStatus.badRequest);
+      expect(unconfirmed.body, contains('Tick the box'));
+      expect((await store.find(hook.id))!.secret, secret);
+      expect(await h.auditEvents('webhook.secret_rotated'), isEmpty);
+
+      final rotated =
+          await h.post('$base/secret', as: browser, form: {'confirm': 'yes'});
+      expect(rotated.status, HttpStatus.seeOther);
+      expect(rotated.location, '$base?done=secret-rotated');
       final newSecret = (await store.find(hook.id))!.secret;
       expect(newSecret, isNot(secret));
-      expect(rotated.body, contains(newSecret));
+      expect(rotated.body, isNot(contains(newSecret)));
+      final shown = await h.page(rotated.location!, as: browser);
+      expect(shown.body, contains(newSecret));
+      expect(shown.body, contains('The secret was replaced.'));
+      // Reloading neither rotates again nor shows the secret again.
+      final reloaded = await h.page(rotated.location!, as: browser);
+      expect(reloaded.body, isNot(contains(newSecret)));
+      expect((await store.find(hook.id))!.secret, newSecret);
+      expect(await h.auditEvents('webhook.secret_rotated'), hasLength(1));
 
       receiver.answers = [(500, 'broken', const {})];
       service = newService(h,
@@ -742,7 +783,25 @@ void main() {
       await drain();
       expect((await deliveries(hook)).first.status, DeliveryStatus.succeeded);
 
-      final deleted = await h.post('$base/delete', as: browser);
+      final hookPage = await h.page(base, as: browser);
+      expect(hookPage.body, contains('href="$base/delete"'));
+      expect(hookPage.body, isNot(contains('data-confirm')));
+      final confirmation = await h.page('$base/delete', as: browser);
+      expect(confirmation.status, HttpStatus.ok);
+      expect(confirmation.body, contains('action="$base/delete"'));
+      expect(confirmation.body, contains('name="confirm" value="yes"'));
+      expect(
+          (await h.page('/admin/webhooks/${'0' * 24}/delete', as: browser))
+              .status,
+          HttpStatus.notFound);
+
+      final undeleted = await h.post('$base/delete', as: browser);
+      expect(undeleted.status, HttpStatus.badRequest);
+      expect(await store.find(hook.id), isNotNull);
+      expect(await h.auditEvents('webhook.deleted'), isEmpty);
+
+      final deleted =
+          await h.post('$base/delete', as: browser, form: {'confirm': 'yes'});
       expect(deleted.status, HttpStatus.seeOther);
       expect(deleted.location, '/admin/webhooks?done=webhook-deleted');
       expect(await store.find(hook.id), isNull);
@@ -753,7 +812,7 @@ void main() {
       final (hook, _) = await addHook();
       final publisher = await h.logIn('owner@b.c');
       final base = '/admin/webhooks/${hook.id}';
-      for (final path in ['/admin/webhooks', base]) {
+      for (final path in ['/admin/webhooks', base, '$base/delete']) {
         expect((await h.page(path, as: publisher)).status, HttpStatus.forbidden,
             reason: path);
       }
@@ -763,8 +822,8 @@ void main() {
           {'url': 'https://x.example/', 'events': 'package.published'}
         ),
         ('$base/enabled', {'enabled': 'false'}),
-        ('$base/secret', const <String, Object>{}),
-        ('$base/delete', const <String, Object>{}),
+        ('$base/secret', {'confirm': 'yes'}),
+        ('$base/delete', {'confirm': 'yes'}),
       ]) {
         expect((await h.post(path, as: publisher, form: form)).status,
             HttpStatus.forbidden,

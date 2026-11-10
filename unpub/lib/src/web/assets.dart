@@ -121,6 +121,7 @@ legend { padding: 0 .3rem; }
 .filters { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: end; margin-bottom: 1rem; }
 .filters label { display: grid; gap: .2rem; font-size: .85rem; color: var(--muted); }
 .filters .check { display: flex; align-items: center; gap: .35rem; }
+.inline-form .check { display: inline-flex; align-items: center; gap: .35rem; }
 
 /* Messages */
 .notice, .error, .secret {

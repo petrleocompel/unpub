@@ -19,12 +19,15 @@ class _AdminOpsUi {
       ..post('/admin/packages/<name>/versions/<version>/delete',
           web._guard2(deleteVersion))
       ..post('/admin/packages/<name>/delete', web._guard1(deletePackage))
+      ..get(
+          '/admin/packages/<name>/owner', web._guard1(confirmTransferOwnership))
       ..post('/admin/packages/<name>/owner', web._guard1(transferOwnership))
       ..get('/admin/webhooks', web._guard(webhooks))
       ..post('/admin/webhooks', web._guard(createWebhook))
       ..get('/admin/webhooks/<id>', web._guard1(webhook))
       ..post('/admin/webhooks/<id>/enabled', web._guard1(setWebhookEnabled))
       ..post('/admin/webhooks/<id>/secret', web._guard1(rotateWebhookSecret))
+      ..get('/admin/webhooks/<id>/delete', web._guard1(confirmDeleteWebhook))
       ..post('/admin/webhooks/<id>/delete', web._guard1(deleteWebhook))
       ..post('/admin/webhooks/<id>/deliveries/<delivery>/redeliver',
           web._guard2(redeliver));
@@ -71,8 +74,30 @@ class _AdminOpsUi {
     });
   }
 
+  /// Asks before [transferOwnership], which the form of the package page
+  /// leads to, so that the transfer needs a second step without JavaScript.
+  Future<shelf.Response> confirmTransferOwnership(
+      shelf.Request req, String name) async {
+    web._administrator(req);
+    final package = isValidPackageName(name)
+        ? await app.metaStore.queryPackage(name)
+        : null;
+    if (package == null) return web._notFoundPage(req);
+    final email = normalizeEmail(req.url.queryParameters['email'] ?? '');
+    if (!isValidEmail(email)) {
+      return web._adminPackagePage(req, name,
+          error: 'The email is invalid.', status: HttpStatus.badRequest);
+    }
+    return WebUi._html(
+        req, adminTransferOwnershipPage(web._context(req), package, email));
+  }
+
   Future<shelf.Response> transferOwnership(shelf.Request req, String name) =>
       web._changingPackage(req, name, (principal, form) async {
+        if (!_confirmed(form)) {
+          throw const ModerationException.invalid(
+              'confirm the transfer on its confirmation page');
+        }
         final email = normalizeEmail(WebUi._field(form, 'email') ?? '');
         if (!isValidEmail(email)) {
           throw const ModerationException.invalid('email is invalid');
@@ -80,6 +105,11 @@ class _AdminOpsUi {
         await _moderation.transferOwnership(req, principal, name, email);
         return 'owner-transferred';
       });
+
+  /// Whether [form] carries the `confirm` field of a confirmation page or
+  /// checkbox, which irreversible changes need.
+  static bool _confirmed(Map<String, List<String>> form) =>
+      WebUi._field(form, 'confirm') == 'yes';
 
   Future<shelf.Response> deletePackage(shelf.Request req, String name) async {
     final principal = web._administrator(req);
@@ -144,10 +174,7 @@ class _AdminOpsUi {
           events: events,
           description: WebUi._field(form, 'description'),
           by: app.auditContext(req, principal));
-      return await _webhookPage(req, hooks, hook.id,
-          secret: secret,
-          notice: 'The webhook was added.',
-          status: HttpStatus.created);
+      return _showSecret(req, hook.id, secret, 'created');
     } on WebhookException catch (error) {
       return _webhooksPage(req, hooks,
           error: WebUi._sentence(error.message),
@@ -179,10 +206,37 @@ class _AdminOpsUi {
         status: status);
   }
 
+  /// Redirects to the page of the webhook [id], which shows [secret] once,
+  /// so that reloading it does not repeat the post.
+  shelf.Response _showSecret(
+      shelf.Request req, String id, String secret, String done) {
+    if (WebUi._sessionId(req) case final session?) {
+      web._flash.put(session, 'webhook:$id', secret);
+    }
+    return WebUi._redirect('${webhookHref(id)}?done=$done');
+  }
+
   Future<shelf.Response> webhook(shelf.Request req, String id) async {
     web._administrator(req);
+    final done = req.url.queryParameters['done'];
+    final changed = switch (done) {
+      'created' => 'The webhook was added.',
+      'secret-rotated' => 'The secret was replaced.',
+      _ => null,
+    };
+    if (changed == null) {
+      return _webhookPage(req, _webhooks(), id, notice: _doneMessages[done]);
+    }
+    final session = WebUi._sessionId(req);
+    final secret = session == null
+        ? null
+        : web._flash.take<String>(session, 'webhook:$id');
     return _webhookPage(req, _webhooks(), id,
-        notice: _doneMessages[req.url.queryParameters['done']]);
+        secret: secret,
+        notice: secret != null
+            ? changed
+            : '$changed The secret is shown only once: rotate it again if it '
+                'was not copied.');
   }
 
   /// Runs [change] of the webhook [id] and goes back to its page.
@@ -224,22 +278,45 @@ class _AdminOpsUi {
       shelf.Request req, String id) async {
     final principal = web._administrator(req);
     final hooks = _webhooks();
-    await WebUi._form(req);
+    final form = await WebUi._form(req);
     try {
+      if (!_confirmed(form)) {
+        await hooks.require(id);
+        return await _webhookPage(req, hooks, id,
+            error: 'Tick the box to confirm that the receiver will need the '
+                'new secret.',
+            status: HttpStatus.badRequest);
+      }
       final secret =
           await hooks.rotateSecret(id, by: app.auditContext(req, principal));
-      return await _webhookPage(req, hooks, id,
-          secret: secret, notice: 'The secret was replaced.');
+      return _showSecret(req, id, secret, 'secret-rotated');
     } on WebhookException {
       return web._notFoundPage(req, 'There is no such webhook.');
     }
   }
 
+  /// Asks before [deleteWebhook].
+  Future<shelf.Response> confirmDeleteWebhook(
+      shelf.Request req, String id) async {
+    web._administrator(req);
+    final hook = await _webhooks().store.find(id);
+    if (hook == null) {
+      return web._notFoundPage(req, 'There is no such webhook.');
+    }
+    return WebUi._html(req, adminDeleteWebhookPage(web._context(req), hook));
+  }
+
   Future<shelf.Response> deleteWebhook(shelf.Request req, String id) async {
     final principal = web._administrator(req);
     final hooks = _webhooks();
-    await WebUi._form(req);
+    final form = await WebUi._form(req);
     try {
+      if (!_confirmed(form)) {
+        await hooks.require(id);
+        return await _webhookPage(req, hooks, id,
+            error: 'Confirm the deletion on its confirmation page.',
+            status: HttpStatus.badRequest);
+      }
       await hooks.delete(id, by: app.auditContext(req, principal));
     } on WebhookException {
       return web._notFoundPage(req, 'There is no such webhook.');

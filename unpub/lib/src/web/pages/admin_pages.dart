@@ -360,24 +360,23 @@ Html adminPackagePage(
     el('h3', const {}, 'Transfer ownership'),
     el('p', {'class': 'muted'},
         'Replaces every uploader with one user, who must have an account.'),
-    postForm(
-      context,
-      '$base/owner',
-      [
-        el('label', {'for': 'owner-email', 'class': 'visually-hidden'},
-            'Email of the new owner'),
-        el('input', {
-          'type': 'email',
-          'id': 'owner-email',
-          'name': 'email',
-          'required': true,
-          'placeholder': 'owner@example.com',
-        }),
-        el('button', {'type': 'submit', 'class': 'danger'}, 'Transfer'),
-      ],
-      className: 'inline-form',
-      confirm: 'Make this user the only uploader of ${package.name}?',
-    ),
+    // Leads to a confirmation page, which makes the change.
+    el('form', {
+      'method': 'get',
+      'action': '$base/owner',
+      'class': 'inline-form',
+    }, [
+      el('label', {'for': 'owner-email', 'class': 'visually-hidden'},
+          'Email of the new owner'),
+      el('input', {
+        'type': 'email',
+        'id': 'owner-email',
+        'name': 'email',
+        'required': true,
+        'placeholder': 'owner@example.com',
+      }),
+      el('button', {'type': 'submit', 'class': 'danger'}, 'Transfer…'),
+    ]),
     el('h3', const {}, 'Versions'),
     el('div', {
       'class': 'table-scroll'
@@ -486,6 +485,37 @@ Html adminDeleteVersionPage(
       [
         el('button', {'type': 'submit', 'class': 'danger'},
             'Delete ${version.version}'),
+        ' ',
+        el('a', {'href': base}, 'Cancel'),
+      ],
+      className: 'inline-form',
+    ),
+  ]);
+}
+
+/// Asks whether [email] should become the only uploader of [package].
+Html adminTransferOwnershipPage(
+    PageContext context, UnpubPackage package, String email) {
+  final base = '/admin/packages/${segment(package.name)}';
+  final uploaders = package.uploaders ?? const <String>[];
+  return adminLayout(context, 'Transfer ${package.name}', [
+    el('h2', const {}, 'Make $email the only uploader of ${package.name}?'),
+    el('p', const {}, [
+      if (uploaders.isEmpty)
+        'The package has no uploaders now. '
+      else
+        'This removes ${uploaders.join(', ')}. ',
+      'Only $email and administrators can then publish and manage it. '
+          'Adding the others back has to be done one by one.',
+    ]),
+    postForm(
+      context,
+      '$base/owner',
+      [
+        el('input', {'type': 'hidden', 'name': 'email', 'value': email}),
+        el('input', {'type': 'hidden', 'name': 'confirm', 'value': 'yes'}),
+        el('button', {'type': 'submit', 'class': 'danger'},
+            'Transfer to $email'),
         ' ',
         el('a', {'href': base}, 'Cancel'),
       ],

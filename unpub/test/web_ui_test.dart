@@ -978,15 +978,25 @@ void main() {}
         'scope': ['read'],
         'expiresIn': '30d'
       });
-      expect(created.status, HttpStatus.created);
+      // Redirected, so that reloading does not create another token.
+      expect(created.status, HttpStatus.seeOther);
+      expect(created.location, '/account?done=token-created');
+      expect(created.body, isNot(contains('new-token')));
+      final shown = await fetch('GET', created.location!, as: browser);
+      expect(shown.status, HttpStatus.ok);
       final secret = RegExp(r'<code id="new-token">([^<]+)</code>')
-          .firstMatch(created.body)!
+          .firstMatch(shown.body)!
           .group(1)!;
-      expect(created.body, contains('dart pub token add http://internal:4000'));
+      expect(shown.body, contains('dart pub token add http://internal:4000'));
 
+      final reloaded = await fetch('GET', created.location!, as: browser);
+      expect(reloaded.body, isNot(contains(secret)));
+      expect(reloaded.body, contains('shown only once'));
       final again = await fetch('GET', '/account', as: browser);
       expect(again.body, isNot(contains(secret)));
       expect(again.body, contains('ci'));
+      expect((await store.listTokens(owner.id)).where((t) => t.name == 'ci'),
+          hasLength(1));
 
       final tokens = await store.listTokens(owner.id);
       final ci = tokens.firstWhere((token) => token.name == 'ci');
@@ -1042,7 +1052,7 @@ void main() {}
         'name': 'x',
         'scope': ['read']
       });
-      expect(created.status, HttpStatus.created);
+      expect(created.status, HttpStatus.seeOther);
       final reader = await store.findUserByEmail('reader@example.com');
       final token = (await store.listTokens(reader!.id)).single;
       expect(

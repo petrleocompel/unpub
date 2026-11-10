@@ -28,6 +28,7 @@ import '../validation.dart';
 import '../webhooks/webhook_service.dart';
 import 'assets.dart';
 import 'download_stats.dart';
+import 'flash.dart';
 import 'html.dart';
 import 'layout.dart';
 import 'pages/account_pages.dart';
@@ -122,6 +123,12 @@ class WebUi {
   late final _moderation = PackageModeration(app);
 
   late final _adminOps = _AdminOpsUi(this);
+
+  /// Secrets created by a form post, for the page it redirects to.
+  final _flash = Flash();
+
+  /// The id of the web session of [req], which owns its flash values.
+  static String? _sessionId(shelf.Request req) => principalOf(req)?.session?.id;
 
   AccountApi? get _accountApi => app.accountApi;
 
@@ -659,8 +666,19 @@ class WebUi {
 
   Future<shelf.Response> account(shelf.Request req) async {
     final (api, principal) = _session(req);
-    return _accountPage(req, api, principal,
-        notice: _doneMessages[req.url.queryParameters['done']]);
+    final done = req.url.queryParameters['done'];
+    if (done == 'token-created') {
+      final session = _sessionId(req);
+      final created =
+          session == null ? null : _flash.take<CreatedToken>(session, 'token');
+      return _accountPage(req, api, principal,
+          created: created,
+          notice: created != null
+              ? null
+              : 'The token was created. Its secret is shown only once: if it '
+                  'was not copied, revoke the token and create another.');
+    }
+    return _accountPage(req, api, principal, notice: _doneMessages[done]);
   }
 
   Future<shelf.Response> changePassword(shelf.Request req) async {
@@ -706,8 +724,12 @@ class WebUi {
             _field(form, 'expiresIn'), principal, api.accounts.clock()),
         by: _by(req, api, principal),
       );
-      return await _accountPage(req, api, principal,
-          created: created, status: HttpStatus.created);
+      // Shown by the page this redirects to, so that reloading it does not
+      // create another token.
+      if (_sessionId(req) case final session?) {
+        _flash.put(session, 'token', created);
+      }
+      return _redirect('/account?done=token-created');
     } on AccountException catch (error) {
       return _accountPage(req, api, principal,
           error: _sentence(error.message), status: error.statusCode);

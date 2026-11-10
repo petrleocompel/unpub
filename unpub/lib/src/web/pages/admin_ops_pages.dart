@@ -264,6 +264,33 @@ Html adminWebhooksPage(
       ),
     ]);
 
+/// Asks before deleting [hook].
+Html adminDeleteWebhookPage(PageContext context, Webhook hook) {
+  final base = webhookHref(hook.id);
+  return adminLayout(context, 'Delete webhook', [
+    el('h2', const {}, [
+      'Delete the webhook ',
+      el('code', const {}, '${hook.url}'),
+      '?',
+    ]),
+    el('p', const {}, [
+      'Its delivery log goes with it, and the deliveries still queued are '
+          'not sent. Disabling it keeps both instead. This cannot be undone.',
+    ]),
+    postForm(
+      context,
+      '$base/delete',
+      [
+        el('input', {'type': 'hidden', 'name': 'confirm', 'value': 'yes'}),
+        el('button', {'type': 'submit', 'class': 'danger'}, 'Delete webhook'),
+        ' ',
+        el('a', {'href': base}, 'Cancel'),
+      ],
+      className: 'inline-form',
+    ),
+  ]);
+}
+
 String _deliveryState(Delivery delivery) => switch (delivery.status) {
       DeliveryStatus.pending when delivery.attempt == 0 => 'Queued',
       DeliveryStatus.pending => 'Retrying',
@@ -324,17 +351,24 @@ Html adminWebhookPage(
       postForm(
         context,
         '$base/secret',
-        el('button', {'type': 'submit'}, 'Rotate secret'),
+        [
+          el('label', {
+            'class': 'check'
+          }, [
+            el('input', {
+              'type': 'checkbox',
+              'name': 'confirm',
+              'value': 'yes',
+              'required': true,
+            }),
+            'The receiver needs the new secret',
+          ]),
+          ' ',
+          el('button', {'type': 'submit'}, 'Rotate secret'),
+        ],
         className: 'inline-form',
-        confirm: 'The receiver must be given the new secret. Rotate it?',
       ),
-      postForm(
-        context,
-        '$base/delete',
-        el('button', {'type': 'submit', 'class': 'danger'}, 'Delete'),
-        className: 'inline-form',
-        confirm: 'Delete this webhook and its delivery log?',
-      ),
+      el('a', {'class': 'button danger', 'href': '$base/delete'}, 'Delete…'),
     ]),
     el('h3', const {}, 'Recent deliveries'),
     if (deliveries.isEmpty)
