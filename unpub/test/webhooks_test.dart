@@ -401,6 +401,7 @@ void main() {
       final app = h.buildApp(webhooks: service);
       await addHook();
       service.start();
+      addTearDown(service.stop);
       await h.publish('alpha', '1.0.0', bearer: ownerToken, using: app);
       for (var i = 0; i < 100 && receiver.received.isEmpty; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
