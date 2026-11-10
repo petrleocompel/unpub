@@ -166,7 +166,8 @@ legend { padding: 0 .3rem; }
 .sidebar ul { list-style: none; margin: 0; padding: 0; }
 .sidebar li { overflow-wrap: anywhere; }
 .snippet { position: relative; margin: .5rem 0 1.25rem; }
-.snippet pre { margin: 0; padding-right: 4.5rem; }
+.snippet pre { margin: 0; }
+.js .snippet pre { padding-right: 4.5rem; }
 .snippet .copy { position: absolute; top: .4rem; right: .4rem; font-size: .8rem; padding: .1rem .5rem; }
 .copy { display: none; }
 .js .copy { display: inline-block; }
