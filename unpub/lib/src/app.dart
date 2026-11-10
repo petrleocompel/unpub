@@ -12,6 +12,7 @@ import 'auth/authenticator.dart';
 import 'config/config.dart';
 import 'publish_policy.dart';
 import 'request_logger.dart';
+import 'routes/admin_api_routes.dart';
 import 'routes/badge_routes.dart';
 import 'routes/health_routes.dart';
 import 'routes/moderation_routes.dart';
@@ -120,6 +121,7 @@ class App {
     _publishRoutes.addRoutes(router);
     ModerationRoutes(this).addRoutes(router);
     WebapiRoutes(this).addRoutes(router);
+    AdminApiRoutes(this).addRoutes(router);
     _webUi.addRoutes(router);
     BadgeRoutes(this).addRoutes(router);
     accountApi?.addRoutes(router);

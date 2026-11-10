@@ -5,22 +5,55 @@ import '../logging.dart';
 import '../store/account_store.dart';
 import '../store/audit_store.dart';
 import 'accounts.dart';
+import 'authenticator.dart';
 import 'password_hasher.dart';
 
 final _log = Logger('unpub.accounts');
 
 /// Who is making a change, for the audit trail.
 class AuditContext {
+  /// The email of whoever acts, or `system`.
   final String actor;
   final String? ip;
 
-  /// How the actor proved who it is, a [CredentialKind] name or `system`.
+  /// How the actor proved who it is, one of [AuditActorKind].
   final String kind;
 
-  const AuditContext(this.actor, {this.ip, this.kind = 'system'});
+  /// The prefix of the API token that acts, if one does.
+  final String? token;
+
+  const AuditContext(this.actor,
+      {this.ip, this.kind = AuditActorKind.system, this.token});
+
+  /// [principal] acting from [ip].
+  factory AuditContext.of(Principal principal, {String? ip}) =>
+      AuditContext(principal.email,
+          ip: ip,
+          kind: principal.credentialKind.name,
+          token: principal.tokenPrefix);
 
   /// The server itself, or an operator at the command line.
   static const system = AuditContext('system');
+
+  /// The event of [action] by this actor.
+  AuditEvent event(
+    String action, {
+    String? package,
+    String? version,
+    String? target,
+    Map<String, Object?> details = const {},
+  }) =>
+      AuditEvent(
+        actor: actor,
+        actorKind: kind,
+        token: token,
+        ip: ip,
+        action: action,
+        package: package,
+        version: version,
+        target: target,
+        details: details,
+      );
 }
 
 /// A session created by a successful login.
@@ -126,13 +159,8 @@ class AccountService {
     if (user.isEnabledAdmin) {
       await _translatingContention(() => _recordEnabledAdmin(user.id));
     }
-    await audit.recordSafely(AuditEvent(
-      actor: by.actor,
-      ip: by.ip,
-      action: 'user.created',
-      target: user.email,
-      details: {'role': role.name, ...auditDetails},
-    ));
+    await audit.recordSafely(by.event('user.created',
+        target: user.email, details: {'role': role.name, ...auditDetails}));
     return user;
   }
 
@@ -329,13 +357,21 @@ class AccountService {
     if (!written) return null;
 
     if (disabled == true) await store.deleteSessionsOfUser(current.id);
-    await audit.recordSafely(AuditEvent(
-      actor: change.by.actor,
-      ip: change.by.ip,
-      action: 'user.updated',
-      target: current.email,
-      details: changes,
-    ));
+    final by = change.by;
+    if (changes.containsKey('displayName')) {
+      await audit.recordSafely(by.event('user.updated',
+          target: current.email, details: {'displayName': displayName}));
+    }
+    if (changes.containsKey('role')) {
+      await audit.recordSafely(by.event('user.role_changed',
+          target: current.email,
+          details: {'from': current.role.name, 'to': role!.name}));
+    }
+    if (changes.containsKey('disabled')) {
+      await audit.recordSafely(by.event(
+          disabled! ? 'user.disabled' : 'user.enabled',
+          target: current.email));
+    }
     return requireUserById(current.id);
   }
 
@@ -350,12 +386,7 @@ class AccountService {
     _checkPassword(password);
     await store.setPasswordHash(user.id, await hasher.hash(password), clock());
     await store.deleteSessionsOfUser(user.id, exceptId: keepSessionId);
-    await audit.recordSafely(AuditEvent(
-      actor: by.actor,
-      ip: by.ip,
-      action: 'user.password_set',
-      target: user.email,
-    ));
+    await audit.recordSafely(by.event('user.password_set', target: user.email));
   }
 
   /// Verifies [password] against the stored hash of [user].
@@ -395,6 +426,7 @@ class AccountService {
     if (failure != null) {
       await audit.recordSafely(AuditEvent(
         actor: normalized,
+        actorKind: AuditActorKind.anonymous,
         ip: ip,
         action: 'user.login_failed',
         target: normalized,
@@ -416,6 +448,7 @@ class AccountService {
     await store.setLastLogin(user.id, now);
     await audit.recordSafely(AuditEvent(
       actor: user.email,
+      actorKind: AuditActorKind.password,
       ip: ip,
       action: 'user.login',
       target: user.email,
@@ -468,10 +501,8 @@ class AccountService {
       ),
       now,
     );
-    await audit.recordSafely(AuditEvent(
-      actor: by.actor,
-      ip: by.ip,
-      action: 'token.created',
+    await audit.recordSafely(by.event(
+      'token.created',
       target: 'token:${token.prefix}',
       details: {
         'user': user.email,
@@ -488,16 +519,10 @@ class AccountService {
     AuditContext by = AuditContext.system,
   }) async {
     if (!await store.revokeToken(token.id, clock())) return;
-    await audit.recordSafely(AuditEvent(
-      actor: by.actor,
-      ip: by.ip,
-      action: 'token.revoked',
+    await audit.recordSafely(by.event(
+      'token.revoked',
       target: 'token:${token.prefix}',
-      details: {
-        'name': token.name,
-        'ownerId': token.userId,
-        'actorKind': by.kind,
-      },
+      details: {'name': token.name, 'ownerId': token.userId},
     ));
   }
 

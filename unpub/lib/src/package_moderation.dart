@@ -53,7 +53,8 @@ class PackageModeration {
       throw const ModerationException.invalid('email already exists');
     }
     await app.metaStore.addUploader(name, email);
-    await app.audit(req, principal, 'uploader.added', name, {'email': email});
+    await app.audit(req, principal, 'uploader.added',
+        package: name, details: {'email': email});
     return 'uploader added';
   }
 
@@ -66,8 +67,8 @@ class PackageModeration {
       throw const ModerationException.invalid('email not uploader');
     }
     await app.metaStore.removeUploader(name, stored);
-    await app
-        .audit(req, principal, 'uploader.removed', name, {'email': stored});
+    await app.audit(req, principal, 'uploader.removed',
+        package: name, details: {'email': stored});
     return 'uploader removed';
   }
 
@@ -105,7 +106,8 @@ class PackageModeration {
         req,
         principal,
         retracted ? 'version.retracted' : 'version.unretracted',
-        '$name@$version',
+        package: name,
+        version: version,
       );
     }
     return retracted ? 'version retracted' : 'version restored';
@@ -149,8 +151,8 @@ class PackageModeration {
       req,
       principal,
       discontinued ? 'package.discontinued' : 'package.continued',
-      name,
-      {if (replacedBy != null) 'replacedBy': replacedBy},
+      package: name,
+      details: {if (replacedBy != null) 'replacedBy': replacedBy},
     );
     return discontinued ? 'package discontinued' : 'package continued';
   }

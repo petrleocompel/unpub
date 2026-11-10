@@ -5,12 +5,12 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:shelf/shelf.dart' as shelf;
 
 import '../app.dart';
+import '../auth/account_service.dart';
 import '../auth/authenticator.dart';
 import '../config/config.dart';
 import '../http_cache.dart';
 import '../models.dart';
 import '../pub_listing.dart';
-import '../store/audit_store.dart';
 import '../upstream/upstream_proxy.dart';
 import 'responses.dart';
 
@@ -98,20 +98,26 @@ extension RouteSupport on App {
         'archive_url': resolveUrl(req, version['archive_url'] as String),
       };
 
+  /// Who acts in [req], for the audit trail.
+  AuditContext auditContext(shelf.Request req, Principal principal) =>
+      AuditContext.of(principal,
+          ip: clientAddress(req, trustForwardedFor: trustForwardedFor));
+
+  /// Records [action] by [principal], after it happened.
   Future<void> audit(
     shelf.Request req,
     Principal principal,
-    String action,
-    String target, [
+    String action, {
+    String? package,
+    String? version,
+    String? target,
     Map<String, Object?> details = const {},
-  ]) =>
-      auditStore.recordSafely(AuditEvent(
-        actor: principal.actor,
-        ip: clientAddress(req, trustForwardedFor: trustForwardedFor),
-        action: action,
-        target: target,
-        details: details,
-      ));
+  }) =>
+      auditStore.recordSafely(auditContext(req, principal).event(action,
+          package: package,
+          version: version,
+          target: target,
+          details: details));
 }
 
 bool clientHasArchive(shelf.Request req, String? hash) =>

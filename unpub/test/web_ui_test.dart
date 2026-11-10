@@ -1290,8 +1290,14 @@ void main() {}
       expect(last.status, HttpStatus.conflict);
       expect(last.body, contains('last enabled administrator'));
 
-      expect(await auditActions(),
-          containsAll(['user.created', 'user.updated', 'user.password_set']));
+      expect(
+          await auditActions(),
+          containsAll([
+            'user.created',
+            'user.role_changed',
+            'user.disabled',
+            'user.password_set'
+          ]));
     });
 
     test('manages packages', () async {
@@ -1358,7 +1364,9 @@ void main() {}
       final retraction =
           events.firstWhere((event) => event['action'] == 'version.retracted');
       expect(retraction['actor'], 'admin@example.com');
-      expect(retraction['target'], 'alpha@1.0.0');
+      expect(retraction['actorKind'], 'session');
+      expect(retraction['package'], 'alpha');
+      expect(retraction['version'], '1.0.0');
     });
 
     test('pages through the packages', () async {

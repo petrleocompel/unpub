@@ -208,9 +208,10 @@ class PublishRoutes {
       } finally {
         await lock.release();
       }
-      await app.audit(req, principal, 'package.published', '$name@$version', {
-        'uploader': uploader,
-      });
+      await app.audit(req, principal, 'package.published',
+          package: name,
+          version: version,
+          details: {'uploader': uploader, 'sha256': archiveHash});
 
       // TODO: Upload docs
       return shelf.Response.found(

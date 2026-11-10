@@ -13,6 +13,7 @@ Html _adminNav(PageContext context) => el('nav', {
         for (final (href, label) in const [
           ('/admin/users', 'Users'),
           ('/admin/packages', 'Packages'),
+          ('/admin/audit', 'Audit log'),
           ('/admin/settings', 'Settings'),
         ])
           el('li', const {}, [
@@ -31,7 +32,7 @@ Html _adminNav(PageContext context) => el('nav', {
       ]),
     ]);
 
-Html _adminLayout(PageContext context, String title, List<Object?> body,
+Html adminLayout(PageContext context, String title, List<Object?> body,
         {String? notice, String? error}) =>
     layout(context, title: '$title · Admin', body: [
       el('h1', const {}, 'Administration'),
@@ -51,7 +52,7 @@ Html _roleSelect(String name, Role? selected, {String? id}) => el('select', {
 
 Html adminUsersPage(PageContext context, List<User> users,
         {String? notice, String? error}) =>
-    _adminLayout(context, 'Users', notice: notice, error: error, [
+    adminLayout(context, 'Users', notice: notice, error: error, [
       el('h2', const {}, 'Users'),
       el('div', {
         'class': 'table-scroll'
@@ -198,7 +199,7 @@ Html adminPackagesPage(
     PageContext context, String? query, UnpubQueryResult result,
     {int page = 1, int size = maxPageSize}) {
   final first = (page - 1) * size + 1;
-  return _adminLayout(context, 'Packages', [
+  return adminLayout(context, 'Packages', [
     el('h2', const {}, 'Packages'),
     el('form', {
       'class': 'filters',
@@ -267,10 +268,20 @@ Html adminPackagePage(
     PageContext context, UnpubPackage package, List<UnpubVersion> versions,
     {String? notice, String? error}) {
   final base = '/admin/packages/${segment(package.name)}';
-  return _adminLayout(context, package.name, notice: notice, error: error, [
+  return adminLayout(context, package.name, notice: notice, error: error, [
     el('h2', const {}, [
       'Package ',
       el('a', {'href': packageHref(package.name)}, package.name),
+    ]),
+    el('p', const {}, [
+      el(
+          'a',
+          {
+            'href': '/admin/audit?${Uri(queryParameters: {
+                  'package': package.name
+                }).query}'
+          },
+          'Audit log of ${package.name}'),
     ]),
     el('h3', const {}, 'Discontinued'),
     postForm(
@@ -402,7 +413,7 @@ Html adminPackagePage(
 /// The settings overview, as section → key → displayed value.
 Html adminSettingsPage(
         PageContext context, Map<String, Map<String, String>>? settings) =>
-    _adminLayout(context, 'Settings', [
+    adminLayout(context, 'Settings', [
       el('h2', const {}, 'Effective configuration'),
       if (settings == null)
         el('p', {'class': 'muted'},

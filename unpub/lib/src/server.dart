@@ -67,7 +67,7 @@ class UnpubServer {
       final metaStore = MongoStore(db);
       final upstreamCache = MongoUpstreamCacheStore(db);
       await accounts.ensureIndexes();
-      await audit.ensureIndexes();
+      await audit.ensureIndexes(retention: config.audit.retention);
       await metaStore.ensureIndexes();
       await upstreamCache.ensureIndexes();
       final service = AccountService(accounts, audit: audit);

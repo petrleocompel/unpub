@@ -64,6 +64,7 @@ const _schema = <String, _ValueKind>{
   'auth.readTokens': _ValueKind.stringList,
   'auth.admin.email': _ValueKind.string,
   'auth.admin.password': _ValueKind.string,
+  'audit.retentionDays': _ValueKind.integer,
   'logging.level': _ValueKind.string,
   'logging.format': _ValueKind.string,
 };
@@ -362,6 +363,18 @@ class AuthConfig {
   });
 }
 
+/// How long the audit trail is kept.
+class AuditConfig {
+  /// Days after which an event is deleted, or 0 to keep every event.
+  final int retentionDays;
+
+  const AuditConfig({this.retentionDays = 0});
+
+  /// Null when events are kept for good.
+  Duration? get retention =>
+      retentionDays > 0 ? Duration(days: retentionDays) : null;
+}
+
 class LoggingConfig {
   final Level level;
   final LogFormat format;
@@ -383,6 +396,7 @@ class Config {
   final UpstreamConfig upstream;
   final PublishConfig publish;
   final AuthConfig auth;
+  final AuditConfig audit;
   final LoggingConfig logging;
 
   const Config({
@@ -392,6 +406,7 @@ class Config {
     required this.upstream,
     this.publish = const PublishConfig(),
     required this.auth,
+    this.audit = const AuditConfig(),
     required this.logging,
   });
 
@@ -630,6 +645,7 @@ class _ConfigReader {
     final upstream = _upstream();
     final publish = _publish();
     final auth = _auth();
+    final audit = _audit();
     final logging = _logging();
     if (_problems.isNotEmpty) throw ConfigException(_problems);
     return Config(
@@ -639,9 +655,23 @@ class _ConfigReader {
       upstream: upstream,
       publish: publish,
       auth: auth,
+      audit: audit,
       logging: logging,
     );
   }
+
+  /// A number of days, 0 or more, with [fallback] when unset.
+  int _days(String key, int fallback) {
+    final days = _integer(key);
+    if (days != null && days < 0) {
+      _problems.add('${_describe(key)} must be 0 or more');
+      return fallback;
+    }
+    return days ?? fallback;
+  }
+
+  AuditConfig _audit() =>
+      AuditConfig(retentionDays: _days('audit.retentionDays', 0));
 
   /// A duration such as `10m`, or `0` when [allowZero] is true.
   Duration? _duration(String key, {required bool allowZero}) {

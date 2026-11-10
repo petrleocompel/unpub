@@ -82,6 +82,11 @@ Map<String, Map<String, String>> settingsOverview(Config config) {
       'admin.email': admin?.email ?? _unset,
       'admin.password': _secret(admin?.password),
     },
+    'audit': {
+      'retentionDays': config.audit.retentionDays == 0
+          ? '0 (kept forever)'
+          : '${config.audit.retentionDays}',
+    },
     'logging': {
       'level': config.logging.level.name,
       'format': config.logging.format.name,

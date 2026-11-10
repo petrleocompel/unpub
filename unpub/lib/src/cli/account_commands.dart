@@ -56,7 +56,7 @@ abstract class _DatabaseCommand extends Command<int> {
       final audit = MongoAuditStore(connection);
       if (!readOnly) {
         await store.ensureIndexes();
-        await audit.ensureIndexes();
+        await audit.ensureIndexes(retention: config.audit.retention);
         await store.reconcileAdminSet(DateTime.now());
       }
       return await runWith(

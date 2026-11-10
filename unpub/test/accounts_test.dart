@@ -214,8 +214,10 @@ void main() {
         if (uploaders != null) 'uploaders': uploaders,
       });
 
-  Future<List<Map<String, dynamic>>> auditEvents(String action) =>
-      db.collection(auditCollection).find(where.eq('action', action)).toList();
+  Future<List<Map<String, dynamic>>> auditEvents(String action) => db
+      .collection(auditCollection)
+      .find(where.eq('action', action).sortBy('at').sortBy('_id'))
+      .toList();
 
   group('publishing', () {
     test('an anonymous client cannot publish', () async {
@@ -1291,7 +1293,7 @@ void main() {
 
         final event = await revocationAudit();
         expect(event['actor'], admin.email);
-        expect(event['details']['actorKind'], 'session');
+        expect(event['actorKind'], 'session');
         expect(event['details']['ownerId'], owner.id);
       });
 
@@ -1313,7 +1315,7 @@ void main() {
         expect(reply.status, HttpStatus.ok);
 
         final event = await revocationAudit();
-        expect(event['details']['actorKind'], 'apiToken');
+        expect(event['actorKind'], 'apiToken');
       });
     });
 
@@ -2375,10 +2377,11 @@ void main() {
 
       await send('PATCH', '/webapi/users/$id',
           browser: browser, body: {'role': 'publisher'});
-      final updated = await event('user.updated');
+      final updated = await event('user.role_changed');
       expect(updated['actor'], 'a@b.c');
+      expect(updated['actorKind'], 'session');
       expect(updated['target'], 'n@b.c');
-      expect(updated['details'], {'role': 'publisher'});
+      expect(updated['details'], {'from': 'reader', 'to': 'publisher'});
 
       await send('POST', '/webapi/users/$id/password',
           browser: browser, body: {'password': 'a-new-password'});
@@ -2389,6 +2392,7 @@ void main() {
       final admin = await user('a@b.c', Role.admin);
       await accounts.updateUser(admin, role: Role.admin);
       expect(await auditEvents('user.updated'), isEmpty);
+      expect(await auditEvents('user.role_changed'), isEmpty);
     });
 
     test('records token creation and revocation', () async {
@@ -2406,8 +2410,11 @@ void main() {
       final created = await accounts.createToken(publisher, name: 'x');
       await publish('fresh', '1.0.0', bearer: created.secret);
       final record = await event('package.published');
-      expect(record['actor'], 'token:${created.secret.substring(0, 8)}');
-      expect(record['target'], 'fresh@1.0.0');
+      expect(record['actor'], 'p@b.c');
+      expect(record['actorKind'], 'apiToken');
+      expect(record['token'], created.secret.substring(0, 8));
+      expect(record['package'], 'fresh');
+      expect(record['version'], '1.0.0');
       expect(record['details']['uploader'], 'p@b.c');
     });
 
@@ -2419,7 +2426,7 @@ void main() {
           bearer: secret, form: 'email=new%40b.c');
       await send('DELETE', '/api/packages/owned/uploaders/gone%40b.c',
           bearer: secret);
-      expect((await event('uploader.added'))['target'], 'owned');
+      expect((await event('uploader.added'))['package'], 'owned');
       expect((await event('uploader.added'))['details'], {'email': 'new@b.c'});
       expect(
           (await event('uploader.removed'))['details'], {'email': 'gone@b.c'});

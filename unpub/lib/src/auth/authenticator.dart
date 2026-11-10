@@ -56,6 +56,10 @@ class Principal {
 
   bool get isAdmin => role == Role.admin;
 
+  /// The prefix of the API token behind this request, if one is.
+  String? get tokenPrefix =>
+      actor.startsWith('token:') ? actor.substring('token:'.length) : null;
+
   /// Whether this credential may take part in publishing at all.
   bool get canPublish => role != Role.reader && scopes.contains(Scope.publish);
 

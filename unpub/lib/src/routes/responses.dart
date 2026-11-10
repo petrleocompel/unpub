@@ -38,6 +38,12 @@ shelf.Response badRequest(String message,
       }),
     );
 
+shelf.Response forbidden(String message) =>
+    badRequest(message, status: HttpStatus.forbidden);
+
+shelf.Response conflict(String message) =>
+    badRequest(message, status: HttpStatus.conflict);
+
 shelf.Response notFound([String message = 'Not Found']) =>
     badRequest(message, status: HttpStatus.notFound);
 

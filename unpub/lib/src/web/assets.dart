@@ -186,6 +186,7 @@ legend { padding: 0 .3rem; }
 
 /* Tables */
 .table-scroll { overflow-x: auto; }
+code.details { font-size: .8rem; word-break: break-all; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
 th { background: var(--subtle); font-weight: 600; }

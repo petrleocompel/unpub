@@ -22,17 +22,21 @@ import '../models.dart';
 import '../package_moderation.dart';
 import '../routes/responses.dart' show parseVersionSegment;
 import '../routes/route_support.dart';
+import '../store/audit_store.dart';
 import '../store/meta_store.dart';
 import '../validation.dart';
 import 'assets.dart';
 import 'html.dart';
 import 'layout.dart';
 import 'pages/account_pages.dart';
+import 'pages/admin_ops_pages.dart';
 import 'pages/admin_pages.dart';
 import 'pages/error_page.dart';
 import 'pages/package_list_page.dart';
 import 'pages/package_page.dart';
 import 'settings.dart';
+
+part 'web_ui_admin.dart';
 
 final _log = Logger('unpub.web');
 
@@ -108,9 +112,14 @@ class WebUi {
 
   late final _moderation = PackageModeration(app);
 
+  late final _adminOps = _AdminOpsUi(this);
+
   AccountApi? get _accountApi => app.accountApi;
 
   void addRoutes(Router router) {
+    // First, as they are more specific than the routes they share a prefix
+    // with.
+    _adminOps.addRoutes(router);
     router
       ..get('/', _guard(listPage))
       ..get('/packages', _guard(listPage))
@@ -591,9 +600,8 @@ class WebUi {
   }
 
   AuditContext _by(shelf.Request req, AccountApi api, Principal principal) =>
-      AuditContext(principal.actor,
-          ip: clientAddress(req, trustForwardedFor: api.trustForwardedFor),
-          kind: principal.credentialKind.name);
+      AuditContext.of(principal,
+          ip: clientAddress(req, trustForwardedFor: api.trustForwardedFor));
 
   Future<shelf.Response> _accountPage(
     shelf.Request req,

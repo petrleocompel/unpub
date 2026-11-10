@@ -144,8 +144,7 @@ class AccountApi {
       clientAddress(request, trustForwardedFor: trustForwardedFor);
 
   AuditContext _by(shelf.Request request, Principal principal) =>
-      AuditContext(principal.actor,
-          ip: _address(request), kind: principal.credentialKind.name);
+      AuditContext.of(principal, ip: _address(request));
 
   static Principal _principal(shelf.Request request) {
     final principal = principalOf(request);

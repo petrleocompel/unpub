@@ -135,8 +135,10 @@ void main() {
         .singleWhere((item) => item['version'] == version);
   }
 
-  Future<List<Map<String, dynamic>>> auditEvents(String action) =>
-      db.collection(auditCollection).find(where.eq('action', action)).toList();
+  Future<List<Map<String, dynamic>>> auditEvents(String action) => db
+      .collection(auditCollection)
+      .find(where.eq('action', action).sortBy('at').sortBy('_id'))
+      .toList();
 
   setUp(() async {
     await clean();
@@ -660,8 +662,10 @@ void main() {
 
       final events = await auditEvents('version.retracted');
       expect(events, hasLength(1));
-      expect(events.single['target'], '$name@1.0.0');
-      expect(events.single['actor'], startsWith('token:'));
+      expect(events.single['package'], name);
+      expect(events.single['version'], '1.0.0');
+      expect(events.single['actorKind'], 'apiToken');
+      expect(events.single['token'], isNotNull);
 
       await send('POST', unretract('1.0.0'), bearer: ownerToken);
       expect(await auditEvents('version.unretracted'), hasLength(1));
