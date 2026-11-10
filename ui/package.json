@@ -13,7 +13,7 @@
     "test": "vitest",
     "test:e2e": "./e2e/run.sh",
     "api:types": "openapi-typescript ../docs/openapi.yaml -o src/api/schema.d.ts && prettier --write src/api/schema.d.ts",
-    "api:check": "openapi-typescript ../docs/openapi.yaml -o node_modules/.tmp/schema.d.ts && prettier --write node_modules/.tmp/schema.d.ts >/dev/null && diff -u src/api/schema.d.ts node_modules/.tmp/schema.d.ts"
+    "api:check": "openapi-typescript ../docs/openapi.yaml 2>/dev/null | prettier --stdin-filepath src/api/schema.d.ts | diff -u src/api/schema.d.ts - && echo 'src/api/schema.d.ts is up to date'"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.107.1",

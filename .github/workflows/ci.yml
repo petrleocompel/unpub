@@ -47,7 +47,7 @@ jobs:
         # Pinned, as in the README; raise both together.
         run: npx --yes @redocly/cli@2.77.0 lint docs/openapi.yaml
 
-  # The web client. Skipped until ui/package.json exists.
+  # The web client: lint, types, unit tests and the build.
   ui:
     runs-on: ubuntu-latest
     defaults:
@@ -56,21 +56,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        if: hashFiles('ui/package.json') != ''
         with:
-          node-version: 22
+          node-version-file: ui/.nvmrc
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - if: hashFiles('ui/package.json') != ''
-        run: npm ci
-      - if: hashFiles('ui/package.json') != ''
-        run: npm run lint
-      - if: hashFiles('ui/package.json') != ''
-        run: npm run typecheck
-      - if: hashFiles('ui/package.json') != ''
-        run: npm test -- --run
-      - if: hashFiles('ui/package.json') != ''
-        run: npm run build
+      - run: npm ci
+      - name: Check that src/api/schema.d.ts matches docs/openapi.yaml
+        run: npm run api:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --run
+      - run: npm run build
+      - name: Bundle size
+        run: |
+          du -sh dist
+          find dist/assets -name '*.js' -o -name '*.css' | xargs gzip -c | wc -c | awk '{printf "gzipped JS and CSS: %d KiB\n", $1/1024}'
+
+  # The client served by the Dart server, in Chromium.
+  ui-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    defaults:
+      run:
+        working-directory: ui
+    env:
+      UNPUB_E2E_MONGO_URI: mongodb://localhost:27017/unpub_e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ui/.nvmrc
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            ui/playwright-report
+            ui/test-results
+          retention-days: 7
 
   docker:
     runs-on: ubuntu-latest
@@ -80,3 +121,11 @@ jobs:
       - name: Run the image
         run: |
           docker run --rm unpub:ci version
+      - name: Check that the image holds the web client
+        run: |
+          # The runtime image is scratch, without a shell: copy the file out.
+          id="$(docker create unpub:ci)"
+          docker cp "$id:/app/ui/index.html" index.html
+          docker rm "$id"
+          grep -q '<div id="root">' index.html
+          ! grep -Eq '<script>|<style|style="' index.html
