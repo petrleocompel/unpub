@@ -777,6 +777,8 @@ export interface components {
       retracted: boolean
       prerelease: boolean
       downloads: number
+      /** @description The SHA-256 of the archive of this version, 64 hex characters, or null when it is not known, as for a version published before the server recorded it. */
+      archiveSha256: string | null
       /**
        * @deprecated
        * @description The same as `published`. Still sent, but not required; read `published`.
@@ -809,6 +811,7 @@ export interface components {
      *           "retracted": false,
      *           "prerelease": false,
      *           "downloads": 210,
+     *           "archiveSha256": "3b1f0c9e0d4a7b2c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d",
      *           "createdAt": "2026-11-02T09:14:00.000Z",
      *           "isRetracted": false
      *         }

@@ -9,6 +9,8 @@ import 'harness.dart';
 import 'markdown_attacks.dart';
 
 const _bootstrap = 'bootstrap-secret-token';
+const _sha256 =
+    'abababababababababababababababababababababababababababababababab';
 
 /// The JSON routes of the web client that read packages, and its config.
 void main() {
@@ -26,6 +28,7 @@ void main() {
     String uploader = 'owner@example.com',
     DateTime? at,
     bool retracted = false,
+    String? sha256 = _sha256,
   }) async {
     await harness.metaStore.addVersion(
         name,
@@ -43,7 +46,7 @@ void main() {
           readme,
           changelog,
           at ?? DateTime.now(),
-          sha256: 'ab' * 32,
+          sha256: sha256,
         ));
     if (retracted) {
       await harness.metaStore
@@ -377,6 +380,7 @@ See [usage](doc/usage.md) and [the license](/LICENSE).
             'retracted',
             'prerelease',
             'downloads',
+            'archiveSha256',
           ]));
       expect(versions[0]['prerelease'], isTrue);
       expect(versions[2]['retracted'], isTrue);
@@ -423,6 +427,31 @@ See [usage](doc/usage.md) and [the license](/LICENSE).
         expectInert(data['changelogHtml'] as String, reason: name);
       });
     }
+
+    test('lists the archive hash of every version, null when unknown',
+        () async {
+      await addVersion('alpha', '1.0.0', sha256: null);
+      await addVersion('alpha', '1.1.0', sha256: 'cd' * 32);
+      for (final path in [
+        '/webapi/package/alpha',
+        '/webapi/package/alpha/1.0.0',
+      ]) {
+        final versions = (await get(path)).json['data']['versions'] as List;
+        expect({
+          for (final v in versions) v['version']: v['archiveSha256']
+        }, {
+          '1.1.0': 'cd' * 32,
+          '1.0.0': null
+        }, reason: path);
+        for (final v in versions) {
+          expect((v as Map).containsKey('archiveSha256'), isTrue);
+        }
+      }
+      expect(
+          (await get('/webapi/package/alpha/1.0.0')).json['data']
+              ['archiveSha256'],
+          isNull);
+    });
 
     test('a missing package or version is a 404 error', () async {
       await addVersion('alpha', '1.0.0');

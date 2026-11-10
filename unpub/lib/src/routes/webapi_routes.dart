@@ -337,6 +337,7 @@ class WebapiRoutes {
               'published': sorted[index].createdAt.toUtc().toIso8601String(),
               'retracted': entry.isRetracted,
               'prerelease': _parse(entry.version).isPreRelease,
+              'archiveSha256': sorted[index].sha256,
             },
         ],
         'latest': package.latest.version,

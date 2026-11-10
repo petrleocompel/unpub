@@ -83,6 +83,7 @@ export function version(value: string, overrides: Partial<Version> = {}): Versio
     retracted: false,
     prerelease: value.includes('-'),
     downloads: 10,
+    archiveSha256: null,
     createdAt: at,
     isRetracted: false,
     ...overrides,
