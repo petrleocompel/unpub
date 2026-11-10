@@ -164,6 +164,9 @@ class AuditEvent {
 }
 
 /// Which events [AuditStore.query] returns, newest first.
+/// How many events a page of the audit log has unless `size` says.
+const defaultAuditPageSize = 50;
+
 class AuditQuery {
   final String? action;
 
@@ -188,7 +191,7 @@ class AuditQuery {
     this.from,
     this.to,
     this.page = 1,
-    this.size = 50,
+    this.size = defaultAuditPageSize,
   });
 
   /// The query given by the parameters `action`, `actor`, `package`, `from`,
@@ -197,7 +200,7 @@ class AuditQuery {
   ///
   /// Throws a [FormatException] saying which parameter is wrong.
   factory AuditQuery.fromParameters(Map<String, String> parameters,
-      {int defaultSize = 50}) {
+      {int defaultSize = defaultAuditPageSize}) {
     String? text(String name) {
       final value = parameters[name]?.trim();
       return value == null || value.isEmpty ? null : value;
@@ -245,14 +248,31 @@ class AuditQuery {
     return endOfDay ? day.add(const Duration(days: 1)) : day;
   }
 
-  /// The parameters giving this query, without the page.
+  /// The parameters giving this query, without the page and the size.
+  ///
+  /// A bound at the start of a day in UTC is given as that date, as the
+  /// filter form sends it: `from` as its day, and `to`, which a date includes
+  /// whole, as the day before.
   Map<String, String> get parameters => {
         if (action != null) 'action': action!,
         if (actor != null) 'actor': actor!,
         if (package != null) 'package': package!,
-        if (from != null) 'from': from!.toUtc().toIso8601String(),
-        if (to != null) 'to': to!.toUtc().toIso8601String(),
+        if (from case final from?) 'from': _bound(from, lastDay: false),
+        if (to case final to?) 'to': _bound(to, lastDay: true),
       };
+
+  /// Whether [time] is the start of a day in UTC.
+  static bool isDayStart(DateTime time) {
+    final utc = time.toUtc();
+    return utc == DateTime.utc(utc.year, utc.month, utc.day);
+  }
+
+  static String _bound(DateTime time, {required bool lastDay}) {
+    final utc = time.toUtc();
+    if (!isDayStart(utc)) return utc.toIso8601String();
+    final day = lastDay ? utc.subtract(const Duration(days: 1)) : utc;
+    return day.toIso8601String().substring(0, 10);
+  }
 
   int get limit => size.clamp(1, maxAuditPageSize);
 

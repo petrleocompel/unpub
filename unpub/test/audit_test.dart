@@ -238,6 +238,63 @@ void main() {
       expect(bad.body, contains('ISO 8601'));
     });
 
+    test('pages keep the date window and the page size', () async {
+      await h.user('a@b.c', Role.admin);
+      final browser = await h.logIn('a@b.c');
+      for (var i = 0; i < 12; i++) {
+        await record('package.published',
+            at: DateTime.utc(2026, 2, 1).add(Duration(hours: i * 4)),
+            package: 'alpha');
+      }
+      // Outside the window.
+      await record('package.published', at: DateTime.utc(2026, 1, 31, 23));
+      await record('package.published', at: DateTime.utc(2026, 2, 3));
+
+      final first = await h.page(
+          '/admin/audit?from=2026-02-01&to=2026-02-02&size=5',
+          as: browser);
+      expect(first.status, HttpStatus.ok);
+      expect(first.body, contains('12 events'));
+      const next = '/admin/audit?from=2026-02-01&amp;to=2026-02-02'
+          '&amp;size=5&amp;page=2';
+      expect(first.body, contains('href="$next"'));
+      // The date inputs show the days asked for, and the form keeps the
+      // size.
+      expect(first.body, contains('name="from" value="2026-02-01"'));
+      expect(first.body, contains('name="to" value="2026-02-02"'));
+      expect(first.body, contains('name="size" value="5"'));
+
+      final second = await h.page(next.replaceAll('&amp;', '&'), as: browser);
+      expect(second.body, contains('12 events'));
+      expect(RegExp('<code>package.published</code>').allMatches(second.body),
+          hasLength(5));
+      expect(second.body, contains('name="from" value="2026-02-01"'));
+      expect(second.body, contains('name="to" value="2026-02-02"'));
+
+      // A bound with a time stays a time, and the default size is left out.
+      final timed = await h.page(
+          '/admin/audit?from=2026-02-01T08:00:00Z&to=2026-02-01T20:00:00Z',
+          as: browser);
+      expect(timed.body, contains('3 events'));
+      expect(timed.body, isNot(contains('name="size"')));
+      expect(const AuditQuery(page: 2).parameters, isEmpty);
+      expect(
+          AuditQuery.fromParameters(const {
+            'from': '2026-02-01T08:00:00Z',
+            'to': '2026-02-01T20:00:00Z',
+          }).parameters,
+          {
+            'from': '2026-02-01T08:00:00.000Z',
+            'to': '2026-02-01T20:00:00.000Z',
+          });
+      expect(
+          AuditQuery.fromParameters(const {
+            'from': '2026-02-01T00:00:00Z',
+            'to': '2026-02-03T00:00:00Z',
+          }).parameters,
+          {'from': '2026-02-01', 'to': '2026-02-02'});
+    });
+
     test('is linked from the admin pages of a package', () async {
       final admin = await h.user('a@b.c', Role.admin);
       await h.publish('alpha', '1.0.0', bearer: await h.token(admin));

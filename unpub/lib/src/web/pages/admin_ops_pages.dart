@@ -14,7 +14,7 @@ String _dateValue(DateTime? time) => time == null ? '' : formatDate(time);
 String auditHref(AuditQuery query, int page) {
   final parameters = {
     ...query.parameters,
-    if (query.limit != 50) 'size': '${query.limit}',
+    if (query.limit != defaultAuditPageSize) 'size': '${query.limit}',
     if (page != 1) 'page': '$page',
   };
   return parameters.isEmpty
@@ -42,7 +42,10 @@ Html _details(AuditEvent event) {
 Html auditPage(PageContext context, AuditQuery query, AuditPage page,
     {String? error}) {
   // The day inputs show what was asked, `to` as the last included day.
-  final lastDay = query.to?.subtract(const Duration(days: 1));
+  final to = query.to;
+  final lastDay = to != null && AuditQuery.isDayStart(to)
+      ? to.subtract(const Duration(days: 1))
+      : to;
   return adminLayout(context, 'Audit log', error: error, [
     el('h2', const {}, 'Audit log'),
     el('form', {
@@ -96,6 +99,10 @@ Html auditPage(PageContext context, AuditQuery query, AuditPage page,
           'value': _dateValue(lastDay),
         }),
       ]),
+      // Filtering again keeps the page size the links carry.
+      if (query.limit != defaultAuditPageSize)
+        el('input',
+            {'type': 'hidden', 'name': 'size', 'value': '${query.limit}'}),
       el('button', {'type': 'submit'}, 'Filter'),
       ' ',
       el('a', {'href': '/admin/audit'}, 'Clear'),
