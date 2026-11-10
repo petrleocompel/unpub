@@ -9,14 +9,23 @@
 #   npm run test:e2e                     # everything
 #   UNPUB_E2E_SKIP_BUILD=1 npm run test:e2e
 #   npm run test:e2e -- --headed         # arguments go to playwright test
+#
+# With UNPUB_E2E_SCREENSHOTS=1 (npm run screenshots) it runs
+# e2e/screenshots.spec.ts instead: the server accepts webhooks to
+# http://127.0.0.1, the spec seeds its own registry, and the fixture is not
+# published here.
 set -euo pipefail
 
 ui_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_dir="$(cd "$ui_dir/.." && pwd)"
 port="${UNPUB_E2E_PORT:-4123}"
 base_url="http://localhost:$port"
+screenshots="${UNPUB_E2E_SCREENSHOTS:-}"
 admin_email="admin@e2e.example"
 admin_password="e2e-admin-password"
+if [[ -n "$screenshots" ]]; then
+  admin_email="ada.lovelace@company.example"
+fi
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/unpub-e2e.XXXXXX")"
 mongo_container=""
@@ -82,6 +91,16 @@ ui:
 logging:
   level: warning
 YAML
+if [[ -n "$screenshots" ]]; then
+  # The spec runs a receiver on 127.0.0.1, and one webhook points at a closed
+  # port so that its deliveries fail at the first attempt.
+  cat >>"$work/unpub.yaml" <<YAML
+webhooks:
+  allowHttp: true
+  allowPrivateNetworks: true
+  maxAttempts: 1
+YAML
+fi
 
 log "Starting the server on $base_url"
 (cd "$repo_dir/unpub" && dart pub get --enforce-lockfile >/dev/null)
@@ -93,6 +112,17 @@ for _ in $(seq 1 120); do
   sleep 0.5
 done
 curl -fsS "$base_url/readyz" >/dev/null
+
+if [[ -n "$screenshots" ]]; then
+  log "Taking the screenshots"
+  cd "$ui_dir"
+  UNPUB_E2E_BASE_URL="$base_url" \
+    UNPUB_E2E_ADMIN_EMAIL="$admin_email" \
+    UNPUB_E2E_ADMIN_PASSWORD="$admin_password" \
+    UNPUB_E2E_SCREENSHOTS=1 \
+    npx playwright test --project=screenshots "$@"
+  exit 0
+fi
 
 log "Publishing the fixture package"
 jar="$work/cookies"

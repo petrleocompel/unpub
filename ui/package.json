@@ -12,6 +12,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest",
     "test:e2e": "./e2e/run.sh",
+    "screenshots": "UNPUB_E2E_SCREENSHOTS=1 ./e2e/run.sh",
     "api:types": "openapi-typescript ../docs/openapi.yaml -o src/api/schema.d.ts && prettier --write src/api/schema.d.ts",
     "api:check": "openapi-typescript ../docs/openapi.yaml 2>/dev/null | prettier --stdin-filepath src/api/schema.d.ts | diff -u src/api/schema.d.ts - && echo 'src/api/schema.d.ts is up to date'"
   },

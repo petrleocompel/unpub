@@ -129,8 +129,9 @@ test('the classic pages still work', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'e2e_demo' }).first()).toBeVisible()
 })
 
-// `UNPUB_E2E_SCREENSHOT=$PWD/../assets/screenshot.png npm run test:e2e`
-// refreshes the screenshot of the README.
+// `UNPUB_E2E_SCREENSHOT=/tmp/list.png npm run test:e2e` takes the package
+// list with the fixture only. The README picture comes from the seeded
+// registry of `npm run screenshots` instead.
 test('screenshot of the package list', async ({ page }) => {
   const out = process.env.UNPUB_E2E_SCREENSHOT
   test.skip(!out, 'Set UNPUB_E2E_SCREENSHOT to the file to write')
