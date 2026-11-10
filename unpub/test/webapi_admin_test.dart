@@ -322,6 +322,24 @@ metrics:
         await WebhookStore(harness.db).enqueue([hook],
             event: 'package.published', eventId: 'e$i', payload: '{}');
       }
+      final second = await send('POST', '/webapi/webhooks', as: browser, json: {
+        'url': 'http://127.0.0.1:9/other',
+        'events': ['package.deleted'],
+      });
+      final secondId = second.json['webhook']['id'] as String;
+      await harness.db.collection('webhook_deliveries').updateOne({
+        'eventId': 'e0'
+      }, {
+        r'$set': {'status': 'failed'}
+      });
+      final counted = await send('GET', '/webapi/webhooks', as: browser);
+      final byId = {
+        for (final item in counted.json['items'] as List)
+          item['id']: item['deliveries'],
+      };
+      expect(byId[id], {'pending': 2, 'succeeded': 0, 'failed': 1});
+      expect(byId[secondId], {'pending': 0, 'succeeded': 0, 'failed': 0});
+
       final page = await send(
           'GET', '/webapi/webhooks/$id/deliveries?size=2&page=2',
           as: browser);

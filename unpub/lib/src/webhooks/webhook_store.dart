@@ -462,16 +462,42 @@ class WebhookStore {
   }
 
   /// Counts the deliveries of [webhookId] by status.
-  Future<Map<String, int>> statusCounts(String webhookId) async {
-    final counts = <String, int>{};
-    for (final status in [
-      DeliveryStatus.pending,
-      DeliveryStatus.succeeded,
-      DeliveryStatus.failed,
-    ]) {
-      counts[status] = (await _deliveries
-              .modernCount(filter: {'webhookId': webhookId, 'status': status}))
-          .count;
+  Future<Map<String, int>> statusCounts(String webhookId) async =>
+      (await statusCountsOf([webhookId]))[webhookId]!;
+
+  /// Counts the deliveries of each of [webhookIds] by status, in one
+  /// aggregation: `pending`, `succeeded` and `failed`, zero included.
+  Future<Map<String, Map<String, int>>> statusCountsOf(
+      Iterable<String> webhookIds) async {
+    final ids = webhookIds.toSet().toList();
+    final counts = {
+      for (final id in ids)
+        id: {
+          DeliveryStatus.pending: 0,
+          DeliveryStatus.succeeded: 0,
+          DeliveryStatus.failed: 0,
+        },
+    };
+    if (ids.isEmpty) return counts;
+    final groups = _deliveries.modernAggregate([
+      {
+        r'$match': {
+          'webhookId': {r'$in': ids},
+        },
+      },
+      {
+        r'$group': {
+          '_id': {'webhookId': r'$webhookId', 'status': r'$status'},
+          'count': {r'$sum': 1},
+        },
+      },
+    ]);
+    await for (final group in groups) {
+      final key = group['_id'] as Map;
+      final byStatus = counts[key['webhookId']];
+      final status = key['status'];
+      if (byStatus == null || status is! String) continue;
+      byStatus[status] = (group['count'] as num).toInt();
     }
     return counts;
   }

@@ -89,9 +89,13 @@ class AdminApiRoutes {
       shelf.Request req, WebhookService hooks, Principal principal) async {
     final all = await hooks.store.list();
     final (:page, :size) = pageParameters(req.url.queryParameters);
+    final shown = pageOf(all, page: page, size: size);
+    final counts =
+        await hooks.store.statusCountsOf([for (final hook in shown) hook.id]);
     return okWithJson({
       ...pageJson([
-        for (final hook in pageOf(all, page: page, size: size)) hook.toJson(),
+        for (final hook in shown)
+          {...hook.toJson(), 'deliveries': counts[hook.id]},
       ], page: page, size: size, total: all.length),
       'enabled': hooks.config.enabled,
     }, headers: _noStore);

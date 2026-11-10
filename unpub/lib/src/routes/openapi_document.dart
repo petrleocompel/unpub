@@ -1959,13 +1959,31 @@ components:
             items:
               type: array
               items:
-                $ref: '#/components/schemas/Webhook'
+                allOf:
+                  - $ref: '#/components/schemas/Webhook'
+                  - type: object
+                    required: [deliveries]
+                    properties:
+                      deliveries:
+                        $ref: '#/components/schemas/DeliveryCounts'
             enabled:
               type: boolean
               description: '`webhooks.enabled`: whether events are queued and delivered.'
     DeliveryCounts:
       type: object
-      description: How many deliveries have each status.
+      description: How many deliveries have each status, zero included.
+      required: [pending, succeeded, failed]
+      examples:
+        - pending: 1
+          succeeded: 41
+          failed: 2
+      properties:
+        pending:
+          type: integer
+        succeeded:
+          type: integer
+        failed:
+          type: integer
       additionalProperties:
         type: integer
     Delivery:
