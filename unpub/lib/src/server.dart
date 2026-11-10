@@ -135,6 +135,7 @@ class UnpubServer {
         metrics: metrics,
       );
       final http = await app.serve(config.server.host, config.server.port);
+      if (config.metrics.enabled) app.metricsSources.warmUp();
       final reclaimer = TemporaryReclaimer(packageStore,
           references: MongoArchiveReferences(db))
         ..start();

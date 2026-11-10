@@ -148,12 +148,16 @@ class MetricsSnapshot {
   final int? packages;
   final int? versions;
   final int? storageBytes;
+
+  /// When [storageBytes] was measured.
+  final DateTime? storageMeasuredAt;
   final bool mongoUp;
 
   const MetricsSnapshot({
     this.packages,
     this.versions,
     this.storageBytes,
+    this.storageMeasuredAt,
     required this.mongoUp,
   });
 }
@@ -299,9 +303,15 @@ class Metrics {
       family(
           'unpub_storage_bytes',
           'gauge',
-          'Bytes held by the package store, measured at most every 10 '
-              'minutes.');
+          'Bytes held by the package store, measured in the background at '
+              'most every 10 minutes.');
       sample('unpub_storage_bytes', bytes);
+    }
+    if (snapshot.storageMeasuredAt case final at?) {
+      family('unpub_storage_measured_timestamp_seconds', 'gauge',
+          'When unpub_storage_bytes was measured, in seconds since the epoch.');
+      sample('unpub_storage_measured_timestamp_seconds',
+          at.millisecondsSinceEpoch ~/ 1000);
     }
     family('unpub_mongo_up', 'gauge', 'Whether MongoDB answered a ping.');
     sample('unpub_mongo_up', snapshot.mongoUp ? 1 : 0);
@@ -310,6 +320,58 @@ class Metrics {
 
   static List<String> _sorted(Map<String, int> counts) =>
       counts.keys.toList()..sort();
+}
+
+/// A value measured in the background, at most every [maxAge], so that
+/// reading it never waits for a measurement.
+class BackgroundValue<T> {
+  final Duration maxAge;
+  final Future<T> Function() compute;
+  final DateTime Function() clock;
+
+  /// Told about a measurement that failed.
+  final void Function(Object error, StackTrace stackTrace)? onError;
+
+  T? _value;
+  DateTime? _at;
+  Future<void>? _running;
+
+  BackgroundValue(this.compute,
+      {required this.maxAge, this.clock = DateTime.now, this.onError});
+
+  /// The last value measured and when, or null before the first measurement
+  /// completed. Starts a measurement, unless one is under way, when there is
+  /// no value yet or it is older than [maxAge]. A failed measurement keeps
+  /// the last value.
+  ({T value, DateTime at})? get current {
+    refresh();
+    final at = _at;
+    return at == null ? null : (value: _value as T, at: at);
+  }
+
+  /// Starts a measurement if the value is missing or old and none is under
+  /// way.
+  void refresh() {
+    if (_running != null) return;
+    final at = _at;
+    if (at != null && clock().difference(at) < maxAge) return;
+    _running = _measure();
+  }
+
+  Future<void> _measure() async {
+    try {
+      final value = await compute();
+      _value = value;
+      _at = clock();
+    } catch (error, stackTrace) {
+      onError?.call(error, stackTrace);
+    } finally {
+      _running = null;
+    }
+  }
+
+  /// Completes when the measurement under way, if any, has.
+  Future<void> get idle => _running ?? Future<void>.value();
 }
 
 /// A value that is computed again only once it is older than [maxAge].

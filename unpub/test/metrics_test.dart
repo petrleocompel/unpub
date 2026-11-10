@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:shelf/shelf.dart' as shelf;
@@ -43,6 +44,21 @@ Map<String, List<(Map<String, String>, String)>> parse(String text) {
   return samples;
 }
 
+/// A file store whose size is known only once [gate] completes.
+class _SlowStore extends FileStore {
+  final Completer<void> gate;
+  var measured = 0;
+
+  _SlowStore(super.baseDir, this.gate);
+
+  @override
+  Future<int?> totalSize() async {
+    measured++;
+    await gate.future;
+    return super.totalSize();
+  }
+}
+
 void main() {
   final h = Harness()..install();
 
@@ -75,6 +91,9 @@ void main() {
   group('the exposition', () {
     test('is valid text format 0.0.4', () async {
       await h.publish('alpha', '1.0.0', bearer: ownerToken);
+      // The first scrape starts measuring the store.
+      await scrape();
+      await h.app.metricsSources.storage.idle;
       final reply = await scrape();
       expect(reply.status, HttpStatus.ok);
       expect(reply.headers['content-type'],
@@ -87,6 +106,10 @@ void main() {
       expect(samples['unpub_versions']!.single.$2, '1');
       expect(
           int.parse(samples['unpub_storage_bytes']!.single.$2), greaterThan(0));
+      final measuredAt = int.parse(
+          samples['unpub_storage_measured_timestamp_seconds']!.single.$2);
+      expect(DateTime.now().millisecondsSinceEpoch ~/ 1000 - measuredAt,
+          inInclusiveRange(0, 60));
       expect(samples['unpub_publishes_total']!.single.$2, '1');
       expect(int.parse(samples['process_start_time_seconds']!.single.$2),
           greaterThan(1700000000));
@@ -318,6 +341,65 @@ void main() {
       expect(() => Config.parse('metrics:\n  token: "has space"\n'),
           throwsA(isA<ConfigException>()));
     });
+  });
+
+  test('a slow package store does not hold up a scrape', () async {
+    final gate = Completer<void>();
+    final store = _SlowStore(h.storage.path, gate);
+    final app = appWith('', packageStore: store);
+    await h.publish('alpha', '1.0.0', bearer: ownerToken, using: app);
+
+    final watch = Stopwatch()..start();
+    final scrapes = await Future.wait([
+      for (var i = 0; i < 3; i++) scrape(using: app),
+    ]);
+    expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+    for (final reply in scrapes) {
+      expect(reply.status, HttpStatus.ok);
+      final samples = parse(reply.body);
+      // Nothing measured yet: the gauge is left out, the rest is there.
+      expect(samples.containsKey('unpub_storage_bytes'), isFalse);
+      expect(samples['unpub_packages']!.single.$2, '1');
+    }
+    expect(store.measured, 1, reason: 'one measurement at a time');
+
+    gate.complete();
+    await app.metricsSources.storage.idle;
+    final samples = parse((await scrape(using: app)).body);
+    expect(
+        int.parse(samples['unpub_storage_bytes']!.single.$2), greaterThan(0));
+    expect(samples.containsKey('unpub_storage_measured_timestamp_seconds'),
+        isTrue);
+    expect(store.measured, 1, reason: 'the value is fresh');
+  });
+
+  test('a background value keeps the last measurement', () async {
+    var now = DateTime(2026);
+    var computed = 0;
+    var fail = false;
+    final errors = <Object>[];
+    final value = BackgroundValue<int>(() async {
+      if (fail) throw StateError('down');
+      return ++computed;
+    },
+        maxAge: const Duration(minutes: 10),
+        clock: () => now,
+        onError: (e, _) => errors.add(e));
+    expect(value.current, isNull);
+    await value.idle;
+    expect(value.current!.value, 1);
+    now = now.add(const Duration(minutes: 11));
+    // Old: still served while the next measurement runs.
+    expect(value.current!.value, 1);
+    await value.idle;
+    expect(value.current!.value, 2);
+    expect(value.current!.at, now);
+    now = now.add(const Duration(minutes: 11));
+    fail = true;
+    expect(value.current!.value, 2);
+    await value.idle;
+    expect(value.current!.value, 2);
+    expect(errors, hasLength(1));
   });
 
   test('a cached value is computed again only when old', () async {

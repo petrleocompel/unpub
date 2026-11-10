@@ -19,6 +19,7 @@ final _log = Logger('unpub.metrics');
 const _countsMaxAge = Duration(seconds: 30);
 
 /// How long the storage size is reused, as measuring it lists everything.
+/// It is measured in the background, so a scrape never waits for it.
 const storageSizeMaxAge = Duration(minutes: 10);
 
 const _probeTimeout = Duration(seconds: 5);
@@ -31,23 +32,31 @@ class MetricsSources {
 
   late final _counts = CachedValue(app.metaStore.counts, maxAge: _countsMaxAge);
 
-  late final _storage =
-      CachedValue(app.packageStore.totalSize, maxAge: storageSizeMaxAge);
+  late final storage = BackgroundValue<int?>(app.packageStore.totalSize,
+      maxAge: storageSizeMaxAge,
+      onError: (error, stackTrace) =>
+          _log.fine('measuring the package store failed: $error'));
+
+  /// Starts measuring the package store, as the server does when it starts,
+  /// so that the first scrape already has the gauge.
+  void warmUp() => storage.refresh();
 
   /// The gauges now. A store that fails leaves its gauges out, and Mongo
-  /// down.
+  /// down. The storage size is the last one measured, left out until the
+  /// first measurement completes.
   Future<MetricsSnapshot> snapshot() async {
+    final storage = this.storage.current;
     final mongoUp = await _probe(() async {
           await app.metaStore.checkHealth();
           return true;
         }) ??
         false;
     final counts = mongoUp ? await _probe(_counts.get) : null;
-    final storage = await _probe(_storage.get);
     return MetricsSnapshot(
       packages: counts?.packages,
       versions: counts?.versions,
-      storageBytes: storage,
+      storageBytes: storage?.value,
+      storageMeasuredAt: storage?.value == null ? null : storage?.at,
       mongoUp: mongoUp,
     );
   }
