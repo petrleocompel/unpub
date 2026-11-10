@@ -1,5 +1,5 @@
-import { useId, useState, type FormEvent } from 'react'
-import { ChevronRight, Loader2, RefreshCw, RotateCw, Send, Trash2 } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { ChevronRight, Loader2, RefreshCw, RotateCw, Send, Trash2, X } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { errorMessage } from '@/api/client'
 import {
@@ -37,7 +37,7 @@ import { formatDate, formatDateTime, formatRelative } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import { useTitle } from '@/lib/use-title'
 import { AdminHeading } from './layout'
-import { settingDays } from './settings'
+import { settingDays, settingNumber } from './settings'
 import { DeliveryCounts, WebhookFields } from './webhooks'
 
 function Breadcrumb({ label }: { label: string }) {
@@ -296,15 +296,22 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
   const settings = useSettings()
   const [open, setOpen] = useState<string | null>(null)
   const retention = settingDays(settings.data, 'webhooks.retentionDays')
+  const maxAttempts = settingNumber(settings.data, 'webhooks.maxAttempts')
   const selected = deliveries.data?.items.find((delivery) => delivery.id === open)
+  const close = (id: string) => {
+    setOpen(null)
+    document.getElementById(`delivery-${id}`)?.focus()
+  }
 
   return (
     <>
       <Panel aria-labelledby="deliveries-title">
         <PanelHeader title="Deliveries" titleId="deliveries-title">
           <div className="flex flex-wrap items-center gap-3">
-            {!!retention && (
-              <span className="text-xs text-muted-foreground">Kept {retention} days</span>
+            {retention !== null && (
+              <span className="text-xs text-muted-foreground">
+                {retention === 0 ? 'Kept forever' : `Kept ${retention} days`}
+              </span>
             )}
             <DeliveryCounts counts={counts} />
             <Button
@@ -367,6 +374,7 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
                     <TableRow key={delivery.id} data-expanded={expanded || undefined}>
                       <TableCell>
                         <button
+                          id={`delivery-${delivery.id}`}
                           type="button"
                           aria-expanded={expanded}
                           aria-controls={`payload-${delivery.id}`}
@@ -386,7 +394,11 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
                       <TableCell className="font-mono text-xs">
                         {delivery.package ? `${delivery.package} ${delivery.version ?? ''}` : '–'}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{delivery.attempt}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap tabular-nums">
+                        {maxAttempts !== null && delivery.attempt <= maxAttempts
+                          ? `${delivery.attempt} of ${maxAttempts}`
+                          : delivery.attempt}
+                      </TableCell>
                       <TableCell>
                         <DeliveryStatusBadge status={delivery.status} />
                       </TableCell>
@@ -443,14 +455,32 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
           </>
         )}
       </Panel>
-      {selected && <DeliveryPayload webhook={webhook} delivery={selected} />}
+      {selected && (
+        <DeliveryPayload webhook={webhook} delivery={selected} onClose={() => close(selected.id)} />
+      )}
     </>
   )
 }
 
-/** The request of a delivery as it was sent: its headers and its body. */
-function DeliveryPayload({ webhook, delivery }: { webhook: Webhook; delivery: Delivery }) {
+/**
+ * The request of a delivery as it was sent: its headers and its body. It
+ * takes the focus when it opens, below the table, and gives it back to the
+ * row when closed.
+ */
+function DeliveryPayload({
+  webhook,
+  delivery,
+  onClose,
+}: {
+  webhook: Webhook
+  delivery: Delivery
+  onClose: () => void
+}) {
   const { config } = useSession()
+  const panel = useRef<HTMLElement>(null)
+  useEffect(() => {
+    panel.current?.focus()
+  }, [delivery.id])
   const path = (() => {
     try {
       const url = new URL(webhook.url)
@@ -468,7 +498,19 @@ function DeliveryPayload({ webhook, delivery }: { webhook: Webhook; delivery: De
     'X-Unpub-Signature: sha256=<HMAC-SHA256 of the body>',
   ].join('\n')
   return (
-    <Panel id={`payload-${delivery.id}`} aria-labelledby={`payload-${delivery.id}-title`}>
+    <Panel
+      ref={panel}
+      id={`payload-${delivery.id}`}
+      aria-labelledby={`payload-${delivery.id}-title`}
+      tabIndex={-1}
+      className="scroll-mt-20"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation()
+          onClose()
+        }
+      }}
+    >
       <PanelHeader
         title={`Delivery ${delivery.id.slice(0, 8)} · payload`}
         titleId={`payload-${delivery.id}-title`}
@@ -480,6 +522,9 @@ function DeliveryPayload({ webhook, delivery }: { webhook: Webhook; delivery: De
               next attempt {formatRelative(delivery.nextAt)}
             </span>
           )}
+          <Button variant="ghost" size="icon-xs" aria-label="Close the payload" onClick={onClose}>
+            <X aria-hidden />
+          </Button>
         </span>
       </PanelHeader>
       <PanelBody className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

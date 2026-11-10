@@ -13,15 +13,21 @@ import { AdminHeading } from './layout'
 type Section = Settings['sections'][number]
 
 /**
- * A number of days from the settings, such as `audit.retentionDays`, whose
- * value reads `30` or `0 (kept forever)`. Null while unknown.
+ * A whole number from the settings, such as `webhooks.maxAttempts` or a
+ * number of days like `audit.retentionDays`, whose value reads `30` or
+ * `0 (kept forever)`. Null while unknown.
  */
-export function settingDays(settings: Settings | undefined, key: string) {
+export function settingNumber(settings: Settings | undefined, key: string) {
   const value = settings?.sections
     .flatMap((section) => section.settings)
     .find((setting) => setting.key === key)?.value
-  const days = value === undefined ? NaN : Number.parseInt(value, 10)
-  return Number.isInteger(days) ? days : null
+  const number = value === undefined ? NaN : Number.parseInt(value, 10)
+  return Number.isInteger(number) ? number : null
+}
+
+/** A number of days from the settings, see [settingNumber]. */
+export function settingDays(settings: Settings | undefined, key: string) {
+  return settingNumber(settings, key)
 }
 
 /** The environment variable, breakable after each underscore. */
