@@ -22,7 +22,7 @@ test.afterEach(() => {
 async function login(page: Page) {
   await page.goto('/login?next=/account')
   await page.getByLabel('Email').fill(adminEmail)
-  await page.getByLabel('Password').fill(adminPassword)
+  await page.getByLabel('Password', { exact: true }).fill(adminPassword)
   await page.getByRole('button', { name: 'Log in' }).click()
   await expect(page).toHaveURL(/\/account$/)
 }
@@ -101,4 +101,17 @@ test('the classic pages still work', async ({ page }) => {
   const response = await page.goto('/classic/packages')
   expect(response?.status()).toBe(200)
   await expect(page.getByRole('link', { name: 'e2e_demo' }).first()).toBeVisible()
+})
+
+// `UNPUB_E2E_SCREENSHOT=$PWD/../assets/screenshot.png npm run test:e2e`
+// refreshes the screenshot of the README.
+test('screenshot of the package list', async ({ page }) => {
+  const out = process.env.UNPUB_E2E_SCREENSHOT
+  test.skip(!out, 'Set UNPUB_E2E_SCREENSHOT to the file to write')
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'e2e_demo' })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await page.screenshot({ path: out, animations: 'disabled' })
 })
