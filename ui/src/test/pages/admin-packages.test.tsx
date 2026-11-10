@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
+import { shortUploaders } from '@/pages/admin/packages'
 import * as f from '../fixtures'
 import { renderApp, where } from '../render'
 import { capture, server, url } from '../server'
@@ -26,7 +27,16 @@ describe('package moderation', () => {
     expect(link).toHaveAttribute('href', '/admin/packages/my_company_core')
     const row = link.closest('tr')!
     expect(within(row).getByText('7')).toBeInTheDocument()
-    expect(within(row).getByText('a@x.example, b@x.example')).toBeInTheDocument()
+    expect(within(row).getByText('a, b')).toHaveAttribute('title', 'a@x.example, b@x.example')
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    )
+  })
+
+  it('shortens long uploader lists', () => {
+    expect(shortUploaders(['a@x.example'])).toBe('a')
+    expect(shortUploaders(['a@x.example', 'b@x.example', 'c@x.example'])).toBe('a +2')
   })
 
   it('deletes a package only after typing its name', async () => {
