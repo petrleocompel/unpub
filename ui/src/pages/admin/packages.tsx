@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   ArrowDown,
   ArrowLeftRight,
   Ban,
+  ChevronDown,
   ChevronRight,
   ExternalLink,
   Search,
@@ -34,6 +35,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDate, formatNumber } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useDebouncedParam } from '@/lib/use-debounced-param'
 import { useTitle } from '@/lib/use-title'
 import {
@@ -47,10 +49,72 @@ import {
 import { packagePath } from '@/pages/package'
 import { AdminHeading } from './layout'
 
-/** The uploaders of a list row, short: names before the @, the rest counted. */
+/**
+ * The uploaders of a list row, short: names before the @, the rest counted.
+ * A name two uploaders share keeps its domain.
+ */
 export function shortUploaders(uploaders: string[]) {
-  const names = uploaders.map((email) => email.split('@')[0] ?? email)
+  const local = (email: string) => email.split('@')[0] ?? email
+  const names = uploaders.map((email) =>
+    uploaders.some((other) => other !== email && local(other) === local(email))
+      ? email
+      : local(email),
+  )
   return names.length <= 2 ? names.join(', ') : `${names[0]} +${names.length - 1}`
+}
+
+/**
+ * The uploaders of a list row: the short list as a button that shows every
+ * full address under it, for keyboard and touch alike.
+ */
+function UploaderList({ uploaders }: { uploaders: string[] }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="grid justify-items-start gap-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+        className="inline-flex max-w-full items-center gap-1 rounded-[5px] text-left hover:text-foreground"
+      >
+        <span className="truncate">{shortUploaders(uploaders)}</span>
+        <span className="sr-only">
+          , {open ? 'hide' : 'show'} the {uploaders.length === 1 ? 'address' : 'addresses'}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            'size-3 shrink-0 transition-transform motion-reduce:transition-none',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && (
+        <ul id={id} className="grid gap-0.5 text-xs whitespace-normal">
+          {uploaders.map((email) => (
+            <li key={email} className="break-all">
+              {email}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** An address that may wrap after its name, at the @. */
+function Address({ email }: { email: string }) {
+  const at = email.indexOf('@')
+  if (at < 0) return <>{email}</>
+  return (
+    <>
+      {email.slice(0, at)}
+      <wbr />
+      {email.slice(at)}
+    </>
+  )
 }
 
 export function AdminPackagesPage() {
@@ -146,9 +210,7 @@ export function AdminPackagesPage() {
                       {item.uploaders.length === 0 ? (
                         'None'
                       ) : (
-                        <span className="block truncate" title={item.uploaders.join(', ')}>
-                          {shortUploaders(item.uploaders)}
-                        </span>
+                        <UploaderList uploaders={item.uploaders} />
                       )}
                     </TableCell>
                     <TableCell>
@@ -313,8 +375,8 @@ function PackageModeration({ pkg }: { pkg: Package }) {
                   <TableCell>
                     <RelativeTime value={version.published} />
                   </TableCell>
-                  <TableCell className="max-w-56 truncate text-muted-foreground">
-                    {version.uploader?.split('@')[0] ?? '–'}
+                  <TableCell className="whitespace-normal text-muted-foreground">
+                    {version.uploader ? <Address email={version.uploader} /> : '–'}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
