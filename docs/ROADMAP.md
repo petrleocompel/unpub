@@ -135,6 +135,7 @@ Goal: the client in `ui/` looks like `docs/design`, screen for screen, in light 
 - No new runtime dependencies, no inline styles, no raw colours: everything through the tokens. CSP unchanged. Accessibility as drawn: roles, labels, `aria-current`, `aria-sort`, `aria-busy`, the focus ring everywhere.
 - Tests stay green and follow the markup where roles or labels change; the Playwright smoke run stays. `assets/screenshot.png` is replaced with the new package list.
 - Review: Codex and Cursor on each part, fixes, Codex re-check, as in phase 6.
+- The implemented screens, on a seeded registry at 1440 px and 390 px in light and dark, are in [`docs/screenshots/`](screenshots/README.md) (`npm run screenshots` in `ui/`).
 
 ## Out of scope
 

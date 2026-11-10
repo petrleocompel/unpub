@@ -607,7 +607,9 @@ With `auth.readAccess: authenticated`, `index.html`, the files of the build, `GE
 
 **Developing.** The client lives in `ui/` (Node 22, npm). Run a server on port 4000, then `npm ci` and `npm run dev` in `ui/`: Vite serves the client on `http://localhost:5173` with hot reload and proxies `/webapi`, `/api`, the archives, `/badge`, `/static` and `/classic` to the server. The API types in `ui/src/api/schema.d.ts` are generated from `docs/openapi.yaml` with `npm run api:types`, and CI fails when they are out of date. `npm test` runs the page tests (Vitest, Testing Library, MSW), and `npm run test:e2e` builds the client, serves it from the Dart server with MongoDB and drives it with Playwright, failing on any console error such as a Content-Security-Policy violation. Colours, radii and fonts are CSS variables in `ui/src/index.css`, so a restyle is a change of theme. See [ui/README.md](ui/README.md).
 
-_Screenshot of the package page: to be added with the visual design (`docs/screenshots/package.png`)._
+![The package page of the web client](docs/screenshots/04-package-readme-1440-light.png)
+
+Every screen, at 1440 px and 390 px in light and dark, is in [docs/screenshots](docs/screenshots/README.md).
 
 ## Web UI
 
