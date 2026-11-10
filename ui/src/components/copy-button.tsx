@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
@@ -32,6 +32,9 @@ export function CopyButton({
   variant?: 'ghost' | 'default'
 }) {
   const [copied, setCopied] = useState(false)
+  // "Copied" for 2 s; a new copy restarts it, unmounting cancels it.
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
   const withText = size === 'sm' || size === 'xs'
   return (
     <Button
@@ -49,7 +52,8 @@ export function CopyButton({
         if (await copyText(text)) {
           setCopied(true)
           toast.success('Copied to the clipboard', label)
-          window.setTimeout(() => setCopied(false), 2000)
+          window.clearTimeout(timer.current)
+          timer.current = window.setTimeout(() => setCopied(false), 2000)
         } else {
           toast.error('Could not copy', 'Select the text and copy it by hand.')
         }
