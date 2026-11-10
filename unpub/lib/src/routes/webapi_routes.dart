@@ -7,6 +7,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import '../app.dart';
 import '../models.dart';
+import '../store/meta_store.dart' show maxSearchPage, maxSearchSize;
 import '../redact.dart';
 import '../utils.dart';
 import '../validation.dart';
@@ -162,8 +163,9 @@ class WebapiRoutes {
 
   Future<shelf.Response> getPackages(shelf.Request req) async {
     var params = req.requestedUri.queryParameters;
-    var size = int.tryParse(params['size'] ?? '') ?? 10;
-    var page = int.tryParse(params['page'] ?? '') ?? 0;
+    // Zero-based, as the former web UI sent it.
+    var size = (parsePageNumber(params['size']) ?? 10).clamp(1, maxSearchSize);
+    var page = (parsePageNumber(params['page']) ?? 0).clamp(0, maxSearchPage);
     var sort = params['sort'] ?? 'download';
     var q = params['q'];
 

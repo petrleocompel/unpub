@@ -32,7 +32,10 @@ info:
     A path that no route matches answers 404 with the text `Route not found`.
 
     **Lists** take `page`, one-based, and `size`, and answer
-    `{"items": [...], "page": 1, "size": 20, "total": 42}`.
+    `{"items": [...], "page": 1, "size": 20, "total": 42}`. Both are bounded
+    (`page` at most 100000, `size` at most 100, 200 for the audit log) and,
+    except on the audit log, read leniently: a value out of range is moved
+    into it, so a page past the end is an empty page, never an error.
   license:
     name: BSD-3-Clause
     url: https://github.com/petrleocompel/unpub/blob/master/LICENSE
@@ -480,7 +483,8 @@ paths:
       deprecated: true
       summary: The package list of the former web UI.
       description: >-
-        Kept for scripts. `page` is zero-based, `size` defaults to 10, `q`
+        Kept for scripts. `page` is zero-based and at most 99999, `size`
+        defaults to 10 and is at most 1000, `q`
         may be `email:<uploader>` or `dependency:<name>`, discontinued
         packages are left out unless `discontinued=true`. Use
         `/webapi/v2/packages`.
@@ -711,6 +715,10 @@ paths:
         - $ref: '#/components/parameters/Page'
         - name: size
           in: query
+          description: >-
+            Unlike the other lists, a `size` or `page` that is not a positive
+            integer, or a `size` above 200, is refused with 400
+            `invalid_request`. A `page` above 100000 is 100000.
           schema:
             type: integer
             minimum: 1
@@ -1199,14 +1207,21 @@ components:
     Page:
       name: page
       in: query
-      description: One-based.
+      description: >-
+        One-based, at most 100000. Read leniently: a value that is not a
+        positive integer is 1, a larger one is 100000, which is past the end of
+        any list and so answers an empty page with `page: 100000`.
       schema:
         type: integer
         minimum: 1
+        maximum: 100000
         default: 1
     Size:
       name: size
       in: query
+      description: >-
+        Read leniently: a value that is not a positive integer is the default,
+        a larger one is 100.
       schema:
         type: integer
         minimum: 1

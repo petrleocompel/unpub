@@ -1,4 +1,7 @@
 import '../../models.dart';
+import '../../paging.dart';
+
+export '../../paging.dart' show maxPageSize;
 import '../../store/meta_store.dart';
 import '../html.dart';
 import '../layout.dart';
@@ -6,7 +9,6 @@ import '../pubspec_info.dart';
 
 /// Default and largest number of packages on a page.
 const defaultPageSize = 20;
-const maxPageSize = 100;
 
 /// The search, filters and page asked for in the query of a list request.
 class PackageListRequest {
@@ -32,8 +34,8 @@ class PackageListRequest {
   /// default rather than failing the page.
   factory PackageListRequest.fromQuery(Map<String, String> query) {
     final text = query['q']?.trim();
-    final size = int.tryParse(query['size'] ?? '') ?? defaultPageSize;
-    final page = int.tryParse(query['page'] ?? '') ?? 1;
+    final size = parsePageNumber(query['size']) ?? defaultPageSize;
+    final page = parsePageNumber(query['page']) ?? 1;
     final search = text == null || text.isEmpty ? null : text;
     final sort = PackageSort.values.asNameMap()[query['sort']];
     return PackageListRequest(
@@ -45,7 +47,7 @@ class PackageListRequest {
               ? PackageSort.downloads
               : sort)
           : sort ?? PackageSort.relevance,
-      page: page.clamp(1, maxSearchPage + 1),
+      page: boundedPage(page),
       size: size.clamp(1, maxPageSize),
     );
   }

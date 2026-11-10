@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:unpub/src/paging.dart' show maxPage;
 import 'package:unpub/unpub.dart';
 
 import 'harness.dart';
@@ -336,6 +337,54 @@ metrics:
       expect(audit.json['items'], hasLength(1));
       expect(audit.json['total'], greaterThan(1));
     });
+  });
+
+  test('extreme pages are bounded on every paged route', () async {
+    await harness.user('admin@example.com', Role.admin);
+    final browser = await harness.apiLogIn('admin@example.com');
+    final created = await send('POST', '/webapi/webhooks', as: browser, json: {
+      'url': 'http://127.0.0.1:9/hook',
+      'events': ['package.published'],
+    });
+    final id = created.json['webhook']['id'] as String;
+    const huge = '922337203685477581';
+    for (final path in [
+      '/webapi/users',
+      '/webapi/tokens',
+      '/webapi/webhooks',
+      '/webapi/webhooks/$id/deliveries',
+      '/webapi/audit',
+      '/webapi/v2/packages',
+    ]) {
+      for (final query in [
+        'page=$huge&size=100',
+        'page=$huge&size=$huge',
+        'page=99999999999999999999999&size=-$huge',
+        'page=100001',
+      ]) {
+        final reply = await send('GET', '$path?$query', as: browser);
+        if (path == '/webapi/audit' && query.contains('size=')) {
+          if (query.endsWith('size=100')) {
+            expect(reply.json['page'], maxPage);
+          } else {
+            // The audit log refuses a size out of range instead.
+            expect(reply.status, HttpStatus.badRequest);
+            expect(reply.json['error']['code'], 'invalid_request');
+          }
+          continue;
+        }
+        expect(reply.status, HttpStatus.ok, reason: '$path?$query');
+        expect(reply.json['items'], isEmpty, reason: '$path?$query');
+        expect(reply.json['page'], maxPage, reason: '$path?$query');
+        expect(reply.json['size'], inInclusiveRange(1, 200));
+      }
+    }
+    final last = await send('GET', '/webapi/users?page=100000', as: browser);
+    expect(last.json['page'], 100000);
+    // The former web UI route, zero-based.
+    final legacy = await send('GET', '/webapi/packages?page=$huge&size=$huge');
+    expect(legacy.status, HttpStatus.ok);
+    expect(legacy.json['data']['packages'], isEmpty);
   });
 
   group('every change of the client', () {

@@ -1,5 +1,6 @@
 import 'package:unpub/src/models.dart';
 
+import '../paging.dart';
 import '../utils.dart';
 import 'archive_references.dart';
 import 'object_locks.dart';
@@ -26,7 +27,7 @@ enum SdkFilter { dart, flutter }
 
 /// The last page a search reads, zero-based, and the most packages on one,
 /// so that the offset of a page stays small.
-const maxSearchPage = 99999;
+const maxSearchPage = maxPage - 1;
 const maxSearchSize = 1000;
 
 /// A search of the package list.

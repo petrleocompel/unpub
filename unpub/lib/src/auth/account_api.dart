@@ -10,7 +10,8 @@ import 'accounts.dart';
 import 'auth_middleware.dart';
 import 'authenticator.dart';
 import 'rate_limiter.dart';
-import '../routes/responses.dart' show pageJson, pageOf, pageParameters;
+import '../routes/responses.dart'
+    show pageJson, pageOf, pageOffset, pageParameters;
 
 /// Largest JSON body accepted, far above any legitimate request.
 const _maxJsonBytes = 64 * 1024;
@@ -326,8 +327,8 @@ class AccountApi {
     requireReadScope(_admin(request));
     final query = request.url.queryParameters;
     final (:page, :size) = pageParameters(query);
-    final (:users, :total) = await accounts.store
-        .searchUsers(text: query['q'], skip: (page - 1) * size, limit: size);
+    final (:users, :total) = await accounts.store.searchUsers(
+        text: query['q'], skip: pageOffset(page, size), limit: size);
     return _json(
         HttpStatus.ok,
         pageJson([for (final user in users) user.toJson()],

@@ -2,6 +2,7 @@ import 'package:logging/logging.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
 import '../logging.dart';
+import '../paging.dart';
 import 'mongo_indexes.dart';
 
 final auditCollection = 'audit';
@@ -209,7 +210,7 @@ class AuditQuery {
     int number(String name, int fallback) {
       final value = text(name);
       if (value == null) return fallback;
-      final parsed = int.tryParse(value);
+      final parsed = parsePageNumber(value);
       if (parsed == null || parsed < 1) {
         throw FormatException('$name must be a positive integer');
       }
@@ -226,7 +227,7 @@ class AuditQuery {
       package: text('package'),
       from: _time(text('from'), 'from', endOfDay: false),
       to: _time(text('to'), 'to', endOfDay: true),
-      page: number('page', 1),
+      page: boundedPage(number('page', 1)),
       size: size,
     );
   }
@@ -276,7 +277,7 @@ class AuditQuery {
 
   int get limit => size.clamp(1, maxAuditPageSize);
 
-  int get offset => (page.clamp(1, 1 << 20) - 1) * limit;
+  int get offset => pageOffset(page, limit);
 
   Map<String, Object> get filter {
     final actor = this.actor;

@@ -147,8 +147,8 @@ class AdminApiRoutes {
       Principal principal, String id) async {
     await hooks.require(id);
     final (:page, :size) = pageParameters(req.url.queryParameters);
-    final deliveries =
-        await hooks.store.deliveries(id, skip: (page - 1) * size, limit: size);
+    final deliveries = await hooks.store
+        .deliveries(id, skip: pageOffset(page, size), limit: size);
     return okWithJson(
         pageJson([for (final delivery in deliveries) delivery.toJson()],
             page: page,
