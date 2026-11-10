@@ -218,13 +218,9 @@ Html pagination({
     if (previous != null && page > previous + 1) {
       links.add(el('span', {'class': 'gap'}, '…'));
     }
-    links.add(el(
-        'a',
-        {
-          'href': href(page),
-          'aria-current': page == current ? 'page' : null,
-        },
-        '$page'));
+    links.add(page == current
+        ? el('span', {'aria-current': 'page'}, '$page')
+        : el('a', {'href': href(page)}, '$page'));
     previous = page;
   }
   if (current < pages) {

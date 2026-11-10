@@ -421,6 +421,40 @@ void main() {
       expect(listed(await fetch('GET', '/packages?size=0')), hasLength(1));
     });
 
+    test('page links keep the search and the filters', () async {
+      for (var i = 0; i < 5; i++) {
+        await publish('pkg_$i', '1.0.0', description: 'Matching words.');
+      }
+      await MongoStore(db).setDiscontinued('pkg_4', discontinued: true);
+      final page = await fetch('GET',
+          '/packages?q=matching&sdk=dart&discontinued=1&sort=name&size=2&page=2');
+      expect(listed(page), ['pkg_2', 'pkg_3']);
+      final nav = html_parser.parse(page.body).querySelector('.pagination')!;
+      final links = {
+        for (final link in nav.querySelectorAll('a'))
+          link.text: Uri.parse(link.attributes['href']!),
+      };
+      expect(links.keys, ['Previous', '1', '3', 'Next']);
+      for (final MapEntry(key: label, value: uri) in links.entries) {
+        expect(uri.path, '/packages');
+        expect(
+            uri.queryParameters,
+            {
+              'q': 'matching',
+              'sdk': 'dart',
+              'discontinued': '1',
+              'sort': 'name',
+              'size': '2',
+              if (label == 'Previous' || label == '1') ...{} else 'page': '3',
+            },
+            reason: label);
+      }
+      // The current page is not a link.
+      final current = nav.querySelector('[aria-current="page"]')!;
+      expect(current.localName, 'span');
+      expect(current.text, '2');
+    });
+
     test('a page or size out of range is an empty page, not an error',
         () async {
       await publish('alpha', '1.0.0');
