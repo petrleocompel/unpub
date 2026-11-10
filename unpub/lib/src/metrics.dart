@@ -15,24 +15,75 @@ const durationBuckets = [0.005, 0.025, 0.1, 0.5, 2.5, 10.0];
 /// The route label of a request that no route matched.
 const unmatchedRoute = 'unmatched';
 
+/// The method labels of requests. Any other method is counted as
+/// [otherMethod], so that a client cannot add series at will.
+const metricMethods = {
+  'GET',
+  'HEAD',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'OPTIONS',
+};
+
+const otherMethod = 'OTHER';
+
+/// The status label of a status outside 100 to 599.
+const otherStatus = 'other';
+
+/// The method label of [method].
+String methodLabel(String method) {
+  final upper = method.toUpperCase();
+  return metricMethods.contains(upper) ? upper : otherMethod;
+}
+
+/// The status label of [status].
+String statusLabel(int status) =>
+    status >= 100 && status <= 599 ? '$status' : otherStatus;
+
 /// A [Router] that remembers the pattern of every route, so that metrics can
 /// label a request by its route rather than its path, which keeps the number
 /// of series bounded.
 ///
-/// It only overrides the public [add], which every route module goes through,
-/// so extending the sealed class is safe. Composing instead would change the
-/// `addRoutes(Router)` of every module, [AccountApi] included.
+/// It only overrides the public [add], [all] and [mount], which every route
+/// module goes through, so extending the sealed class is safe. Composing
+/// instead would change the `addRoutes(Router)` of every module, [AccountApi]
+/// included. A request to a mounted handler is labeled with the prefix it is
+/// mounted at.
 class PatternRouter extends Router {
+  /// The verb, the label and the pattern of each route, in the order the
+  /// router tries them.
   final _patterns = <(String, String, RegExp)>[];
+
+  /// The prefix of the [mount] under way, which labels the routes it adds.
+  String? _mounting;
 
   PatternRouter({super.notFoundHandler});
 
   @override
   void add(String verb, String route, Function handler) {
     final upper = verb.toUpperCase();
-    _patterns.add((upper, route, _compile(route)));
-    if (upper == 'GET') _patterns.add(('HEAD', route, _compile(route)));
+    final label = _mounting ?? route;
+    _patterns.add((upper, label, _compile(route)));
+    if (upper == 'GET') _patterns.add(('HEAD', label, _compile(route)));
     super.add(verb, route, handler);
+  }
+
+  @override
+  void all(String route, Function handler) {
+    _patterns.add(('ALL', _mounting ?? route, _compile(route)));
+    super.all(route, handler);
+  }
+
+  @override
+  void mount(String prefix, shelf.Handler handler) {
+    _mounting = prefix;
+    try {
+      super.mount(prefix, handler);
+    } finally {
+      _mounting = null;
+    }
   }
 
   /// `<name>` matches a segment, `<name|regexp>` what the regexp matches, as
@@ -57,7 +108,9 @@ class PatternRouter extends Router {
   String? patternOf(String method, String path) {
     final upper = method.toUpperCase();
     for (final (verb, route, regexp) in _patterns) {
-      if (verb == upper && regexp.hasMatch(path)) return route;
+      if ((verb == upper || verb == 'ALL') && regexp.hasMatch(path)) {
+        return route;
+      }
     }
     return null;
   }
@@ -110,7 +163,7 @@ class MetricsSnapshot {
 class Metrics {
   final DateTime startedAt;
 
-  final _requests = <(String, String, int), int>{};
+  final _requests = <(String, String, String), int>{};
   final _durations = <String, _Histogram>{};
   var downloads = 0;
   var publishes = 0;
@@ -119,8 +172,10 @@ class Metrics {
 
   Metrics({DateTime? startedAt}) : startedAt = startedAt ?? DateTime.now();
 
+  /// Counts a request to [route], with [method] and [status] reduced to
+  /// [methodLabel] and [statusLabel].
   void countRequest(String route, String method, int status, Duration took) {
-    final key = (route, method, status);
+    final key = (route, methodLabel(method), statusLabel(status));
     _requests[key] = (_requests[key] ?? 0) + 1;
     _durations
         .putIfAbsent(route, _Histogram.new)
@@ -187,7 +242,7 @@ class Metrics {
       ..sort((a, b) => '${a.key}'.compareTo('${b.key}'));
     for (final MapEntry(key: (route, method, status), :value) in requests) {
       sample('unpub_http_requests_total', value,
-          {'route': route, 'method': method, 'status': '$status'});
+          {'route': route, 'method': method, 'status': status});
     }
 
     family('unpub_http_request_duration_seconds', 'histogram',

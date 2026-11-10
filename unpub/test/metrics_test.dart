@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:shelf_router/shelf_router.dart';
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart';
 
@@ -45,10 +47,12 @@ void main() {
   final h = Harness()..install();
 
   App appWith(String yaml,
-          {ReadAccess readAccess = ReadAccess.public, Metrics? metrics}) =>
+          {ReadAccess readAccess = ReadAccess.public,
+          Metrics? metrics,
+          PackageStore? packageStore}) =>
       App(
         metaStore: h.metaStore,
-        packageStore: h.packageStore,
+        packageStore: packageStore ?? h.packageStore,
         authenticator:
             ChainAuthenticator([ApiTokenAuthenticator(h.accountStore)]),
         readAccess: readAccess,
@@ -120,6 +124,80 @@ void main() {
               s.$1['route'] == '/api/packages/versions/newUpload' &&
               s.$1['method'] == 'POST'),
           isTrue);
+    });
+
+    test('bounds the method and status labels', () async {
+      for (final method in ['PROPFIND', 'BREW', 'X$adminToken', 'get']) {
+        await h.send(method, '/healthz');
+      }
+      await h.send('OPTIONS', '/api/packages/alpha');
+      final requests =
+          parse((await scrape()).body)['unpub_http_requests_total']!;
+      final methods = {for (final (labels, _) in requests) labels['method']};
+      expect(methods, containsAll(['GET', 'OPTIONS', otherMethod]));
+      expect(methods.difference({...metricMethods, otherMethod}), isEmpty);
+      expect(
+          requests.firstWhere((s) => s.$1['method'] == otherMethod).$1['route'],
+          unmatchedRoute);
+      // Unknown methods share one series per route and status.
+      expect(
+          requests
+              .where((s) =>
+                  s.$1['method'] == otherMethod && s.$1['status'] == '404')
+              .single
+              .$2,
+          '3');
+
+      final metrics = Metrics()
+        ..countRequest('/x', 'delete', 200, Duration.zero)
+        ..countRequest('/x', 'GET', 99, Duration.zero)
+        ..countRequest('/x', 'GET', 1000, Duration.zero);
+      final samples =
+          parse(metrics.render(const MetricsSnapshot(mongoUp: true)))[
+              'unpub_http_requests_total']!;
+      expect({
+        for (final s in samples) '${s.$1['method']} ${s.$1['status']}': s.$2
+      }, {
+        'DELETE 200': '1',
+        'GET $otherStatus': '2'
+      });
+    });
+
+    test('labels a mounted handler by its prefix', () async {
+      shelf.Response ok(shelf.Request request) => shelf.Response.ok('');
+      final router = PatternRouter()
+        ..get('/top', ok)
+        ..mount(
+            '/sub/',
+            (Router()..get('/x/<id>', (shelf.Request r, String id) => ok(r)))
+                .call)
+        ..mount('/flat', ok);
+      final metrics = Metrics();
+      final handler = const shelf.Pipeline()
+          .addMiddleware(metrics.middleware(router))
+          .addHandler(router.call);
+      for (final path in [
+        '/sub/x/1',
+        '/sub/x/2',
+        '/flat',
+        '/flat/deep/er',
+        '/top',
+        '/nothing',
+      ]) {
+        await handler(shelf.Request('GET', Uri.parse('http://h$path')));
+      }
+      expect(router.patternOf('POST', '/sub/anything'), '/sub/');
+      final samples =
+          parse(metrics.render(const MetricsSnapshot(mongoUp: true)))[
+              'unpub_http_requests_total']!;
+      expect({
+        for (final s in samples) s.$1['route']: s.$2
+      }, {
+        '/sub/': '2',
+        '/flat': '2',
+        '/top': '1',
+        unmatchedRoute: '1',
+      });
     });
 
     test('has cumulative duration buckets', () async {
