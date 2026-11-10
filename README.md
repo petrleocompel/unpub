@@ -2,9 +2,7 @@
 
 Unpub is a self-hosted private Dart Pub server for teams, with a simple web interface to search and view package information. It is a single binary that stores metadata in MongoDB and package archives on disk or in S3.
 
-> **This is a modernization in progress.** User accounts, roles, personal API tokens, publishing policies and an upstream proxy are in place. The plan for the new web UI and administration is in [docs/ROADMAP.md](docs/ROADMAP.md).
-
-![Screenshot](assets/screenshot.png)
+> **This is a modernization in progress.** User accounts, roles, personal API tokens, publishing policies, an upstream proxy and a server-rendered web UI with an admin panel are in place. What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Quick start with Docker
 
@@ -97,7 +95,7 @@ Each takes `--config <path>`. The last enabled administrator cannot be demoted o
 
 ### HTTP API
 
-JSON endpoints under `/webapi`, for scripts and the upcoming web UI. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409 or 429.
+JSON endpoints under `/webapi`, for scripts. The web UI does not use them. Errors look like `{"error": {"code": "...", "message": "..."}}`, with status 400, 401, 403, 404, 409 or 429.
 
 | Endpoint | Description |
 | --- | --- |
@@ -297,7 +295,7 @@ Without `storage.s3.accessKey`, S3 credentials come from the standard AWS variab
   | `ALLOWED_TOKENS` | `auth.readAccess: authenticated` and `auth.readTokens` |
 
 - A registry that set `ALLOWED_TOKENS` was private. It becomes world-readable unless you set `auth.readAccess: authenticated`, which is not the default.
-- The embedded web UI cannot send tokens, so it is unusable in `authenticated` mode, as it was with `ALLOWED_TOKENS`, until the new UI replaces it. Badges under `/badge/...` need a token in that mode too, so public badge images stop working.
+- In `authenticated` mode the web UI sends visitors to its login page, see [Web UI](#web-ui). Badges under `/badge/...` need a token in that mode too, so public badge images stop working.
 - A package without an `uploaders` list can now only be changed by an administrator.
 - Accounts: run `unpub migrate` once. It creates a placeholder `publisher` for every email in existing `uploaders`, and an `admin` for `auth.bootstrapEmail` if it appears there. Check first with `unpub migrate --dry-run`. Placeholders cannot log in, so give them a password with `unpub admin set-password` or a token with `unpub admin create-token`.
 - Run `unpub migrate` after creating your first administrator, or use `unpub admin create-user` afterwards: `auth.admin.*` is ignored once any user exists.
@@ -319,6 +317,8 @@ client_max_body_size 100m;
 ```
 
 Also set `server.trustForwardedFor: true`, or the login limit and the audit log see only the address of the proxy, and one user's failures would lock out everyone.
+
+The web UI sends its own `Content-Security-Policy` and other security headers, see [Web UI](#web-ui). Pass them through unchanged: a proxy that adds a stricter policy, or injects scripts or styles into pages, breaks the UI, and one that adds `'unsafe-inline'` weakens it for nothing. Serve over HTTPS with `server.publicUrl` set to the `https://` origin, so that the session cookie is marked `Secure`.
 
 ## Operations
 
@@ -365,9 +365,46 @@ Future<void> main() async {
 }
 ```
 
-`PublishPolicy` applies the `publish` settings, and `UpstreamProxy` turns on proxy mode. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints are added by passing an `AccountApi`. `S3Store` and `FileStore` are included.
+`PublishPolicy` applies the `publish` settings, and `UpstreamProxy` turns on proxy mode. `MetaStore`, `PackageStore`, `Authenticator` and `AuditStore` can each be replaced by your own implementation. The account endpoints, and the login, account and admin pages of the web UI, are added by passing an `AccountApi`. The web UI is always part of `App.handler`; pass `config` to fill the admin settings page. `S3Store` and `FileStore` are included.
 
 `ensureIndexes` creates the unique indexes that concurrent publishes rely on, and throws if `packages` already holds a name twice. To get reclamation as `unpub serve` does it, start a `TemporaryReclaimer` with `MongoArchiveReferences` too, which shares the `object_locks` of `MongoStore`.
+
+## Web UI
+
+The server renders every page itself. There is no frontend build and no third-party script, font or stylesheet: one stylesheet and one small script are served from `/static/`, and everything works without JavaScript.
+
+| Page | Description |
+| --- | --- |
+| `/`, `/packages` | The package list. `q` searches names and descriptions, `sdk=dart` or `sdk=flutter` filters, `discontinued=1` includes discontinued packages, `sort` is `relevance` (the default with `q`), `downloads` (the default otherwise), `updated` or `name`, and `page` and `size` (20 by default, at most 100) page through it. With JavaScript, the list updates while typing. |
+| `/packages/<name>` | The latest version, with the tabs `?tab=readme`, `changelog`, `versions` and `install`, and a sidebar with the SDK constraints, platforms, links, dependencies, uploaders and, for a package from the upstream, a link to it. |
+| `/packages/<name>/versions/<version>` | The same for one version. |
+| `/login`, `/account` | Log in and out, change the password, and list, create and revoke personal tokens. |
+| `/admin/users`, `/admin/packages`, `/admin/settings` | Administrators only, see below. |
+
+Search uses a MongoDB text index on names and descriptions, created by the server at startup, with stemming for English, and also matches any part of a name. Without the index, for example when another text index already exists on `packages`, it matches each word anywhere in the name or a description, and logs a warning at startup. A package counts as a Flutter package when any of its versions has a `flutter` section, an `environment.flutter` constraint or a dependency on `flutter`. An unknown package name sends the browser to the upstream in proxy mode, and shows a 404 page with a link to the upstream otherwise.
+
+README and CHANGELOG are rendered as GitHub flavoured markdown and then sanitized through an allowlist of elements and attributes. Scripts, styles, frames, forms, event handlers and `javascript:` or `data:` URLs are removed. Links to other sites get `rel="nofollow noopener"` and open in a new tab. Images may come from any `https` site.
+
+**Logging in.** Users log in with their email and password on `/login`. Failures show one generic message and count towards the same rate limit as `POST /webapi/login`. After logging in the browser goes back to the page it came from, which must be a path on this server. The login form carries its own token in a `SameSite=Strict` cookie, as there is no session yet.
+
+**Tokens.** `/account` lists the tokens of the user with their prefix, scopes, creation, last use and expiry, creates one with a name, scopes and a lifetime, and revokes them. A new token's secret is shown once, with the `dart pub token add` command to use it. A reader can only create `read` tokens.
+
+**Administration.** `/admin/users` lists the users and creates, promotes, demotes, disables, enables them and sets their passwords. `/admin/packages/<name>` discontinues a package, optionally with its replacement, retracts and restores versions, and adds and removes uploaders. These apply the same rules as the API and are audited in the same way. Deleting versions and packages is not available yet. `/admin/settings` shows the effective configuration, with the MongoDB credentials, S3 keys, `auth.bootstrapToken`, `auth.readTokens` and the administrator password replaced by `<redacted>`. Everyone else gets a 403 page.
+
+**Security.** Every form that changes something carries the CSRF token of the session, and a missing or wrong one answers a 403 page. Changing credentials, roles or packages from the UI needs a password login, as on the JSON API. The session cookie is `HttpOnly` and `SameSite=Lax`, and `Secure` when `server.publicUrl` is `https`. Pages are sent with:
+
+```
+Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+```
+
+`connect-src 'self'` lets the script fetch the list while typing. Pages are `Cache-Control: no-store` once logged in and `private, max-age=0` otherwise. The stylesheet and script are cached for a year, with an `ETag`, and linked with a hash of their content.
+
+**`auth.readAccess: authenticated`.** A browser asking for any page without a session is sent to `/login`, and back afterwards. The login page, `/static/` and the health probes stay open. API clients, and any request that does not accept `text/html`, still get the 401 challenge. Badges need a token in this mode.
+
+**Errors.** A browser gets small HTML pages for 403, 404 and 500. Every API path (`/api/`, `/webapi/`, archives, `.json`, badges, the probes) answers JSON or plain text as before.
 
 ## Badges
 
@@ -384,11 +421,13 @@ cd unpub
 dart test
 ```
 
-Set `UNPUB_TEST_MONGO_URI` to use another database. The S3 tests run when `UNPUB_TEST_S3_ENDPOINT` points to an S3 compatible service. Run `make generate` after changing routes or models. Commits follow [Conventional Commits](https://www.conventionalcommits.org).
+Set `UNPUB_TEST_MONGO_URI` to use another database. The S3 tests run when `UNPUB_TEST_S3_ENDPOINT` points to an S3 compatible service. Run `make generate` after changing the JSON models. Commits follow [Conventional Commits](https://www.conventionalcommits.org).
+
+The web UI needs no build step. Routes are registered by hand in `lib/src/routes/` and `lib/src/web/web_ui.dart`. Pages are plain Dart functions in `lib/src/web/pages/` built with the `el` helper of `lib/src/web/html.dart`, which escapes all text and attribute values; unescaped markup only goes through `Html.trusted`, used for the sanitized markdown. The stylesheet and script are string constants in `lib/src/web/assets.dart`.
 
 ## Credits
 
-- [pub-dev](https://github.com/dart-lang/pub-dev): web page styles are mostly taken from https://pub.dev.
+- [pub-dev](https://github.com/dart-lang/pub-dev): the API this server implements.
 - [shields](https://shields.io): badge generation.
 - [bytedance/unpub](https://github.com/bytedance/unpub): the project this is forked from.
 

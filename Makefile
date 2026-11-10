@@ -13,7 +13,7 @@ format:
 analyze:
 	cd unpub && dart analyze
 
-# Regenerate *.g.dart after changing routes or models.
+# Regenerate *.g.dart after changing the JSON models.
 generate:
 	cd unpub && dart run build_runner build --delete-conflicting-outputs
 

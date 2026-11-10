@@ -1,3 +1,20 @@
+## 3.0.0-dev.4
+
+Replaces the AngularDart UI with HTML rendered by the server. See "Web UI" in the README.
+
+- Adds the package list on `/` and `/packages`, with search over names and descriptions, filters for the SDK and discontinued packages, sorting by relevance, downloads, update time or name, and pagination. Search uses a new text index on `packages`, created at startup and skipped with a warning if it cannot be, and falls back to pattern matching without it.
+- Adds package and version pages with the README and CHANGELOG rendered from markdown and sanitized, the versions with date, uploader, retraction and hash, install snippets using `server.publicUrl`, SDK constraints, platforms, dependencies linked to local packages or the upstream, uploaders and the discontinued notice.
+- Adds `/login`, logout and `/account`: change the password, list, create (shown once) and revoke personal tokens. Login shares the rate limit of `POST /webapi/login`.
+- Adds the admin pages `/admin/users` (create, role, disable, enable, set password), `/admin/packages/<name>` (discontinue with a replacement, retract and restore versions, add and remove uploaders, audited like the API) and `/admin/settings` (the effective configuration with secrets redacted).
+- Every form is protected by the CSRF token of the session, the login form by a token of its own. Pages send a `Content-Security-Policy` without `unsafe-inline`, `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options`, and are not cached once logged in. The stylesheet and the one small script are served from `/static/` with an `ETag` and cached for a year.
+- In `auth.readAccess: authenticated` mode, browsers are sent to the login page instead of getting a 401. API clients are unchanged.
+- Browsers get HTML pages for 403, 404 and 500. API paths answer as before.
+- The router is split into route modules, registered by hand: `app.g.dart` and the `shelf_router_generator` dev dependency are gone.
+- Adds the dependencies `markdown` and `html`.
+- **Breaking:** the compiled AngularDart UI is gone: `/main.dart.js` answers 404, and `/`, `/packages`, `/packages/<name>` and `/packages/<name>/versions/<version>` serve the new pages. The `/webapi` endpoints and `/packages/<name>.json` stay.
+- **Breaking:** `App` gains the optional argument `config`, shown on the admin settings page. The pages are part of `App.handler` and `App.router`. `authMiddleware` gains an optional `failureResponse`, and lets the login form and `/static/` through in `authenticated` mode, and a session post its own `/logout`, `/account/password` and `/account/tokens` routes like the JSON ones.
+- **Breaking:** `MetaStore` gains `searchPackages` and `existingPackageNames`, with defaults that read every package through `queryPackages` and `queryPackage`. `MongoStore` overrides both.
+
 ## 3.0.0-dev.3
 
 Completes the pub API, and adds publishing policies and an upstream proxy. See "Pub API compatibility", "Retraction and discontinued", "Publishing policies" and "Upstream proxy" in the README, and run `unpub migrate` after upgrading.
