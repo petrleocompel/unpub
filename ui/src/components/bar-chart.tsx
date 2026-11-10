@@ -16,7 +16,8 @@ export function BarChart({
   const height = 160
   const top = 10
   const bottom = 20
-  const max = Math.max(1, ...data.map((d) => d.count))
+  const peak = Math.max(0, ...data.map((d) => d.count))
+  const max = Math.max(1, peak)
   const slot = width / Math.max(1, data.length)
   const bar = Math.max(2, slot * 0.7)
   const plot = height - top - bottom
@@ -60,7 +61,9 @@ export function BarChart({
       </svg>
       <figcaption className="flex justify-between text-xs text-muted-foreground">
         <span>{first ? formatDate(first.day) : ''}</span>
-        <span>max {formatNumber(max)} / day</span>
+        <span>
+          {peak === 0 ? 'No downloads in this period' : `at most ${formatNumber(peak)} a day`}
+        </span>
         <span>{last ? formatDate(last.day) : ''}</span>
       </figcaption>
     </figure>

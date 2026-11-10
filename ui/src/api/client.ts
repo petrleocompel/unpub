@@ -151,6 +151,12 @@ export function errorMessage(error: unknown): string {
     if (error.code === 'csrf_failed') {
       return 'Your session token is out of date. Reload the page and try again.'
     }
+    if (error.code === 'session_required') {
+      return `${error.message} Log in with your password to do this.`
+    }
+    if (error.code === 'insufficient_scope') {
+      return `${error.message} The credential lacks the scope for this.`
+    }
     if (error.status === 429 && error.retryAfter) {
       return `${error.message} Try again in ${formatWait(error.retryAfter)}.`
     }

@@ -42,25 +42,29 @@ export function Header() {
   const navigate = useNavigate()
   const logout = useLogout()
   const next = `${location.pathname}${location.search}`
+  // A private registry shows anonymous visitors the login only.
+  const locked = config.readAccess === 'authenticated' && !me
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-6">
         <Wordmark />
-        <nav aria-label="Main" className="hidden sm:block">
-          <NavLink
-            to="/packages"
-            className={({ isActive }) =>
-              cn(
-                'rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground',
-                isActive && 'text-foreground',
-              )
-            }
-          >
-            Packages
-          </NavLink>
-        </nav>
-        <SearchBox className="max-w-md flex-1" />
+        {!locked && (
+          <nav aria-label="Main" className="hidden sm:block">
+            <NavLink
+              to="/packages"
+              className={({ isActive }) =>
+                cn(
+                  'rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground',
+                  isActive && 'text-foreground',
+                )
+              }
+            >
+              Packages
+            </NavLink>
+          </nav>
+        )}
+        {!locked && <SearchBox className="max-w-md flex-1" />}
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           {me ? (

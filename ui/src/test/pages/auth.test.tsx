@@ -125,6 +125,7 @@ describe('private registry', () => {
     expect(await screen.findByRole('heading', { name: 'Log in to unpub' })).toBeInTheDocument()
     expect(where(router)).toBe('/login?next=%2Fpackages%2Fmy_company_core')
     expect(screen.getByText(/This registry is private/)).toBeInTheDocument()
+    expect(screen.queryByRole('searchbox')).toBeNull()
   })
 
   it('shows the pages once logged in', async () => {
