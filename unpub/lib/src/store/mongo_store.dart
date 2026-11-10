@@ -667,6 +667,36 @@ class MongoStore extends MetaStore {
     return found.toSet();
   }
 
+  @override
+  Future<({int packages, int versions})> counts() async {
+    final reply = await db.runCommand({
+      'aggregate': packageCollection,
+      'pipeline': [
+        {
+          r'$group': {
+            '_id': null,
+            'packages': {r'$sum': 1},
+            'versions': {
+              r'$sum': {
+                r'$size': {
+                  r'$ifNull': [r'$versions', []]
+                }
+              }
+            },
+          },
+        },
+      ],
+      'cursor': <String, Object>{},
+    });
+    final batch = (reply['cursor'] as Map?)?['firstBatch'] as List?;
+    if (batch == null || batch.isEmpty) return (packages: 0, versions: 0);
+    final totals = batch.first as Map;
+    return (
+      packages: (totals['packages'] as num).toInt(),
+      versions: (totals['versions'] as num).toInt(),
+    );
+  }
+
   /// Pings the server.
   @override
   Future<void> checkHealth() async {

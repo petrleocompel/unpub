@@ -223,6 +223,10 @@ abstract class PackageStore {
           Directory(path.join(Directory.systemTemp.path, temporaryNamespace)),
           (now ?? DateTime.now()).subtract(maxAge));
 
+  /// How many bytes the store holds, or null for a store that cannot tell.
+  /// This lists everything, so callers cache it.
+  Future<int?> totalSize() async => null;
+
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}
 }

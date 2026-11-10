@@ -11,6 +11,7 @@ import 'auth/authenticator.dart';
 import 'auth/rate_limiter.dart';
 import 'config/config.dart';
 import 'logging.dart';
+import 'metrics.dart';
 import 'publish_policy.dart';
 import 'redact.dart';
 import 'store/account_store.dart';
@@ -76,8 +77,11 @@ class UnpubServer {
       await upstreamCache.ensureIndexes();
       final webhookStore = WebhookStore(db);
       await webhookStore.ensureIndexes(retention: config.webhooks.retention);
-      final webhooks =
-          WebhookService(webhookStore, config: config.webhooks, audit: audit);
+      final metrics = Metrics();
+      final webhooks = WebhookService(webhookStore,
+          config: config.webhooks,
+          audit: audit,
+          onAttempt: (result) => metrics.countWebhookDelivery(result.name));
       final service = AccountService(accounts, audit: audit);
       await service.bootstrapAdmin(config.auth.admin);
       await accounts.reconcileAdminSet(DateTime.now());
@@ -97,6 +101,7 @@ class UnpubServer {
               config: config.upstream,
               cache: upstreamCache,
               archives: packageStore,
+              onFetch: metrics.countUpstreamFetch,
             )
           : null;
 
@@ -127,6 +132,7 @@ class UnpubServer {
         publishPolicy: PublishPolicy(config.publish),
         publicUrl: config.server.publicUrl,
         config: config,
+        metrics: metrics,
       );
       final http = await app.serve(config.server.host, config.server.port);
       final reclaimer = TemporaryReclaimer(packageStore,

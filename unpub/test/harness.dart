@@ -184,8 +184,11 @@ class Harness {
       },
       body: body,
     ));
+    final bytes = await response
+        .read()
+        .fold<List<int>>([], (all, chunk) => all..addAll(chunk));
     return Reply(response.statusCode, response.headers, response.headersAll,
-        await response.readAsString());
+        utf8.decode(bytes, allowMalformed: true));
   }
 
   /// A page as a browser asks for it.

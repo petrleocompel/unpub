@@ -71,6 +71,8 @@ const _schema = <String, _ValueKind>{
   'webhooks.allowHttp': _ValueKind.boolean,
   'webhooks.allowPrivateNetworks': _ValueKind.boolean,
   'webhooks.retentionDays': _ValueKind.integer,
+  'metrics.enabled': _ValueKind.boolean,
+  'metrics.token': _ValueKind.string,
   'logging.level': _ValueKind.string,
   'logging.format': _ValueKind.string,
 };
@@ -83,6 +85,7 @@ const _secretKeys = {
   'auth.bootstrapToken',
   'auth.readTokens',
   'auth.admin.password',
+  'metrics.token',
   'mongo.uri',
 };
 
@@ -420,6 +423,16 @@ class WebhooksConfig {
       retentionDays > 0 ? Duration(days: retentionDays) : null;
 }
 
+/// The Prometheus endpoint `/metrics`.
+class MetricsConfig {
+  final bool enabled;
+
+  /// A Bearer token that opens `/metrics`, for a scraper without an account.
+  final String? token;
+
+  const MetricsConfig({this.enabled = true, this.token});
+}
+
 class LoggingConfig {
   final Level level;
   final LogFormat format;
@@ -443,6 +456,7 @@ class Config {
   final AuthConfig auth;
   final AuditConfig audit;
   final WebhooksConfig webhooks;
+  final MetricsConfig metrics;
   final LoggingConfig logging;
 
   const Config({
@@ -454,6 +468,7 @@ class Config {
     required this.auth,
     this.audit = const AuditConfig(),
     this.webhooks = const WebhooksConfig(),
+    this.metrics = const MetricsConfig(),
     required this.logging,
   });
 
@@ -694,6 +709,7 @@ class _ConfigReader {
     final auth = _auth();
     final audit = _audit();
     final webhooks = _webhooks();
+    final metrics = _metrics();
     final logging = _logging();
     if (_problems.isNotEmpty) throw ConfigException(_problems);
     return Config(
@@ -705,6 +721,7 @@ class _ConfigReader {
       auth: auth,
       audit: audit,
       webhooks: webhooks,
+      metrics: metrics,
       logging: logging,
     );
   }
@@ -741,6 +758,18 @@ class _ConfigReader {
       allowPrivateNetworks: _boolean('webhooks.allowPrivateNetworks') ?? false,
       retentionDays:
           _days('webhooks.retentionDays', WebhooksConfig.defaultRetentionDays),
+    );
+  }
+
+  MetricsConfig _metrics() {
+    final token = _string('metrics.token');
+    if (token != null && !_bearerTokenPattern.hasMatch(token)) {
+      _problems.add('${_describe('metrics.token')} may only contain '
+          'the characters a-z A-Z 0-9 . _ ~ + / = -');
+    }
+    return MetricsConfig(
+      enabled: _boolean('metrics.enabled') ?? true,
+      token: token,
     );
   }
 

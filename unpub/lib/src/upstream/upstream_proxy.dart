@@ -184,6 +184,10 @@ class UpstreamProxy {
   final http.Client _client;
   final DateTime Function() clock;
 
+  /// Called with the result of every request to the upstream: `ok`,
+  /// `not_modified`, `not_found` or `error`.
+  void Function(String result)? onFetch;
+
   final _inFlight = <String, Future<Object?>>{};
   final _unkeptArchives = <File, Timer>{};
   final _FetchSlots _slots;
@@ -194,6 +198,7 @@ class UpstreamProxy {
     required this.archives,
     http.Client? client,
     this.clock = DateTime.now,
+    this.onFetch,
   })  : url = config.url,
         cacheTtl = config.cacheTtl,
         allowlist = config.allowlist.toSet(),
@@ -774,6 +779,24 @@ class UpstreamProxy {
   /// Sends a GET for [uri], following redirects itself so that each hop is
   /// checked, and giving up after [timeout] without an answer.
   Future<http.StreamedResponse> _send(Uri uri,
+      {String? accept, String? etag}) async {
+    final http.StreamedResponse response;
+    try {
+      response = await _sendFollowing(uri, accept: accept, etag: etag);
+    } catch (_) {
+      onFetch?.call('error');
+      rethrow;
+    }
+    onFetch?.call(switch (response.statusCode) {
+      200 => 'ok',
+      304 => 'not_modified',
+      404 => 'not_found',
+      _ => 'error',
+    });
+    return response;
+  }
+
+  Future<http.StreamedResponse> _sendFollowing(Uri uri,
       {String? accept, String? etag}) async {
     var origin = url;
     var target = uri;

@@ -221,6 +221,27 @@ class FileStore extends PackageStore {
     return objects;
   }
 
+  /// Every file under [baseDir] except temporary ones.
+  @override
+  Future<int?> totalSize() async {
+    final base = path.normalize(path.absolute(baseDir));
+    final directory = Directory(base);
+    if (!await directory.exists()) return 0;
+    var total = 0;
+    await for (final entity
+        in directory.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      final relative = path.split(path.relative(entity.path, from: base));
+      if (relative.first == temporaryNamespace) continue;
+      try {
+        total += (await entity.stat()).size;
+      } on FileSystemException {
+        // Deleted meanwhile.
+      }
+    }
+    return total;
+  }
+
   @override
   Future<DateTime?> objectModified(StoredObject object) async {
     final file = object.upstream

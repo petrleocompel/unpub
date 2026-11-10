@@ -43,6 +43,11 @@ bool isHealthRequest(shelf.Request request) {
   return path == 'healthz' || path == 'readyz';
 }
 
+/// Whether [request] reads `/metrics`, which decides who may read it itself,
+/// because a scraper may present `metrics.token` instead of an account.
+bool isMetricsRequest(shelf.Request request) =>
+    _readMethods.contains(request.method) && request.url.path == 'metrics';
+
 bool _isLoginRequest(shelf.Request request) =>
     request.method == 'POST' &&
     (request.url.path == 'webapi/login' || request.url.path == 'login');
@@ -99,8 +104,10 @@ shelf.Middleware authMiddleware(
 
       try {
         final principal = await authenticator.authenticate(request);
-        _authorize(request, principal,
-            isOpenPageRequest(request) ? ReadAccess.public : readAccess);
+        if (!isMetricsRequest(request)) {
+          _authorize(request, principal,
+              isOpenPageRequest(request) ? ReadAccess.public : readAccess);
+        }
         var authorized = request;
         final session = principal?.session;
         if (session != null && !_safeMethods.contains(request.method)) {

@@ -212,6 +212,7 @@ class PublishRoutes {
           package: name,
           version: version,
           details: {'uploader': uploader, 'sha256': archiveHash});
+      app.metrics.publishes++;
       await app.notify(principal, 'package.published',
           package: name,
           version: version,

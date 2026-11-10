@@ -267,6 +267,21 @@ class S3Store extends PackageStore {
     ];
   }
 
+  /// Every object of the bucket except temporary ones and the probe.
+  @override
+  Future<int?> totalSize() async {
+    final listed = await _minio.listAllObjects(bucketName, recursive: true);
+    var total = 0;
+    for (final object in listed.objects) {
+      final key = object.key ?? '';
+      if (key.startsWith('$temporaryNamespace/') || key.startsWith('.unpub/')) {
+        continue;
+      }
+      total += object.size ?? 0;
+    }
+    return total;
+  }
+
   @override
   Future<DateTime?> objectModified(StoredObject object) async {
     final key = object.upstream

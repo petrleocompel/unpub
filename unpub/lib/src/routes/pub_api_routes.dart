@@ -227,6 +227,7 @@ class PubApiRoutes {
 
     if (app.isPubClient(req) && req.method == 'GET') {
       metaStore.increaseDownloads(name, version);
+      app.metrics.downloads++;
     }
 
     if (packageStore.supportsDownloadUrl) {

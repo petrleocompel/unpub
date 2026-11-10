@@ -240,6 +240,15 @@ abstract class MetaStore {
           if (await queryPackage(name) != null) name,
       };
 
+  /// How many packages and versions this store holds.
+  Future<({int packages, int versions})> counts() async {
+    final all = await queryPackages(size: 1 << 20, page: 0, sort: 'name');
+    return (
+      packages: all.count,
+      versions: all.packages.fold<int>(0, (sum, p) => sum + p.versions.length),
+    );
+  }
+
   /// Throws if the store cannot currently serve requests.
   Future<void> checkHealth() async {}
 }

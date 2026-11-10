@@ -8,6 +8,7 @@ export 'src/auth/password_hasher.dart' show PasswordHasher;
 export 'src/auth/rate_limiter.dart';
 export 'src/config/config.dart';
 export 'src/logging.dart';
+export 'src/metrics.dart';
 export 'src/migrate/migrations.dart';
 export 'src/models.dart';
 export 'src/publish_policy.dart';

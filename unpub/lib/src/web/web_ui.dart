@@ -89,6 +89,7 @@ bool _isApiPath(String path) {
   final trimmed = path.replaceFirst(RegExp(r'/+$'), '');
   return trimmed == 'healthz' ||
       trimmed == 'readyz' ||
+      trimmed == 'metrics' ||
       path == 'api' ||
       path.startsWith('api/') ||
       path == 'webapi' ||

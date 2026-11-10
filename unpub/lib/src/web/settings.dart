@@ -97,6 +97,10 @@ Map<String, Map<String, String>> settingsOverview(Config config) {
           ? '0 (kept forever)'
           : '${config.webhooks.retentionDays}',
     },
+    'metrics': {
+      'enabled': '${config.metrics.enabled}',
+      'token': _secret(config.metrics.token),
+    },
     'logging': {
       'level': config.logging.level.name,
       'format': config.logging.format.name,
