@@ -73,6 +73,7 @@ describe('package page', () => {
     expect(within(screen.getByRole('tabpanel')).getByText('Faster.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Versions' }))
+    await user.click(screen.getByRole('switch', { name: 'Show retracted versions' }))
     const table = within(screen.getByRole('tabpanel')).getByRole('table')
     const rows = within(table).getAllByRole('row')
     expect(rows).toHaveLength(4)
@@ -109,8 +110,9 @@ describe('package page', () => {
         ],
       }),
     )
-    renderApp('/packages/my_company_core?tab=versions')
-    const table = await screen.findByRole('table', { name: /Versions of my_company_core/ })
+    const { user } = renderApp('/packages/my_company_core?tab=versions')
+    await user.click(await screen.findByRole('switch', { name: 'Show retracted versions' }))
+    const table = screen.getByRole('table', { name: /Versions of my_company_core/ })
     const rows = within(table).getAllByRole('row')
     expect(within(rows[1]!).getByText('a1b2c3d4e5f6')).toHaveAttribute('title', other)
     expect(
@@ -120,6 +122,83 @@ describe('package page', () => {
     expect(within(rows[3]!).getByText('Not known')).toBeInTheDocument()
     expect(within(rows[3]!).queryByRole('button', { name: /^Copy/ })).not.toBeInTheDocument()
     expect(within(table).queryByRole('link', { name: 'Show' })).not.toBeInTheDocument()
+  })
+
+  it('hides retracted versions until asked, except the one being viewed', async () => {
+    packageHandlers(
+      f.pkg({
+        versions: [
+          f.version('2.0.0'),
+          f.version('1.4.0'),
+          f.version('1.2.0', { retracted: true }),
+          f.version('1.0.0', { retracted: true }),
+        ],
+      }),
+    )
+    const { user } = renderApp('/packages/my_company_core?tab=versions')
+    const toggle = await screen.findByRole('switch', { name: 'Show retracted versions' })
+    expect(toggle).not.toBeChecked()
+    const versions = () =>
+      within(screen.getByRole('table', { name: /Versions of my_company_core/ }))
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(row).getAllByRole('link')[0]!.textContent)
+    expect(versions()).toEqual(['2.0.0', '1.4.0'])
+    expect(screen.getByRole('heading', { name: '4 versions' })).toBeInTheDocument()
+    expect(screen.getByText(/2 retracted versions are hidden\./)).toBeInTheDocument()
+    expect(screen.getByRole('table')).toHaveAccessibleName(
+      'Versions of my_company_core, highest first, without 2 retracted',
+    )
+
+    await user.click(toggle)
+    expect(toggle).toBeChecked()
+    expect(versions()).toEqual(['2.0.0', '1.4.0', '1.2.0', '1.0.0'])
+    expect(screen.queryByText(/retracted versions? (is|are) hidden/)).toBeNull()
+
+    await user.click(toggle)
+    expect(versions()).toEqual(['2.0.0', '1.4.0'])
+  })
+
+  it('keeps the retracted version being viewed in the list', async () => {
+    packageHandlers()
+    renderApp('/packages/my_company_core/versions/1.0.0?tab=versions')
+    const table = await screen.findByRole('table', { name: /Versions of my_company_core/ })
+    expect(screen.getByRole('switch', { name: 'Show retracted versions' })).not.toBeChecked()
+    const current = within(table).getByRole('link', { name: '1.0.0' })
+    expect(current).toHaveAttribute('aria-current', 'page')
+    expect(within(table).getAllByRole('row')).toHaveLength(4)
+  })
+
+  it('offers no retracted switch when nothing is retracted', async () => {
+    packageHandlers(f.pkg({ versions: [f.version('1.4.0'), f.version('1.0.0')] }))
+    renderApp('/packages/my_company_core?tab=versions')
+    const table = await screen.findByRole('table', { name: /Versions of my_company_core/ })
+    expect(within(table).getAllByRole('row')).toHaveLength(3)
+    expect(screen.queryByRole('switch')).toBeNull()
+  })
+
+  it('links the archive of every version', async () => {
+    packageHandlers(f.pkg({ versions: [f.version('1.4.0'), f.version('1.0.0+5')] }))
+    renderApp('/packages/my_company_core?tab=versions')
+    const download = await screen.findByRole('link', { name: 'Download 1.4.0 archive' })
+    expect(download).toHaveAttribute('href', '/packages/my_company_core/versions/1.4.0.tar.gz')
+    expect(download).toHaveAttribute('download')
+    expect(screen.getByRole('link', { name: 'Download 1.0.0+5 archive' })).toHaveAttribute(
+      'href',
+      '/packages/my_company_core/versions/1.0.0%2B5.tar.gz',
+    )
+  })
+
+  it('links the archive on a private registry too, as the session reads it', async () => {
+    packageHandlers()
+    renderApp('/packages/my_company_core?tab=versions', {
+      me: f.me(f.user()),
+      config: f.config({ readAccess: 'authenticated' }),
+    })
+    expect(await screen.findByRole('link', { name: 'Download 1.4.0 archive' })).toHaveAttribute(
+      'href',
+      '/packages/my_company_core/versions/1.4.0.tar.gz',
+    )
   })
 
   it('gives the token command of a private registry a copy button', async () => {

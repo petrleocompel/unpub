@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   Archive,
   Ban,
@@ -34,8 +34,11 @@ import { NativeSelect } from '@/components/native-select'
 import { EmptyState, ErrorState, isNotFound } from '@/components/states'
 import { DateTime, RelativeTime } from '@/components/time'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { buttonVariants } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { SegmentedControl } from '@/components/ui/segmented'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -415,14 +418,47 @@ function PackageHeader({ pkg }: { pkg: Package }) {
   )
 }
 
+/** The archive of [version], as the pub client downloads it. The server
+ * accepts the session cookie there, so it also works on a private registry. */
+export function archivePath(name: string, version: string) {
+  return `/packages/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}.tar.gz`
+}
+
 function VersionsTable({ pkg }: { pkg: Package }) {
+  const switchId = useId()
+  const retracted = pkg.versions.filter((version) => version.retracted).length
+  const [showRetracted, setShowRetracted] = useState(false)
+  // The version being viewed stays, retracted or not.
+  const shown =
+    showRetracted || retracted === 0
+      ? pkg.versions
+      : pkg.versions.filter((version) => !version.retracted || version.version === pkg.version)
+  const hidden = pkg.versions.length - shown.length
   return (
     <div className="grid gap-4">
-      <h2 className="text-[1.0625rem] leading-6 font-semibold">
-        {pkg.versions.length} {pkg.versions.length === 1 ? 'version' : 'versions'}
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[1.0625rem] leading-6 font-semibold">
+          {pkg.versions.length} {pkg.versions.length === 1 ? 'version' : 'versions'}
+        </h2>
+        {retracted > 0 && (
+          <div className="flex items-center gap-2 text-[0.8125rem]">
+            <Switch
+              id={switchId}
+              checked={showRetracted}
+              onCheckedChange={setShowRetracted}
+              aria-label="Show retracted versions"
+            />
+            <Label htmlFor={switchId} aria-hidden className="font-normal">
+              Show retracted
+            </Label>
+          </div>
+        )}
+      </div>
       <Table containerClassName="rounded-lg border bg-card" stickyFirstColumn>
-        <caption className="sr-only">Versions of {pkg.name}, highest first</caption>
+        <caption className="sr-only">
+          Versions of {pkg.name}, highest first
+          {hidden > 0 && `, without ${hidden} retracted`}
+        </caption>
         <TableHeader>
           <TableRow>
             <TableHead scope="col" aria-sort="descending">
@@ -434,10 +470,13 @@ function VersionsTable({ pkg }: { pkg: Package }) {
               Downloads
             </TableHead>
             <TableHead scope="col">SHA-256</TableHead>
+            <TableHead scope="col">
+              <span className="sr-only">Archive</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {pkg.versions.map((version) => (
+          {shown.map((version) => (
             <TableRow
               key={version.version}
               data-current={version.version === pkg.version || undefined}
@@ -469,6 +508,21 @@ function VersionsTable({ pkg }: { pkg: Package }) {
               <TableCell>
                 <VersionHash pkg={pkg} version={version} />
               </TableCell>
+              <TableCell className="text-right">
+                {/* A plain link: the archive is a route of the server, not of the client. */}
+                <a
+                  href={archivePath(pkg.name, version.version)}
+                  download
+                  aria-label={`Download ${version.version} archive`}
+                  title={`Download ${version.version} archive`}
+                  className={cn(
+                    buttonVariants({ variant: 'ghost', size: 'icon-xs' }),
+                    'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Download aria-hidden />
+                </a>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -476,6 +530,8 @@ function VersionsTable({ pkg }: { pkg: Package }) {
       <p className="text-xs leading-4 text-muted-foreground">
         Dates are relative; hover or focus for the absolute time. The row of the version you are
         viewing is highlighted.
+        {hidden > 0 &&
+          ` ${hidden} retracted ${hidden === 1 ? 'version is' : 'versions are'} hidden.`}
       </p>
     </div>
   )
