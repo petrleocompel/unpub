@@ -120,7 +120,7 @@ export function PackagePage({ defaultTab = 'readme' }: { defaultTab?: PackageTab
             }}
             className="min-w-0"
           >
-            <TabsList className="h-auto w-full flex-wrap justify-start sm:w-auto">
+            <TabsList className="w-full max-w-full flex-nowrap justify-start overflow-x-auto sm:w-auto">
               {packageTabs.map((value) => (
                 <TabsTrigger key={value} value={value}>
                   {tabLabels[value]}
