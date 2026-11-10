@@ -73,9 +73,21 @@ const _schema = <String, _ValueKind>{
   'webhooks.retentionDays': _ValueKind.integer,
   'metrics.enabled': _ValueKind.boolean,
   'metrics.token': _ValueKind.string,
+  'ui.assetsDir': _ValueKind.string,
+  'ui.mode': _ValueKind.string,
   'logging.level': _ValueKind.string,
   'logging.format': _ValueKind.string,
 };
+
+/// The environment variable that sets [key], such as
+/// `UNPUB_SERVER_PUBLIC_URL` for `server.publicUrl`.
+String environmentVariableFor(String key) {
+  final words = [
+    for (final part in key.split('.'))
+      part.replaceAllMapped(RegExp(r'(?<=[a-z0-9])(?=[A-Z])'), (_) => '_'),
+  ];
+  return 'UNPUB_${words.join('_').toUpperCase()}';
+}
 
 /// Keys whose values must never appear in messages.
 const _secretKeys = {
@@ -433,6 +445,45 @@ class MetricsConfig {
   const MetricsConfig({this.enabled = true, this.token});
 }
 
+/// Which user interface the server shows at `/`.
+enum UiMode {
+  /// The single-page client at `/`, the server-rendered pages under
+  /// `/classic`.
+  spa,
+
+  /// The server-rendered pages at `/`, the single-page client, if its files
+  /// exist, under `/app`.
+  ssr,
+}
+
+/// The web client and where its built files are.
+class UiConfig {
+  /// Where `ui.assetsDir` is looked for when it is not set, in order: the
+  /// directory of the Docker image, then the build output of a checkout,
+  /// relative to the working directory.
+  static const defaultAssetDirs = ['/app/ui', 'ui/dist'];
+
+  /// The directory holding `index.html` and `assets/`, or null when there is
+  /// no client to serve.
+  final String? assetsDir;
+  final UiMode mode;
+
+  const UiConfig({this.assetsDir, this.mode = UiMode.ssr});
+
+  /// Whether the single-page client is served.
+  bool get hasAssets => assetsDir != null;
+
+  /// The path the single-page client is served under, `''` for `/`.
+  String get spaBasePath => mode == UiMode.spa ? '' : '/app';
+
+  /// The path the server-rendered pages are served under, `''` for `/`.
+  String get classicBasePath => mode == UiMode.spa ? '/classic' : '';
+
+  /// Whether [directory] holds a built client.
+  static bool isClientDirectory(String directory) =>
+      File('$directory${Platform.pathSeparator}index.html').existsSync();
+}
+
 class LoggingConfig {
   final Level level;
   final LogFormat format;
@@ -457,6 +508,7 @@ class Config {
   final AuditConfig audit;
   final WebhooksConfig webhooks;
   final MetricsConfig metrics;
+  final UiConfig ui;
   final LoggingConfig logging;
 
   const Config({
@@ -469,6 +521,7 @@ class Config {
     this.audit = const AuditConfig(),
     this.webhooks = const WebhooksConfig(),
     this.metrics = const MetricsConfig(),
+    this.ui = const UiConfig(),
     required this.logging,
   });
 
@@ -710,6 +763,7 @@ class _ConfigReader {
     final audit = _audit();
     final webhooks = _webhooks();
     final metrics = _metrics();
+    final ui = _ui();
     final logging = _logging();
     if (_problems.isNotEmpty) throw ConfigException(_problems);
     return Config(
@@ -722,6 +776,7 @@ class _ConfigReader {
       audit: audit,
       webhooks: webhooks,
       metrics: metrics,
+      ui: ui,
       logging: logging,
     );
   }
@@ -770,6 +825,38 @@ class _ConfigReader {
     return MetricsConfig(
       enabled: _boolean('metrics.enabled') ?? true,
       token: token,
+    );
+  }
+
+  UiConfig _ui() {
+    final modeName = _string('ui.mode');
+    final mode = modeName == null ? null : UiMode.values.asNameMap()[modeName];
+    if (modeName != null && mode == null) {
+      _problems.add('${_describe('ui.mode')} must be one of spa, ssr, '
+          'got ${_shown('ui.mode')}');
+    }
+    final configured = _string('ui.assetsDir');
+    String? assetsDir;
+    if (configured != null) {
+      if (UiConfig.isClientDirectory(configured)) {
+        assetsDir = configured;
+      } else {
+        _problems.add('${_describe('ui.assetsDir')} must be a directory '
+            'holding index.html, got ${_shown('ui.assetsDir')}');
+      }
+    } else {
+      assetsDir = UiConfig.defaultAssetDirs
+          .where(UiConfig.isClientDirectory)
+          .firstOrNull;
+    }
+    if (mode == UiMode.spa && assetsDir == null && configured == null) {
+      _problems.add('${_describe('ui.mode')} is spa, but no web client was '
+          'found in ${UiConfig.defaultAssetDirs.join(' or ')}: build it in '
+          'ui/ or set ui.assetsDir');
+    }
+    return UiConfig(
+      assetsDir: assetsDir,
+      mode: mode ?? (assetsDir == null ? UiMode.ssr : UiMode.spa),
     );
   }
 
