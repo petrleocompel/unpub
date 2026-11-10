@@ -21,6 +21,7 @@ Prepares the server for the single-page web client of phase 6: the JSON API it n
 - The shell is served by the `q` values of `Accept`: the most specific range matching `text/html` decides, so `text/html;q=0` gets no shell while `*/*` does. `index.html` is read only if it resolves inside the build, checked when the client is built and on every read; otherwise the request gets a 500 and the reason is logged.
 - `page` is at most 100000 on every list route, so a huge one can no longer overflow the offset; a page past the end is an empty page. Digits too long for an integer count as out of range rather than as missing.
 - `SpaClient` and `spaContentSecurityPolicy` are exported.
+- `unpub admin create-token --expires-in` also takes `never`, as the API does, and its help and error message name `1y` and `never`.
 - Every answer has an `X-Request-Id`, the one of the request when it has 1 to 64 of `[A-Za-z0-9._-]`, a new random one otherwise. The request log has it as `requestId`, JSON errors with a 5xx status as `error.requestId`, and the 500 pages show it. `requestIdOf` reads it in a handler.
 - Links of `index.html` to the server-rendered pages, `href="/classic/..."`, are moved to where the pages are, so the `<noscript>` link of the client leads to `/` with `ui.mode: ssr`.
 - Every item of `versions` in `GET /webapi/package/<name>[/<version>]` has `archiveSha256`, null when the hash of that archive is not known.

@@ -342,6 +342,33 @@ void main() {
         'soon'
       ]);
       expect(result.exitCode, 64);
+      expect(
+          result.stderr,
+          contains(
+              '--expires-in must look like 12h, 30d, 8w or 1y, or be never.'));
+    });
+
+    test('create-token takes years and never', () async {
+      await admin(['create-user', '--email', 'a@b.c', '--role', 'reader']);
+      Future<DateTime?> expiryOf(String expiresIn) async {
+        final result = await admin([
+          'create-token',
+          '--email',
+          'a@b.c',
+          '--name',
+          expiresIn,
+          '--expires-in',
+          expiresIn
+        ]);
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        final token =
+            await db.collection('tokens').findOne({'name': expiresIn});
+        return token!['expiresAt'] as DateTime?;
+      }
+
+      final year = await expiryOf('1y');
+      expect(year!.difference(DateTime.now()).inDays, closeTo(365, 1));
+      expect(await expiryOf('never'), isNull);
     });
 
     test('commands record who did what', () async {
