@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:logging/logging.dart';
 import 'package:mime/mime.dart' as mime;
 import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart' as shelf;
@@ -12,6 +13,8 @@ import 'web_ui.dart' show contentSecurityPolicy, securityHeaders;
 /// The policy of the shell of the single-page client: the one of the pages,
 /// and fonts from this server, which the client bundles.
 const spaContentSecurityPolicy = "$contentSecurityPolicy; font-src 'self'";
+
+final _log = Logger('unpub.spa');
 
 /// The first path segments that belong to the server, never to the client
 /// served at `/`.
@@ -46,6 +49,12 @@ const _contentTypes = {
   '.wasm': 'application/wasm',
 };
 
+/// The shell could not be read safely.
+class _ShellUnavailable implements Exception {
+  final String reason;
+  const _ShellUnavailable(this.reason);
+}
+
 /// What a request for the client asks for.
 sealed class SpaTarget {
   const SpaTarget();
@@ -71,7 +80,8 @@ final class SpaShell extends SpaTarget {
 ///
 /// Requests for files of the build get them, `assets/` cached for good and
 /// the rest for an hour. Every other GET or HEAD that accepts HTML and is
-/// not for the server gets `index.html`, the shell, so that the client can
+/// not for the server gets `index.html`, the shell,
+/// so that the client can
 /// route it. The shell gets the meta tags `unpub-base`, with [basePath], and
 /// `unpub-classic`, with [classicPath], and its relative references to the
 /// build are made absolute under [basePath], so one build serves under any
@@ -91,8 +101,9 @@ class SpaClient {
 
   SpaClient(String directory, {this.basePath = '', this.classicPath = ''})
       : directory = Directory(directory).resolveSymbolicLinksSync() {
-    if (!File(p.join(this.directory, 'index.html')).existsSync()) {
-      throw ArgumentError.value(directory, 'directory', 'has no index.html');
+    if (_file(const ['index.html']) == null) {
+      throw ArgumentError.value(
+          directory, 'directory', 'has no index.html inside it');
     }
   }
 
@@ -183,7 +194,16 @@ class SpaClient {
   }
 
   Future<shelf.Response> _shellResponse() async {
-    return shelf.Response.ok(await shellMarkup(), headers: {
+    final String markup;
+    try {
+      markup = await _shellMarkup();
+    } on _ShellUnavailable catch (error) {
+      _log.severe('not serving the shell of the client: ${error.reason}');
+      return shelf.Response.internalServerError(
+          body: 'Internal Server Error',
+          headers: {HttpHeaders.cacheControlHeader: 'no-store'});
+    }
+    return shelf.Response.ok(markup, headers: {
       HttpHeaders.contentTypeHeader: 'text/html; charset=utf-8',
       HttpHeaders.cacheControlHeader: 'no-store',
       HttpHeaders.varyHeader: 'Accept',
@@ -193,8 +213,16 @@ class SpaClient {
   }
 
   /// `index.html` as it is served, read again when it changes.
-  Future<String> shellMarkup() async {
-    final file = File(p.join(directory, 'index.html'));
+  ///
+  /// Like every file of the build, it is read only if it resolves, links
+  /// followed, to a file inside [directory]; this is checked on every read.
+  Future<String> _shellMarkup() async {
+    final path = _file(const ['index.html']);
+    if (path == null) {
+      throw _ShellUnavailable(
+          'index.html is missing or resolves outside $directory');
+    }
+    final file = File(path);
     final modified = await file.lastModified();
     final cached = _shell;
     if (cached != null && cached.$1 == modified) return cached.$2;

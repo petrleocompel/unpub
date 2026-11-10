@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:logging/logging.dart';
+import 'package:shelf/shelf.dart' as shelf;
 import 'package:test/test.dart';
 import 'package:unpub/src/web/spa.dart';
 import 'package:unpub/unpub.dart';
@@ -345,6 +347,57 @@ void main() {
       final home = await get('/', using: private);
       expect(home.status, HttpStatus.seeOther);
       expect(home.location, '/login');
+    });
+  });
+
+  group('shell containment', () {
+    late Directory root;
+    late Directory build;
+    late File secret;
+
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('unpub_spa_');
+      build = Directory('${root.path}/build')..createSync();
+      secret = File('${root.path}/secret.txt')
+        ..writeAsStringSync('outside the client');
+    });
+    tearDown(() => root.deleteSync(recursive: true));
+
+    Future<shelf.Response?> shell(SpaClient client) => client.handle(
+        shelf.Request('GET', Uri.parse('http://internal/packages/alpha'),
+            headers: {'accept': 'text/html'}));
+
+    test('an index.html linked outside the build is refused at start', () {
+      Link('${build.path}/index.html').createSync(secret.path);
+      expect(() => SpaClient(build.path), throwsArgumentError);
+    });
+
+    test('an index.html linked outside later is never served', () async {
+      final index = File('${build.path}/index.html')
+        ..writeAsStringSync('<head></head>inside');
+      final client = SpaClient(build.path);
+      final first = await shell(client);
+      expect(first!.statusCode, HttpStatus.ok);
+      expect(await first.readAsString(), contains('inside'));
+
+      index.deleteSync();
+      Link(index.path).createSync(secret.path);
+      final logs = <LogRecord>[];
+      final subscription = Logger.root.onRecord.listen(logs.add);
+      addTearDown(subscription.cancel);
+      final reply = await shell(client);
+      expect(reply!.statusCode, HttpStatus.internalServerError);
+      expect(await reply.readAsString(), isNot(contains('outside')));
+      expect(logs.map((record) => record.message),
+          contains(contains('resolves outside')));
+    });
+
+    test('an index.html linked inside the build is served', () async {
+      File('${build.path}/real.html').writeAsStringSync('<head></head>linked');
+      Link('${build.path}/index.html').createSync('${build.path}/real.html');
+      final reply = await shell(SpaClient(build.path));
+      expect(reply!.statusCode, HttpStatus.ok);
+      expect(await reply.readAsString(), contains('linked'));
     });
   });
 
