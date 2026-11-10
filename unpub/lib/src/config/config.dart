@@ -781,11 +781,16 @@ class _ConfigReader {
     );
   }
 
-  /// A number of days, 0 or more, with [fallback] when unset.
+  /// The most days a retention setting may hold, 100 years, so that the
+  /// duration it makes can never overflow into a negative one.
+  static const maxRetentionDays = 36500;
+
+  /// A number of days, 0 to [maxRetentionDays], with [fallback] when unset.
   int _days(String key, int fallback) {
     final days = _integer(key);
-    if (days != null && days < 0) {
-      _problems.add('${_describe(key)} must be 0 or more');
+    if (days != null && (days < 0 || days > maxRetentionDays)) {
+      _problems
+          .add('${_describe(key)} must be between 0 and $maxRetentionDays');
       return fallback;
     }
     return days ?? fallback;

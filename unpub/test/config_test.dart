@@ -66,6 +66,19 @@ void main() {
     });
   });
 
+  group('retention days', () {
+    test('are bounded so the duration cannot overflow', () {
+      expect(() => parse('audit:\n  retentionDays: 109500000\n'),
+          problemsContaining([contains('must be between 0 and 36500')]));
+      expect(() => parse(null, env: {'UNPUB_WEBHOOKS_RETENTION_DAYS': '-1'}),
+          problemsContaining([contains('must be between 0 and 36500')]));
+      final config = parse('audit:\n  retentionDays: 36500\n'
+          'webhooks:\n  retentionDays: 0\n');
+      expect(config.audit.retention, const Duration(days: 36500));
+      expect(config.webhooks.retention, isNull);
+    });
+  });
+
   group('forwarded address', () {
     test('is not trusted by default', () {
       expect(parse(null).server.trustForwardedFor, isFalse);

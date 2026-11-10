@@ -419,13 +419,13 @@ Any key can be set through a variable named `UNPUB_<SECTION>_<KEY>`. CamelCase k
 | `auth.bootstrapToken` | `UNPUB_AUTH_BOOTSTRAP_TOKEN` | | Deprecated. Static Bearer token that acts as an administrator. |
 | `auth.bootstrapEmail` | `UNPUB_AUTH_BOOTSTRAP_EMAIL` | `admin@localhost` | Email of the `auth.bootstrapToken` identity, and the uploader recorded for its publishes. |
 | `auth.readTokens` | `UNPUB_AUTH_READ_TOKENS` | | Deprecated. Static Bearer tokens that act as readers. A YAML list, or comma separated in the environment. |
-| `audit.retentionDays` | `UNPUB_AUDIT_RETENTION_DAYS` | `0` | Days events are kept, through a TTL index. `0` keeps them for good. |
+| `audit.retentionDays` | `UNPUB_AUDIT_RETENTION_DAYS` | `0` | Days events are kept, through a TTL index, at most 36500. `0` keeps them for good. |
 | `webhooks.enabled` | `UNPUB_WEBHOOKS_ENABLED` | `true` | Queue and deliver webhook events. |
 | `webhooks.timeout` | `UNPUB_WEBHOOKS_TIMEOUT` | `10s` | How long one attempt may take, at most `5m`. |
 | `webhooks.maxAttempts` | `UNPUB_WEBHOOKS_MAX_ATTEMPTS` | `5` | Attempts before a delivery is given up, 1 to 20. |
 | `webhooks.allowHttp` | `UNPUB_WEBHOOKS_ALLOW_HTTP` | `false` | Accept plain `http` webhook URLs. |
 | `webhooks.allowPrivateNetworks` | `UNPUB_WEBHOOKS_ALLOW_PRIVATE_NETWORKS` | `false` | Let webhooks reach loopback, link-local, private and unique local addresses. |
-| `webhooks.retentionDays` | `UNPUB_WEBHOOKS_RETENTION_DAYS` | `30` | Days finished deliveries are kept. `0` keeps them. |
+| `webhooks.retentionDays` | `UNPUB_WEBHOOKS_RETENTION_DAYS` | `30` | Days finished deliveries are kept, at most 36500. `0` keeps them. |
 | `metrics.enabled` | `UNPUB_METRICS_ENABLED` | `true` | Serve `/metrics`. |
 | `metrics.token` | `UNPUB_METRICS_TOKEN` | | Bearer token for scrapers. When set, `/metrics` needs it or an administrator, also in `public` mode. |
 | `ui.assetsDir` | `UNPUB_UI_ASSETS_DIR` | `/app/ui`, else `ui/dist`, if they hold `index.html` | The built [web client](#web-client). When set it must hold `index.html`. |
