@@ -223,9 +223,7 @@ describe('private registry', () => {
 describe('admin pages', () => {
   it('are forbidden to other roles', async () => {
     renderApp('/admin/users', { me: f.me(f.user()) })
-    expect(
-      await screen.findByRole('heading', { name: 'You may not open this page' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Administrators only' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Log in as an administrator' })).toBeInTheDocument()
   })
 })
