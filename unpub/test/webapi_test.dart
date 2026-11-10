@@ -463,8 +463,26 @@ See [usage](doc/usage.md) and [the license](/LICENSE).
           harness.metaStore.increaseDownloads('alpha', version);
         }
       }
-      // The counters are written without waiting.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      // The counters are written without waiting: wait until all are.
+      Future<bool> counted() async {
+        final package = await harness.packageDocument('alpha');
+        final stats = await harness.db
+            .collection(statsCollection)
+            .findOne(where.eq('name', 'alpha'));
+        final versions = await harness.metaStore
+            .versionDownloadCounts('alpha', ['1.0.0', '2.0.0']);
+        return package?['download'] == 40 + 11 &&
+            stats?['d${key.format(today)}'] == 3 + 11 &&
+            versions['1.0.0'] == 4 &&
+            versions['2.0.0'] == 7;
+      }
+
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (!await counted()) {
+        expect(DateTime.now().isBefore(deadline), isTrue,
+            reason: 'the download counters were not written');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
 
       final reply = await get('/webapi/package/alpha/stats');
       expect(reply.status, HttpStatus.ok, reason: reply.body);

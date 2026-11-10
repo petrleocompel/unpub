@@ -5,6 +5,7 @@ import 'package:unpub/src/paging.dart' show maxPage;
 import 'package:unpub/unpub.dart';
 
 import 'harness.dart';
+import 'openapi_schema.dart';
 
 const _bootstrap = 'bootstrap-secret-token';
 
@@ -491,6 +492,10 @@ metrics:
         expect(refused.status, HttpStatus.forbidden,
             reason: '$method $path without the header: ${refused.body}');
         expect(refused.json['error']['code'], 'csrf_failed');
+        expect(refused.json, {
+          'error': {'code': 'csrf_failed', 'message': isA<String>()},
+        });
+        expectResponse(method, path, refused.status, refused.json);
 
         final accepted = await harness.send(method, path,
             as: browser, json: body ?? const <String, Object>{});
@@ -498,6 +503,7 @@ metrics:
             reason: '$method $path: ${accepted.body}');
         expect(accepted.headers['content-type'], contains('json'),
             reason: '$method $path');
+        expectResponse(method, path, accepted.status, accepted.json);
       }
 
       final package = await harness.packageDocument('alpha');
