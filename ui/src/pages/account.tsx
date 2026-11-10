@@ -244,7 +244,11 @@ function Tokens() {
             <p className="text-sm">
               Then tell <InlineCode>dart pub</InlineCode> about it and paste the token when asked:
             </p>
-            <CodeBlock code={`dart pub token add ${hostedUrl(config)}`} label="the token command" />
+            <CodeBlock
+              code={`dart pub token add ${hostedUrl(config)}`}
+              label="the token command"
+              prompt
+            />
             <div>
               <Button variant="outline" size="sm" onClick={() => setCreated(null)}>
                 I have copied it

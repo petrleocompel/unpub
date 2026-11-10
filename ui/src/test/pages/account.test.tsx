@@ -27,7 +27,9 @@ describe('account', () => {
 
     const box = await screen.findByRole('status', { name: /ci-read/ })
     expect(within(box).getByText('unpub_secret_value')).toBeInTheDocument()
-    expect(within(box).getByText('dart pub token add https://pub.example.com')).toBeInTheDocument()
+    expect(
+      within(box).getByText(/dart pub token add https:\/\/pub.example.com/),
+    ).toBeInTheDocument()
     expect(within(box).getByText(/will not be shown again/)).toBeInTheDocument()
     expect(await created[0]!.json()).toEqual({
       name: 'ci-read',
