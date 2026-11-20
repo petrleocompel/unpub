@@ -34,8 +34,7 @@ bool isPrivateAddress(InternetAddress address) {
     return true;
   }
   // ::ffff:a.b.c.d and the deprecated ::a.b.c.d.
-  final mapped =
-      bytes.sublist(0, 10).every((byte) => byte == 0) &&
+  final mapped = bytes.sublist(0, 10).every((byte) => byte == 0) &&
       ((bytes[10] == 0xff && bytes[11] == 0xff) ||
           (bytes[10] == 0 && bytes[11] == 0));
   if (mapped) {
@@ -108,9 +107,8 @@ Future<InternetAddress> resolvePinnedHost(
   if (!allowPrivate) {
     for (final address in addresses) {
       if (isPrivateAddress(address)) {
-        final flag = allowPrivateFlag == null
-            ? ''
-            : ' ($allowPrivateFlag is false)';
+        final flag =
+            allowPrivateFlag == null ? '' : ' ($allowPrivateFlag is false)';
         throw RefusedAddressException(
           '$host resolves to the private address ${address.address}, which '
           '$purpose may not reach$flag',
@@ -126,10 +124,11 @@ Future<InternetAddress> resolveWebhookHost(
   String host, {
   required bool allowPrivate,
   Future<List<InternetAddress>> Function(String host)? lookup,
-}) => resolvePinnedHost(
-  host,
-  allowPrivate: allowPrivate,
-  purpose: 'webhooks',
-  allowPrivateFlag: 'webhooks.allowPrivateNetworks',
-  lookup: lookup,
-);
+}) =>
+    resolvePinnedHost(
+      host,
+      allowPrivate: allowPrivate,
+      purpose: 'webhooks',
+      allowPrivateFlag: 'webhooks.allowPrivateNetworks',
+      lookup: lookup,
+    );

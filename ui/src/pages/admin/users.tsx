@@ -378,7 +378,6 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           autoComplete="new-password"
           minLength={8}
           value={password}
-          aria-describedby={`${id}-password-hint`}
           onChange={(event) => setPassword(event.target.value)}
           {...invalidField(`${id}-error`, !!create.error, `${id}-password-hint`)}
         />
@@ -442,7 +441,6 @@ function SetPasswordForm({ user, onDone }: { user: User; onDone: () => void }) {
           required
           minLength={8}
           value={password}
-          aria-describedby={`${id}-password-hint`}
           onChange={(event) => setPassword(event.target.value)}
           {...invalidField(`${id}-error`, !!set.error, `${id}-password-hint`)}
         />

@@ -95,7 +95,8 @@ class _StallingStore extends PackageStore {
     String name,
     String version,
     String digest,
-  ) => inner.downloadObject(name, version, digest);
+  ) =>
+      inner.downloadObject(name, version, digest);
 
   @override
   Future<void> deleteObject(String name, String version, String digest) =>
@@ -143,10 +144,8 @@ class _LockWatchingMetaStore extends MongoStore {
 
   @override
   Future<void> addVersion(String name, UnpubVersion version) async {
-    locksDuringWrite = await db
-        .collection(objectLocksCollection)
-        .find()
-        .toList();
+    locksDuringWrite =
+        await db.collection(objectLocksCollection).find().toList();
     await super.addVersion(name, version);
   }
 }
@@ -228,13 +227,14 @@ void main() {
     Future<void> Function(Map<String, dynamic>, String)? uploadValidator,
     PublishConfig publish = const PublishConfig(),
     MetaStore? metaStore,
-  }) => App(
-    metaStore: metaStore ?? MongoStore(db),
-    packageStore: packageStore ?? FileStore(storage.path),
-    authenticator: const FakeAuthenticator(_token, 'dev@b.c'),
-    publishPolicy: PublishPolicy(publish),
-    uploadValidator: uploadValidator,
-  );
+  }) =>
+      App(
+        metaStore: metaStore ?? MongoStore(db),
+        packageStore: packageStore ?? FileStore(storage.path),
+        authenticator: const FakeAuthenticator(_token, 'dev@b.c'),
+        publishPolicy: PublishPolicy(publish),
+        uploadValidator: uploadValidator,
+      );
 
   String pubspec(String description, {String version = '1.0.0'}) =>
       'name: $_name\nversion: $version\ndescription: $description\n';
@@ -252,9 +252,8 @@ void main() {
   }
 
   Future<Map<String, dynamic>> storedVersion([String version = '1.0.0']) async {
-    final package = await db
-        .collection(packageCollection)
-        .findOne(where.eq('name', _name));
+    final package =
+        await db.collection(packageCollection).findOne(where.eq('name', _name));
     return (package!['versions'] as List)
         .cast<Map<String, dynamic>>()
         .singleWhere((item) => item['version'] == version);
@@ -328,15 +327,15 @@ void main() {
 
   group('adding a version', () {
     UnpubVersion entry(String version, String hash) => UnpubVersion(
-      version,
-      {'name': _name, 'version': version},
-      'name: $_name',
-      'dev@b.c',
-      null,
-      null,
-      DateTime.now(),
-      sha256: hash,
-    );
+          version,
+          {'name': _name, 'version': version},
+          'name: $_name',
+          'dev@b.c',
+          null,
+          null,
+          DateTime.now(),
+          sha256: hash,
+        );
 
     Future<List<Map<String, dynamic>>> packageDocuments() =>
         db.collection(packageCollection).find(where.eq('name', _name)).toList();
@@ -729,7 +728,8 @@ void main() {
       expect(objects(), hasLength(1));
     });
 
-    test('a losing upload deletes nothing, so a later publish of its digest '
+    test(
+        'a losing upload deletes nothing, so a later publish of its digest '
         'stays served', () async {
       final loserStore = _DeletionCountingStore(FileStore(storage.path));
       final losing = upload(buildApp(packageStore: loserStore), 'same');
@@ -841,9 +841,7 @@ void main() {
         publish: const PublishConfig(requireVersionBump: false),
       );
       expect(await upload(app, 'first'), isNull);
-      await db
-          .collection(packageCollection)
-          .updateOne(
+      await db.collection(packageCollection).updateOne(
             where.eq('name', _name),
             modify.unset(r'versions.0.sha256'),
           );
@@ -854,15 +852,15 @@ void main() {
 
     group('replacing, in the metadata store', () {
       UnpubVersion entry(String hash) => UnpubVersion(
-        '1.0.0',
-        {'name': _name, 'version': '1.0.0'},
-        'name: $_name',
-        'dev@b.c',
-        null,
-        null,
-        DateTime.now(),
-        sha256: hash,
-      );
+            '1.0.0',
+            {'name': _name, 'version': '1.0.0'},
+            'name: $_name',
+            'dev@b.c',
+            null,
+            null,
+            DateTime.now(),
+            sha256: hash,
+          );
 
       setUp(() => MongoStore(db).addVersion(_name, entry('original')));
 
@@ -901,11 +899,11 @@ void main() {
     final archiveOf = crypto.sha256.convert;
 
     Future<shelf.Response> download(App app) async => app.handler(
-      shelf.Request(
-        'GET',
-        Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz'),
-      ),
-    );
+          shelf.Request(
+            'GET',
+            Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz'),
+          ),
+        );
 
     Future<void> storeVersion(Map<String, Object> fields) =>
         db.collection(packageCollection).insertOne({
@@ -1234,9 +1232,9 @@ void main() {
     final reclaimAt = DateTime.now().add(const Duration(hours: 2));
 
     TemporaryReclaimer reclaimer() => TemporaryReclaimer(
-      FileStore(storage.path),
-      references: MongoArchiveReferences(db),
-    );
+          FileStore(storage.path),
+          references: MongoArchiveReferences(db),
+        );
 
     test('removes what a replacement left behind, and only that', () async {
       final app = buildApp(
@@ -1495,9 +1493,8 @@ storage:
 
     test('has a unique index and expires by itself', () async {
       await MongoStore(db).ensureIndexes();
-      final indexes = await db
-          .collection(uploadReservationsCollection)
-          .getIndexes();
+      final indexes =
+          await db.collection(uploadReservationsCollection).getIndexes();
       expect(
         indexes.singleWhere((i) => i['name'] == 'name_version')['unique'],
         isTrue,

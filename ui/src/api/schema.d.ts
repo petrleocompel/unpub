@@ -668,7 +668,7 @@ export interface components {
     Scope: 'read' | 'publish'
     /**
      * @example {
-     *       "version": "3.0.0-dev.6",
+     *       "version": "3.0.0-dev.7",
      *       "publicUrl": "https://pub.example.com",
      *       "readAccess": "authenticated",
      *       "accounts": true,
@@ -692,7 +692,7 @@ export interface components {
     Config: {
       /**
        * @description The version of the server.
-       * @example 3.0.0-dev.6
+       * @example 3.0.0-dev.7
        */
       version: string
       /** @description `server.publicUrl`, null when URLs derive from the request. */

@@ -16,8 +16,7 @@ const _ssr = UiConfig(assetsDir: _client, mode: UiMode.ssr);
 
 void main() {
   group('shell markup', () {
-    const index =
-        '<!doctype html><html><head><meta charset="utf-8">'
+    const index = '<!doctype html><html><head><meta charset="utf-8">'
         '<script type="module" src="./assets/a.js"></script>'
         '<link rel="stylesheet" href="/assets/a.css">'
         '<link rel="icon" href="https://cdn.example/x.svg"></head>'
@@ -91,7 +90,8 @@ void main() {
     Map<String, String> headers = const {},
     App? using,
     String method = 'GET',
-  }) => harness.send(method, path, html: html, headers: headers, using: using);
+  }) =>
+      harness.send(method, path, html: html, headers: headers, using: using);
 
   void expectShell(Reply reply, {String base = ''}) {
     expect(reply.status, HttpStatus.ok, reason: reply.body);
@@ -481,12 +481,12 @@ void main() {
     tearDown(() => root.deleteSync(recursive: true));
 
     Future<shelf.Response?> shell(SpaClient client) => client.handle(
-      shelf.Request(
-        'GET',
-        Uri.parse('http://internal/packages/alpha'),
-        headers: {'accept': 'text/html'},
-      ),
-    );
+          shelf.Request(
+            'GET',
+            Uri.parse('http://internal/packages/alpha'),
+            headers: {'accept': 'text/html'},
+          ),
+        );
 
     test('an index.html linked outside the build is refused at start', () {
       Link('${build.path}/index.html').createSync(secret.path);

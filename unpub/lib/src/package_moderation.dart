@@ -31,7 +31,7 @@ class ModerationException implements Exception {
   const ModerationException(this.statusCode, this.message);
 
   const ModerationException.invalid(this.message)
-    : statusCode = HttpStatus.badRequest;
+      : statusCode = HttpStatus.badRequest;
 
   @override
   String toString() => message;

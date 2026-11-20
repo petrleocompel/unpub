@@ -47,8 +47,7 @@ final _log = Logger('unpub.web');
 /// The policy sent with every page. Nothing inline is needed: the one script
 /// and the one stylesheet are files, and markdown images may come from any
 /// https host.
-const contentSecurityPolicy =
-    "default-src 'none'; script-src 'self'; "
+const contentSecurityPolicy = "default-src 'none'; script-src 'self'; "
     "style-src 'self'; img-src 'self' https: data:; connect-src 'self'; "
     "form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
@@ -167,7 +166,7 @@ class WebUi {
   final String basePath;
 
   WebUi(this.app, {String? basePath})
-    : basePath = basePath ?? app.ui.classicBasePath {
+      : basePath = basePath ?? app.ui.classicBasePath {
     if (this.basePath.isNotEmpty &&
         (!this.basePath.startsWith('/') || this.basePath.endsWith('/'))) {
       throw ArgumentError.value(
@@ -265,35 +264,36 @@ class WebUi {
   // Responses.
 
   PageContext _context(shelf.Request req) => PageContext(
-    principal: principalOf(req),
-    path: '/${req.url.path}',
-    query: req.url.path == 'packages' || req.url.path.isEmpty
-        ? req.url.queryParameters['q']
-        : null,
-    accountsEnabled: _accountApi != null,
-  );
+        principal: principalOf(req),
+        path: '/${req.url.path}',
+        query: req.url.path == 'packages' || req.url.path.isEmpty
+            ? req.url.queryParameters['q']
+            : null,
+        accountsEnabled: _accountApi != null,
+      );
 
   /// Headers of a page for [req]: a page shown to a signed-in user must not
   /// be kept by any cache.
   static Map<String, Object> pageHeaders(shelf.Request req) => {
-    HttpHeaders.contentTypeHeader: 'text/html; charset=utf-8',
-    HttpHeaders.cacheControlHeader:
-        principalOf(req)?.session != null || sessionCookie(req) != null
-        ? 'no-store'
-        : 'private, max-age=0',
-    ...securityHeaders,
-  };
+        HttpHeaders.contentTypeHeader: 'text/html; charset=utf-8',
+        HttpHeaders.cacheControlHeader:
+            principalOf(req)?.session != null || sessionCookie(req) != null
+                ? 'no-store'
+                : 'private, max-age=0',
+        ...securityHeaders,
+      };
 
   static shelf.Response _html(
     shelf.Request req,
     Html document, {
     int status = HttpStatus.ok,
     Map<String, Object> headers = const {},
-  }) => shelf.Response(
-    status,
-    body: document.markup,
-    headers: {...pageHeaders(req), ...headers},
-  );
+  }) =>
+      shelf.Response(
+        status,
+        body: document.markup,
+        headers: {...pageHeaders(req), ...headers},
+      );
 
   shelf.Response errorResponse(
     shelf.Request req,
@@ -324,7 +324,8 @@ class WebUi {
   shelf.Response _notFoundPage(
     shelf.Request req, [
     String message = 'There is nothing at this address.',
-  ]) => errorResponse(req, HttpStatus.notFound, 'Not found', message);
+  ]) =>
+      errorResponse(req, HttpStatus.notFound, 'Not found', message);
 
   shelf.Response _forbiddenPage(shelf.Request req, String message) =>
       errorResponse(req, HttpStatus.forbidden, 'Forbidden', message);
@@ -332,12 +333,12 @@ class WebUi {
   /// A redirect to [location], a path of a page, under the base path of the
   /// page being rendered.
   static shelf.Response _redirect(String location) => shelf.Response(
-    HttpStatus.seeOther,
-    headers: {
-      HttpHeaders.locationHeader: rebase(location),
-      HttpHeaders.cacheControlHeader: 'no-store',
-    },
-  );
+        HttpStatus.seeOther,
+        headers: {
+          HttpHeaders.locationHeader: rebase(location),
+          HttpHeaders.cacheControlHeader: 'no-store',
+        },
+      );
 
   /// Where a browser goes to log in and come back to [req], a request
   /// relative to the base path.
@@ -384,8 +385,7 @@ class WebUi {
   }
 
   /// Turns an error thrown while answering a browser into a page.
-  shelf.Middleware get errorPages =>
-      (inner) => (req) async {
+  shelf.Middleware get errorPages => (inner) => (req) async {
         try {
           return await inner(req);
         } on shelf.HijackException {
@@ -417,7 +417,8 @@ class WebUi {
   Future<shelf.Response> _reporting(
     shelf.Request outer,
     Future<shelf.Response> Function(shelf.Request) route,
-  ) => _rendering(() => _report(_local(outer), route));
+  ) =>
+      _rendering(() => _report(_local(outer), route));
 
   Future<shelf.Response> _report(
     shelf.Request req,
@@ -471,7 +472,7 @@ class WebUi {
 
   Function _guard3(
     Future<shelf.Response> Function(shelf.Request, String, String, String)
-    route,
+        route,
   ) =>
       (shelf.Request req, String a, String b, String c) =>
           _reporting(req, (local) => route(local, a, b, c));
@@ -558,12 +559,15 @@ class WebUi {
         'Package not found',
         'There is no package $name on this server.',
         extra: el('p', const {}, [
-          el('a', {
-            'href': _upstream
-                .resolve('/packages/${Uri.encodeComponent(name)}')
-                .toString(),
-            'rel': 'noopener',
-          }, 'Look for $name on ${_upstream.host}'),
+          el(
+              'a',
+              {
+                'href': _upstream
+                    .resolve('/packages/${Uri.encodeComponent(name)}')
+                    .toString(),
+                'rel': 'noopener',
+              },
+              'Look for $name on ${_upstream.host}'),
         ]),
       ),
       status: HttpStatus.notFound,
@@ -884,9 +888,8 @@ class WebUi {
     final done = req.url.queryParameters['done'];
     if (done == 'token-created') {
       final session = _sessionId(req);
-      final created = session == null
-          ? null
-          : _flash.take<CreatedToken>(session, 'token');
+      final created =
+          session == null ? null : _flash.take<CreatedToken>(session, 'token');
       return _accountPage(
         req,
         api,
@@ -895,7 +898,7 @@ class WebUi {
         notice: created != null
             ? null
             : 'The token was created. Its secret is shown only once: if it '
-                  'was not copied, revoke the token and create another.',
+                'was not copied, revoke the token and create another.',
       );
     }
     return _accountPage(req, api, principal, notice: _doneMessages[done]);
@@ -919,19 +922,19 @@ class WebUi {
       return switch (outcome) {
         PasswordChanged() => _redirect('/account?done=password-changed'),
         Throttled() => await _accountPage(
-          req,
-          api,
-          principal,
-          error: 'Too many failed attempts. Try again later.',
-          status: HttpStatus.tooManyRequests,
-        ),
+            req,
+            api,
+            principal,
+            error: 'Too many failed attempts. Try again later.',
+            status: HttpStatus.tooManyRequests,
+          ),
         _ => await _accountPage(
-          req,
-          api,
-          principal,
-          error: 'The current password is wrong.',
-          status: HttpStatus.forbidden,
-        ),
+            req,
+            api,
+            principal,
+            error: 'The current password is wrong.',
+            status: HttpStatus.forbidden,
+          ),
       };
     } on AccountException catch (error) {
       return _accountPage(
@@ -1053,7 +1056,7 @@ class WebUi {
   Future<shelf.Response> _changingUsers(
     shelf.Request req,
     Future<String> Function(AccountApi, Principal, Map<String, List<String>>)
-    change,
+        change,
   ) async {
     final principal = _administrator(req);
     final api = _requireAccounts();
@@ -1105,8 +1108,8 @@ class WebUi {
           'true' => true,
           'false' => false,
           _ => throw const AccountException.invalid(
-            'disabled must be true or false',
-          ),
+              'disabled must be true or false',
+            ),
         };
         final user = await api.accounts.requireUserById(id);
         await api.accounts.updateUser(

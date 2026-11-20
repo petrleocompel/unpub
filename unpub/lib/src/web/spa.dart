@@ -100,7 +100,7 @@ class SpaClient {
   (DateTime, String)? _shell;
 
   SpaClient(String directory, {this.basePath = '', this.classicPath = ''})
-    : directory = Directory(directory).resolveSymbolicLinksSync() {
+      : directory = Directory(directory).resolveSymbolicLinksSync() {
     if (_file(const ['index.html']) == null) {
       throw ArgumentError.value(
         directory,
@@ -319,20 +319,17 @@ String shellFor(
   required String classicPath,
   Set<String> buildEntries = const {'assets'},
 }) {
-  final rebased = index
-      .replaceAllMapped(_reference, (match) {
-        final relative = match[2] == './';
-        if (!relative && !buildEntries.contains(match[3])) return match[0]!;
-        return '${match[1]}$basePath/${match[3]}';
-      })
-      .replaceAllMapped(_classicLink, (match) {
-        final rest = match.input[match.end];
-        // `/classic` alone, or followed by a query or fragment, is the root.
-        final root = classicPath.isEmpty && rest != '/' ? '/' : classicPath;
-        return '${match[1]}${escapeHtml(root)}';
-      });
-  final meta =
-      '\n<meta name="unpub-base" content="${escapeHtml(basePath)}">'
+  final rebased = index.replaceAllMapped(_reference, (match) {
+    final relative = match[2] == './';
+    if (!relative && !buildEntries.contains(match[3])) return match[0]!;
+    return '${match[1]}$basePath/${match[3]}';
+  }).replaceAllMapped(_classicLink, (match) {
+    final rest = match.input[match.end];
+    // `/classic` alone, or followed by a query or fragment, is the root.
+    final root = classicPath.isEmpty && rest != '/' ? '/' : classicPath;
+    return '${match[1]}${escapeHtml(root)}';
+  });
+  final meta = '\n<meta name="unpub-base" content="${escapeHtml(basePath)}">'
       '\n<meta name="unpub-classic" content="${escapeHtml(classicPath)}">';
   final head = _head.firstMatch(rebased);
   if (head == null) return '$meta\n$rebased';

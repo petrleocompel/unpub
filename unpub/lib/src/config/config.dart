@@ -16,8 +16,7 @@ class ConfigException implements Exception {
   const ConfigException(this.problems);
 
   @override
-  String toString() =>
-      'Invalid configuration:\n'
+  String toString() => 'Invalid configuration:\n'
       '${problems.map((problem) => '  - $problem').join('\n')}';
 }
 
@@ -943,9 +942,8 @@ class _ConfigReader {
   UpstreamConfig _upstream() {
     final url = _httpUrl('upstream.url') ?? Uri.parse('https://pub.dev');
     final modeName = _string('upstream.mode') ?? UpstreamMode.redirect.name;
-    final mode = UpstreamMode.values
-        .where((m) => m.name == modeName)
-        .firstOrNull;
+    final mode =
+        UpstreamMode.values.where((m) => m.name == modeName).firstOrNull;
     if (mode == null) {
       _problems.add(
         '${_describe('upstream.mode')} must be one of redirect, '
@@ -989,23 +987,19 @@ class _ConfigReader {
     return UpstreamConfig(
       url: url,
       mode: mode ?? UpstreamMode.redirect,
-      cacheTtl:
-          _duration('upstream.cacheTtl', allowZero: true) ??
+      cacheTtl: _duration('upstream.cacheTtl', allowZero: true) ??
           UpstreamConfig.defaultCacheTtl,
       allowlist: allowlist,
-      timeout:
-          _duration('upstream.timeout', allowZero: false) ??
+      timeout: _duration('upstream.timeout', allowZero: false) ??
           UpstreamConfig.defaultTimeout,
       allowedArchiveHosts: [for (final h in archiveHosts) h.toLowerCase()],
       requireSha256: _boolean('upstream.requireSha256') ?? true,
       allowPublishWhenUnavailable:
           _boolean('upstream.allowPublishWhenUnavailable') ?? false,
       allowPrivateNetworks: _boolean('upstream.allowPrivateNetworks') ?? false,
-      maxArchiveBytes:
-          _integer('upstream.maxArchiveBytes') ??
+      maxArchiveBytes: _integer('upstream.maxArchiveBytes') ??
           UpstreamConfig.defaultMaxArchiveBytes,
-      maxConcurrentFetches:
-          _integer('upstream.maxConcurrentFetches') ??
+      maxConcurrentFetches: _integer('upstream.maxConcurrentFetches') ??
           UpstreamConfig.defaultMaxConcurrentFetches,
     );
   }
@@ -1053,9 +1047,8 @@ class _ConfigReader {
       requiredFiles: requiredFiles,
       rejectOlderThanLatest: _boolean('publish.rejectOlderThanLatest') ?? false,
       requireVersionBump: _boolean('publish.requireVersionBump') ?? true,
-      retractionWindow: window == Duration.zero
-          ? null
-          : window ?? defaults.retractionWindow,
+      retractionWindow:
+          window == Duration.zero ? null : window ?? defaults.retractionWindow,
       uploadTimeout: uploadTimeout ?? defaults.uploadTimeout,
     );
   }
@@ -1083,9 +1076,8 @@ class _ConfigReader {
 
   StorageConfig _storage() {
     final typeName = _string('storage.type') ?? StorageType.file.name;
-    final type = StorageType.values
-        .where((type) => type.name == typeName)
-        .firstOrNull;
+    final type =
+        StorageType.values.where((type) => type.name == typeName).firstOrNull;
     if (type == null) {
       _problems.add(
         '${_describe('storage.type')} must be one of file, s3, '
@@ -1107,8 +1099,7 @@ class _ConfigReader {
       _problems.add('storage.s3.bucket is required when storage.type is s3');
     }
 
-    final region =
-        _string('storage.s3.region') ??
+    final region = _string('storage.s3.region') ??
         _nonEmptyEnv('AWS_DEFAULT_REGION') ??
         _nonEmptyEnv('AWS_REGION');
     if (region == null) {
@@ -1118,8 +1109,7 @@ class _ConfigReader {
       );
     }
 
-    final endpoint =
-        _string('storage.s3.endpoint') ??
+    final endpoint = _string('storage.s3.endpoint') ??
         _nonEmptyEnv('AWS_S3_ENDPOINT') ??
         's3.amazonaws.com';
     if (endpoint.contains('://') || endpoint.contains('/')) {
@@ -1197,9 +1187,8 @@ class _ConfigReader {
       );
     }
     final readAccessName = _string('auth.readAccess') ?? ReadAccess.public.name;
-    final readAccess = ReadAccess.values
-        .where((a) => a.name == readAccessName)
-        .firstOrNull;
+    final readAccess =
+        ReadAccess.values.where((a) => a.name == readAccessName).firstOrNull;
     if (readAccess == null) {
       _problems.add(
         '${_describe('auth.readAccess')} must be one of public, '
@@ -1257,9 +1246,8 @@ class _ConfigReader {
       );
     }
     final formatName = _string('logging.format') ?? LogFormat.text.name;
-    final format = LogFormat.values
-        .where((f) => f.name == formatName)
-        .firstOrNull;
+    final format =
+        LogFormat.values.where((f) => f.name == formatName).firstOrNull;
     if (format == null) {
       _problems.add(
         '${_describe('logging.format')} must be one of text, json, '
