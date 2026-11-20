@@ -84,15 +84,29 @@ describe('login', () => {
       const button = screen.getByRole('button', { name: 'Log in' })
       expect(button).toBeDisabled()
 
-      act(() => vi.advanceTimersByTime((left - 5) * 1000))
+      // useCountdown re-arms a 1s timeout from useEffect, so advance one
+      // second at a time and let act flush the next schedule.
+      for (let i = 0; i < left - 5; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
       expect(within(alert).getByText(/^Try again in 0:0[45]\.$/)).toBeInTheDocument()
       expect(button).toBeDisabled()
 
-      act(() => vi.advanceTimersByTime(6_000))
+      for (let i = 0; i < 6; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
       expect(alert).toHaveTextContent('Too many attempts. You can try again now.')
       expect(within(alert).queryByText(/Try again in/)).toBeNull()
       expect(button).toBeEnabled()
-      act(() => vi.advanceTimersByTime(5_000))
+      for (let i = 0; i < 5; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
       expect(alert).toHaveTextContent('You can try again now.')
 
       await user.type(screen.getByLabelText('Password'), 'whatever2')

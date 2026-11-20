@@ -448,7 +448,8 @@ void main() {
     test('needs an existing user when accounts are enabled', () async {
       final admin = await user('a@b.c', Role.admin);
       await addPackage('owned', ['a@b.c']);
-      final reply = await add('owned', 'nobody@b.c', bearer: await token(admin));
+      final reply =
+          await add('owned', 'nobody@b.c', bearer: await token(admin));
       expect(reply.status, HttpStatus.notFound);
       expect(reply.body['error']['message'],
           'there is no user with the email nobody@b.c');
