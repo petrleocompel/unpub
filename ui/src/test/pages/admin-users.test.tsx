@@ -165,8 +165,6 @@ describe('admin users', () => {
     expect(
       screen.queryByRole('button', { name: 'Actions for jane.doe@company.example' }),
     ).toBeNull()
-    expect(
-      screen.getByText(/Log in with your password to create users/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Log in with your password to create users/i)).toBeInTheDocument()
   })
 })

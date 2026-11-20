@@ -186,9 +186,7 @@ describe('logout', () => {
   it('keeps the session when CSRF refresh cannot see the user', async () => {
     packages()
     server.use(
-      http.post(url('/webapi/logout'), () =>
-        error(403, 'csrf_failed', 'CSRF token mismatch.'),
-      ),
+      http.post(url('/webapi/logout'), () => error(403, 'csrf_failed', 'CSRF token mismatch.')),
     )
     const { user } = renderApp('/', { me: f.me() })
     // Install the null /me after bootstrap: renderApp seeds me, and a handler
