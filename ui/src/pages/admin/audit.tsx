@@ -282,6 +282,8 @@ function identity(event: AuditEvent): string {
     event.version,
     event.target,
     event.ip,
+    // Distinguish same-second twin events that only differ in details.
+    JSON.stringify(event.details),
   ]
     .map((value) => value ?? '')
     .join('\u0000')

@@ -88,10 +88,15 @@ class RefusedAddressException implements Exception {
 /// Unless [allowPrivate] is true, every address the name resolves to has to
 /// be public, so that a name with one public and one private address cannot
 /// be used to reach the private one. The connection then goes to the address
-/// checked here, never to a second lookup.
-Future<InternetAddress> resolveWebhookHost(String host,
-    {required bool allowPrivate,
-    Future<List<InternetAddress>> Function(String host)? lookup}) async {
+/// checked here, never to a second lookup. [purpose] names what is connecting
+/// in the refusal message, for example `webhooks` or `the upstream`.
+Future<InternetAddress> resolvePinnedHost(
+  String host, {
+  required bool allowPrivate,
+  String purpose = 'this connection',
+  String? allowPrivateFlag,
+  Future<List<InternetAddress>> Function(String host)? lookup,
+}) async {
   final literal = InternetAddress.tryParse(host);
   final addresses = literal != null
       ? [literal]
@@ -102,11 +107,28 @@ Future<InternetAddress> resolveWebhookHost(String host,
   if (!allowPrivate) {
     for (final address in addresses) {
       if (isPrivateAddress(address)) {
+        final flag =
+            allowPrivateFlag == null ? '' : ' ($allowPrivateFlag is false)';
         throw RefusedAddressException(
-            '$host resolves to the private address ${address.address}, which '
-            'webhooks may not reach (webhooks.allowPrivateNetworks is false)');
+          '$host resolves to the private address ${address.address}, which '
+          '$purpose may not reach$flag',
+        );
       }
     }
   }
   return addresses.first;
 }
+
+/// [resolvePinnedHost] for webhook deliveries.
+Future<InternetAddress> resolveWebhookHost(
+  String host, {
+  required bool allowPrivate,
+  Future<List<InternetAddress>> Function(String host)? lookup,
+}) =>
+    resolvePinnedHost(
+      host,
+      allowPrivate: allowPrivate,
+      purpose: 'webhooks',
+      allowPrivateFlag: 'webhooks.allowPrivateNetworks',
+      lookup: lookup,
+    );

@@ -111,7 +111,7 @@ export function Root() {
   if (config.isPending || me.isPending) return <ShellSkeleton />
   if (config.isError || me.isError) {
     return (
-      <main className="mx-auto max-w-xl p-8">
+      <main id="main" tabIndex={-1} className="mx-auto max-w-xl p-8">
         <ErrorState
           title="unpub cannot be reached"
           error={config.error ?? me.error}

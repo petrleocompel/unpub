@@ -44,7 +44,11 @@ class _PausingStore extends FileStore {
 
   @override
   Future<void> storeObject(
-      String name, String version, String digest, List<int> content) async {
+    String name,
+    String version,
+    String digest,
+    List<int> content,
+  ) async {
     if (reached?.isCompleted == false) reached!.complete();
     await resume?.future;
     final error = failure;
@@ -70,7 +74,11 @@ class _StallingStore extends PackageStore {
 
   @override
   Future<void> storeObject(
-      String name, String version, String digest, List<int> content) async {
+    String name,
+    String version,
+    String digest,
+    List<int> content,
+  ) async {
     await inner.storeObject(name, version, digest, content);
     if (!reached.isCompleted) {
       reached.complete();
@@ -84,7 +92,10 @@ class _StallingStore extends PackageStore {
 
   @override
   Stream<List<int>> downloadObject(
-          String name, String version, String digest) =>
+    String name,
+    String version,
+    String digest,
+  ) =>
       inner.downloadObject(name, version, digest);
 
   @override
@@ -229,10 +240,14 @@ void main() {
       'name: $_name\nversion: $version\ndescription: $description\n';
 
   /// The error of an upload, or null if it succeeded.
-  Future<String?> upload(App app, String description,
-      {String version = '1.0.0'}) async {
-    final response = await app
-        .handler(uploadRequest(pubspec(description, version: version), _auth));
+  Future<String?> upload(
+    App app,
+    String description, {
+    String version = '1.0.0',
+  }) async {
+    final response = await app.handler(
+      uploadRequest(pubspec(description, version: version), _auth),
+    );
     return Uri.parse(response.headers['location']!).queryParameters['error'];
   }
 
@@ -260,8 +275,12 @@ void main() {
   /// to the hash in the metadata.
   Future<void> expectServedConsistent(App app) async {
     final stored = await storedVersion();
-    final response = await app.handler(shelf.Request('GET',
-        Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz')));
+    final response = await app.handler(
+      shelf.Request(
+        'GET',
+        Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz'),
+      ),
+    );
     expect(response.statusCode, HttpStatus.ok);
     final digest = crypto.sha256
         .convert(await collectBytes(response.read().map((c) => c)))
@@ -345,8 +364,9 @@ void main() {
     });
 
     test('many concurrent first publishes leave one entry', () async {
-      final results = await addAll(
-          [for (var i = 0; i < 16; i++) entry('1.0.0', 'hash $i')]);
+      final results = await addAll([
+        for (var i = 0; i < 16; i++) entry('1.0.0', 'hash $i'),
+      ]);
 
       expect(results.where((error) => error == null), hasLength(1));
       expect(results.whereType<VersionExistsException>(), hasLength(15));
@@ -366,24 +386,33 @@ void main() {
       expect(documents.single['versions'], hasLength(8));
     });
 
-    test('two concurrent adds to an existing package leave one entry',
-        () async {
-      await MongoStore(db).addVersion(_name, entry('1.0.0', 'first'));
+    test(
+      'two concurrent adds to an existing package leave one entry',
+      () async {
+        await MongoStore(db).addVersion(_name, entry('1.0.0', 'first'));
 
-      final results = await addAll([entry('2.0.0', 'a'), entry('2.0.0', 'b')]);
+        final results = await addAll([
+          entry('2.0.0', 'a'),
+          entry('2.0.0', 'b'),
+        ]);
 
-      expect(results.where((error) => error == null), hasLength(1));
-      expect(results.whereType<VersionExistsException>(), hasLength(1));
-      final versions = (await packageDocuments()).single['versions'] as List;
-      expect(
-          versions.where((item) => item['version'] == '2.0.0'), hasLength(1));
-    });
+        expect(results.where((error) => error == null), hasLength(1));
+        expect(results.whereType<VersionExistsException>(), hasLength(1));
+        final versions = (await packageDocuments()).single['versions'] as List;
+        expect(
+          versions.where((item) => item['version'] == '2.0.0'),
+          hasLength(1),
+        );
+      },
+    );
 
     test('adding a version that exists changes nothing', () async {
       final store = MongoStore(db);
       await store.addVersion(_name, entry('1.0.0', 'first'));
-      await expectLater(store.addVersion(_name, entry('1.0.0', 'second')),
-          throwsA(isA<VersionExistsException>()));
+      await expectLater(
+        store.addVersion(_name, entry('1.0.0', 'second')),
+        throwsA(isA<VersionExistsException>()),
+      );
       expect((await storedVersion())['sha256'], 'first');
     });
   });
@@ -391,8 +420,10 @@ void main() {
   group('the unique index on package names', () {
     test('exists after startup', () async {
       final indexes = await db.collection(packageCollection).getIndexes();
-      expect(indexes.singleWhere((i) => i['name'] == 'name_unique')['unique'],
-          isTrue);
+      expect(
+        indexes.singleWhere((i) => i['name'] == 'name_unique')['unique'],
+        isTrue,
+      );
     });
 
     test('is safe to create twice', () async {
@@ -409,9 +440,15 @@ void main() {
       ]);
 
       await expectLater(
-          MongoStore(db).ensureIndexes(),
-          throwsA(isA<StateError>().having((e) => e.message, 'message',
-              allOf(contains('twice'), isNot(contains('once'))))));
+        MongoStore(db).ensureIndexes(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('twice'), isNot(contains('once'))),
+          ),
+        ),
+      );
     });
   });
 
@@ -419,18 +456,22 @@ void main() {
     test('a second upload during the validator is refused', () async {
       final entered = Completer<void>();
       final resume = Completer<void>();
-      final app = buildApp(uploadValidator: (spec, _) async {
-        if (spec['description'] == 'first') {
-          entered.complete();
-          await resume.future;
-        }
-      });
+      final app = buildApp(
+        uploadValidator: (spec, _) async {
+          if (spec['description'] == 'first') {
+            entered.complete();
+            await resume.future;
+          }
+        },
+      );
 
       final first = upload(app, 'first');
       await entered.future;
 
-      expect(await upload(app, 'second'),
-          contains('version is being published by another request'));
+      expect(
+        await upload(app, 'second'),
+        contains('version is being published by another request'),
+      );
 
       resume.complete();
       expect(await first, isNull);
@@ -439,13 +480,17 @@ void main() {
 
     test('the validator runs after the package is claimed', () async {
       final validated = <String>[];
-      final app = buildApp(uploadValidator: (spec, _) async {
-        validated.add(spec['description'] as String);
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
+      final app = buildApp(
+        uploadValidator: (spec, _) async {
+          validated.add(spec['description'] as String);
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        },
+      );
 
-      final results =
-          await Future.wait([upload(app, 'one'), upload(app, 'two')]);
+      final results = await Future.wait([
+        upload(app, 'one'),
+        upload(app, 'two'),
+      ]);
 
       expect(results.where((error) => error == null), hasLength(1));
       expect(validated, hasLength(1));
@@ -453,8 +498,9 @@ void main() {
     });
 
     test('the version can be published once the first one is done', () async {
-      final app =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final app = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'first'), isNull);
       expect(await upload(app, 'second'), isNull);
       await expectConsistent('second');
@@ -463,12 +509,14 @@ void main() {
     test('a different version is not held up', () async {
       final entered = Completer<void>();
       final resume = Completer<void>();
-      final app = buildApp(uploadValidator: (spec, _) async {
-        if (spec['version'] == '1.0.0') {
-          entered.complete();
-          await resume.future;
-        }
-      });
+      final app = buildApp(
+        uploadValidator: (spec, _) async {
+          if (spec['version'] == '1.0.0') {
+            entered.complete();
+            await resume.future;
+          }
+        },
+      );
 
       final first = upload(app, 'first');
       await entered.future;
@@ -489,39 +537,46 @@ void main() {
       final first = upload(firstServer, 'first');
       await store.reached!.future;
 
-      expect(await upload(secondServer, 'second'),
-          contains('version is being published by another request'));
+      expect(
+        await upload(secondServer, 'second'),
+        contains('version is being published by another request'),
+      );
 
       store.resume!.complete();
       expect(await first, isNull);
       await expectConsistent('first');
     });
 
-    test('a server that resumes after the other published stores nothing',
-        () async {
-      final entered = Completer<void>();
-      final resume = Completer<void>();
-      final slowServer = buildApp(uploadValidator: (_, __) async {
-        entered.complete();
-        await resume.future;
-      });
-      final fastServer = buildApp();
+    test(
+      'a server that resumes after the other published stores nothing',
+      () async {
+        final entered = Completer<void>();
+        final resume = Completer<void>();
+        final slowServer = buildApp(
+          uploadValidator: (_, __) async {
+            entered.complete();
+            await resume.future;
+          },
+        );
+        final fastServer = buildApp();
 
-      final slow = upload(slowServer, 'slow');
-      await entered.future;
-      expect(await upload(fastServer, 'fast'), isNull);
+        final slow = upload(slowServer, 'slow');
+        await entered.future;
+        expect(await upload(fastServer, 'fast'), isNull);
 
-      resume.complete();
+        resume.complete();
 
-      expect(await slow, contains('already exists'));
-      await expectConsistent('fast');
-    });
+        expect(await slow, contains('already exists'));
+        await expectConsistent('fast');
+      },
+    );
 
     test('concurrent servers leave one consistent version', () async {
       final servers = [for (var i = 0; i < 8; i++) buildApp()];
 
-      final results = await Future.wait(
-          [for (var i = 0; i < 8; i++) upload(servers[i], 'upload $i')]);
+      final results = await Future.wait([
+        for (var i = 0; i < 8; i++) upload(servers[i], 'upload $i'),
+      ]);
 
       final winner = results.indexOf(null);
       expect(results.where((error) => error == null), hasLength(1));
@@ -529,19 +584,37 @@ void main() {
       expect(await reservations(), isEmpty);
     });
 
-    test('a reservation left by a dead server blocks until it expires',
-        () async {
+    test(
+      'a reservation left by a dead server blocks until it expires',
+      () async {
+        await db.collection(uploadReservationsCollection).insertOne({
+          'name': _name,
+          'version': '1.0.0',
+          'reservation': 'dead',
+          'createdAt': DateTime.now(),
+          'expiresAt': DateTime.now().add(const Duration(minutes: 15)),
+        });
+
+        expect(
+          await upload(buildApp(), 'blocked'),
+          contains('version is being published by another request'),
+        );
+        expect(objects(), isEmpty);
+      },
+    );
+
+    test('an expired reservation is reclaimed on the next publish', () async {
       await db.collection(uploadReservationsCollection).insertOne({
         'name': _name,
         'version': '1.0.0',
         'reservation': 'dead',
-        'createdAt': DateTime.now(),
-        'expiresAt': DateTime.now().add(const Duration(minutes: 15)),
+        'createdAt': DateTime.now().subtract(const Duration(minutes: 20)),
+        'expiresAt': DateTime.now().subtract(const Duration(minutes: 5)),
       });
 
-      expect(await upload(buildApp(), 'blocked'),
-          contains('version is being published by another request'));
-      expect(objects(), isEmpty);
+      expect(await upload(buildApp(), 'reclaimed'), isNull);
+      expect(await reservations(), isEmpty);
+      await expectConsistent('reclaimed');
     });
 
     test('only its holder can renew a reservation', () async {
@@ -555,9 +628,11 @@ void main() {
 
       expect(await meta.renewUpload(_name, '1.0.0', held!), isTrue);
       expect(
-          ((await reservations()).single['expiresAt'] as DateTime)
-              .isAfter(before),
-          isTrue);
+        ((await reservations()).single['expiresAt'] as DateTime).isAfter(
+          before,
+        ),
+        isTrue,
+      );
 
       await meta.releaseUpload(_name, '1.0.0', held);
       expect(await meta.renewUpload(_name, '1.0.0', held), isFalse);
@@ -578,29 +653,31 @@ void main() {
   });
 
   group('digest-addressed objects', () {
-    test('a publisher stalled past its reservation cannot replace the winner',
-        () async {
-      final store = _PausingStore(storage.path)
-        ..reached = Completer<void>()
-        ..resume = Completer<void>();
-      final stalled = upload(buildApp(packageStore: store), 'stalled');
-      await store.reached!.future;
+    test(
+      'a publisher stalled past its reservation cannot replace the winner',
+      () async {
+        final store = _PausingStore(storage.path)
+          ..reached = Completer<void>()
+          ..resume = Completer<void>();
+        final stalled = upload(buildApp(packageStore: store), 'stalled');
+        await store.reached!.future;
 
-      // What the TTL index does once the reservation has run out.
-      await db
-          .collection(uploadReservationsCollection)
-          .deleteMany(where.eq('name', _name));
-      expect(await upload(buildApp(), 'winner'), isNull);
-      final winner = objectFile((await storedVersion())['sha256'] as String);
-      final winnerBytes = winner.readAsBytesSync();
+        // What the TTL index does once the reservation has run out.
+        await db
+            .collection(uploadReservationsCollection)
+            .deleteMany(where.eq('name', _name));
+        expect(await upload(buildApp(), 'winner'), isNull);
+        final winner = objectFile((await storedVersion())['sha256'] as String);
+        final winnerBytes = winner.readAsBytesSync();
 
-      store.resume!.complete();
+        store.resume!.complete();
 
-      expect(await stalled, contains('already exists'));
-      expect(winner.readAsBytesSync(), winnerBytes);
-      await expectConsistent('winner');
-      expect(temporaries(), isEmpty);
-    });
+        expect(await stalled, contains('already exists'));
+        expect(winner.readAsBytesSync(), winnerBytes);
+        await expectConsistent('winner');
+        expect(temporaries(), isEmpty);
+      },
+    );
 
     test('nothing is published until the metadata is written', () async {
       final store = _PausingStore(storage.path)
@@ -618,27 +695,34 @@ void main() {
       await expectConsistent('first');
     });
 
-    test('losing the metadata write leaves the object to reclamation',
-        () async {
-      final error =
-          await upload(buildApp(metaStore: _LosingMetaStore(db)), 'first');
+    test(
+      'losing the metadata write leaves the object to reclamation',
+      () async {
+        final error = await upload(
+          buildApp(metaStore: _LosingMetaStore(db)),
+          'first',
+        );
 
-      expect(error, contains('already exists'));
-      expect(objects(), hasLength(1));
-      expect(temporaries(), isEmpty);
+        expect(error, contains('already exists'));
+        expect(objects(), hasLength(1));
+        expect(temporaries(), isEmpty);
 
-      expect(
-          await TemporaryReclaimer(FileStore(storage.path),
-                  references: MongoArchiveReferences(db))
-              .reclaimOrphans(
-                  now: DateTime.now().add(const Duration(hours: 2))),
-          1);
-      expect(objects(), isEmpty);
-    });
+        expect(
+          await TemporaryReclaimer(
+            FileStore(storage.path),
+            references: MongoArchiveReferences(db),
+          ).reclaimOrphans(now: DateTime.now().add(const Duration(hours: 2))),
+          1,
+        );
+        expect(objects(), isEmpty);
+      },
+    );
 
     test('a failed metadata write leaves the object to reclamation', () async {
       final error = await upload(
-          buildApp(metaStore: _FailingMetaStore(db, applied: false)), 'first');
+        buildApp(metaStore: _FailingMetaStore(db, applied: false)),
+        'first',
+      );
 
       expect(error, contains('connection lost'));
       expect(objects(), hasLength(1));
@@ -654,8 +738,9 @@ void main() {
           .collection(uploadReservationsCollection)
           .deleteMany(where.eq('name', _name));
 
-      final winner =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final winner = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(winner, 'different'), isNull);
       loserStore.resume.complete();
       expect(await losing, contains('already exists'));
@@ -669,7 +754,9 @@ void main() {
 
     test('an object the metadata does refer to is kept', () async {
       final error = await upload(
-          buildApp(metaStore: _FailingMetaStore(db, applied: true)), 'first');
+        buildApp(metaStore: _FailingMetaStore(db, applied: true)),
+        'first',
+      );
 
       expect(error, contains('connection lost'));
       expect(objects(), hasLength(1));
@@ -697,38 +784,46 @@ void main() {
     test('an object removed during the publish is put back', () async {
       final store = FileStore(storage.path);
       expect(
-          await upload(
-              buildApp(
-                  packageStore: store,
-                  metaStore: _RemovingMetaStore(db, store)),
-              'first'),
-          isNull);
+        await upload(
+          buildApp(
+            packageStore: store,
+            metaStore: _RemovingMetaStore(db, store),
+          ),
+          'first',
+        ),
+        isNull,
+      );
       await expectConsistent('first');
     });
 
-    test('a legacy file neither blocks a publish nor is served over it',
-        () async {
-      legacyFile().writeAsStringSync('left behind');
+    test(
+      'a legacy file neither blocks a publish nor is served over it',
+      () async {
+        legacyFile().writeAsStringSync('left behind');
 
-      final app = buildApp();
-      expect(await upload(app, 'first'), isNull);
+        final app = buildApp();
+        expect(await upload(app, 'first'), isNull);
 
-      expect(legacyFile().readAsStringSync(), 'left behind');
-      await expectConsistent('first');
-      await expectServedConsistent(app);
-    });
+        expect(legacyFile().readAsStringSync(), 'left behind');
+        await expectConsistent('first');
+        await expectServedConsistent(app);
+      },
+    );
 
     test('a failing write leaves nothing', () async {
       final store = _PausingStore(storage.path)..failure = 'disk full';
-      expect(await upload(buildApp(packageStore: store), 'first'),
-          contains('disk full'));
+      expect(
+        await upload(buildApp(packageStore: store), 'first'),
+        contains('disk full'),
+      );
       expect(objects(), isEmpty);
       expect(temporaries(), isEmpty);
     });
 
     test('replacing a version adds an object and moves the pointer', () async {
-      final app =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final app = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'first'), isNull);
       final first = (await storedVersion())['sha256'] as String;
       expect(await upload(app, 'second'), isNull);
@@ -742,11 +837,14 @@ void main() {
     });
 
     test('replacing a version without a hash is allowed', () async {
-      final app =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final app = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'first'), isNull);
       await db.collection(packageCollection).updateOne(
-          where.eq('name', _name), modify.unset(r'versions.0.sha256'));
+            where.eq('name', _name),
+            modify.unset(r'versions.0.sha256'),
+          );
 
       expect(await upload(app, 'second'), isNull);
       await expectConsistent('second');
@@ -768,17 +866,21 @@ void main() {
 
       test('applies when the hash is the expected one', () async {
         expect(
-            await MongoStore(db).replaceVersion(_name, entry('new'),
-                expectedSha256: 'original'),
-            isTrue);
+          await MongoStore(
+            db,
+          ).replaceVersion(_name, entry('new'), expectedSha256: 'original'),
+          isTrue,
+        );
         expect((await storedVersion())['sha256'], 'new');
       });
 
       test('changes nothing when the hash has moved on', () async {
         expect(
-            await MongoStore(db)
-                .replaceVersion(_name, entry('new'), expectedSha256: 'stale'),
-            isFalse);
+          await MongoStore(
+            db,
+          ).replaceVersion(_name, entry('new'), expectedSha256: 'stale'),
+          isFalse,
+        );
         expect((await storedVersion())['sha256'], 'original');
       });
 
@@ -796,9 +898,12 @@ void main() {
   group('the archive layout', () {
     final archiveOf = crypto.sha256.convert;
 
-    Future<shelf.Response> download(App app) async => app.handler(shelf.Request(
-        'GET',
-        Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz')));
+    Future<shelf.Response> download(App app) async => app.handler(
+          shelf.Request(
+            'GET',
+            Uri.parse('http://localhost/packages/$_name/versions/1.0.0.tar.gz'),
+          ),
+        );
 
     Future<void> storeVersion(Map<String, Object> fields) =>
         db.collection(packageCollection).insertOne({
@@ -827,8 +932,9 @@ void main() {
       ..writeAsBytesSync(bytes);
 
     test('new uploads and replacements record the digest layout', () async {
-      final app =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final app = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'first'), isNull);
       expect((await storedVersion())['archiveLayout'], 'digest');
       expect(await upload(app, 'second'), isNull);
@@ -838,8 +944,9 @@ void main() {
     test('a missing digest object is a 404, never the legacy bytes', () async {
       final store = FileStore(storage.path);
       final app = buildApp(
-          packageStore: store,
-          publish: const PublishConfig(requireVersionBump: false));
+        packageStore: store,
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'legacy'), isNull);
       final old = (await storedVersion())['sha256'] as String;
       writeLegacy(objectFile(old).readAsBytesSync());
@@ -849,8 +956,9 @@ void main() {
       objectFile(current).deleteSync();
 
       final logged = <String>[];
-      final subscription =
-          Logger.root.onRecord.listen((record) => logged.add(record.message));
+      final subscription = Logger.root.onRecord.listen(
+        (record) => logged.add(record.message),
+      );
       addTearDown(subscription.cancel);
 
       final response = await download(app);
@@ -915,22 +1023,25 @@ void main() {
         expect((await download(buildApp())).statusCode, HttpStatus.notFound);
       });
 
-      test('is a 404 when only a legacy file with other bytes exists',
-          () async {
-        // A replacement from before layouts were recorded whose digest object
-        // is gone, while the archive it replaced is still at the legacy path.
-        writeLegacy([9, 9]);
-        final logged = <String>[];
-        final subscription =
-            Logger.root.onRecord.listen((record) => logged.add(record.message));
-        addTearDown(subscription.cancel);
+      test(
+        'is a 404 when only a legacy file with other bytes exists',
+        () async {
+          // A replacement from before layouts were recorded whose digest object
+          // is gone, while the archive it replaced is still at the legacy path.
+          writeLegacy([9, 9]);
+          final logged = <String>[];
+          final subscription = Logger.root.onRecord.listen(
+            (record) => logged.add(record.message),
+          );
+          addTearDown(subscription.cancel);
 
-        final response = await download(buildApp());
+          final response = await download(buildApp());
 
-        expect(response.statusCode, HttpStatus.notFound);
-        expect(await response.readAsString(), isNot(contains('legacy')));
-        expect(logged.where((line) => line.contains(digest)), hasLength(1));
-      });
+          expect(response.statusCode, HttpStatus.notFound);
+          expect(await response.readAsString(), isNot(contains('legacy')));
+          expect(logged.where((line) => line.contains(digest)), hasLength(1));
+        },
+      );
     });
 
     test('a digest layout version falls back to nothing', () async {
@@ -962,29 +1073,37 @@ void main() {
     TemporaryReclaimer reclaimer(PackageStore store) =>
         TemporaryReclaimer(store, references: MongoArchiveReferences(db));
 
-    test('a publish waits out reclamation of that digest and stays served',
-        () async {
-      final digest = await orphan();
-      final store = _PausingHashStore(storage.path);
-      final reclaiming = reclaimer(store).reclaimOrphans();
-      await store.reached.future;
+    test(
+      'a publish waits out reclamation of that digest and stays served',
+      () async {
+        final digest = await orphan();
+        final store = _PausingHashStore(storage.path);
+        final reclaiming = reclaimer(store).reclaimOrphans();
+        await store.reached.future;
 
-      var finished = false;
-      final app = buildApp();
-      final publishing =
-          upload(app, 'same').whenComplete(() => finished = true);
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(finished, isFalse, reason: 'the digest is locked by reclamation');
+        var finished = false;
+        final app = buildApp();
+        final publishing = upload(
+          app,
+          'same',
+        ).whenComplete(() => finished = true);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(
+          finished,
+          isFalse,
+          reason: 'the digest is locked by reclamation',
+        );
 
-      store.resume.complete();
+        store.resume.complete();
 
-      expect(await reclaiming, 1);
-      expect(await publishing, isNull);
-      expect((await storedVersion())['sha256'], digest);
-      expect(objectFile(digest).existsSync(), isTrue);
-      await expectServedConsistent(app);
-      expect(await locks(), isEmpty);
-    });
+        expect(await reclaiming, 1);
+        expect(await publishing, isNull);
+        expect((await storedVersion())['sha256'], digest);
+        expect(objectFile(digest).existsSync(), isTrue);
+        await expectServedConsistent(app);
+        expect(await locks(), isEmpty);
+      },
+    );
 
     test('reclamation skips a candidate that a publish has locked', () async {
       final digest = await orphan();
@@ -1007,14 +1126,18 @@ void main() {
       final digest = await orphan();
       final held = await MongoObjectLocks(db).tryLock(digest);
       final app = buildApp(
-          publish:
-              const PublishConfig(uploadTimeout: Duration(milliseconds: 200)));
+        publish: const PublishConfig(
+          uploadTimeout: Duration(milliseconds: 200),
+        ),
+      );
 
       final response = await app.handler(uploadRequest(pubspec('same'), _auth));
 
       final location = Uri.parse(response.headers['location']!);
       expect(
-          location.queryParameters['error'], contains('publish.uploadTimeout'));
+        location.queryParameters['error'],
+        contains('publish.uploadTimeout'),
+      );
       expect(location.queryParameters['retryable'], 'true');
       expect(await db.collection(packageCollection).findOne(), isNull);
       expect(objectFile(digest).existsSync(), isTrue);
@@ -1040,8 +1163,9 @@ void main() {
       final store = _PausingStore(storage.path)
         ..reached = Completer<void>()
         ..resume = Completer<void>();
-      final response = buildApp(packageStore: store)
-          .handler(uploadRequest(pubspec('same'), _auth));
+      final response = buildApp(
+        packageStore: store,
+      ).handler(uploadRequest(pubspec('same'), _auth));
       await store.reached!.future;
       await db.dropCollection(objectLocksCollection);
 
@@ -1064,14 +1188,18 @@ void main() {
 
     test('is released after a failed write', () async {
       final store = _PausingStore(storage.path)..failure = 'disk full';
-      expect(await upload(buildApp(packageStore: store), 'same'),
-          contains('disk full'));
+      expect(
+        await upload(buildApp(packageStore: store), 'same'),
+        contains('disk full'),
+      );
       expect(await locks(), isEmpty);
     });
 
     test('is released after a failed metadata write', () async {
       final error = await upload(
-          buildApp(metaStore: _FailingMetaStore(db, applied: false)), 'same');
+        buildApp(metaStore: _FailingMetaStore(db, applied: false)),
+        'same',
+      );
       expect(error, contains('connection lost'));
       expect(await locks(), isEmpty);
     });
@@ -1079,7 +1207,9 @@ void main() {
     test('is released when reclamation fails', () async {
       final digest = await orphan();
       expect(
-          await reclaimer(_UnreadableStore(storage.path)).reclaimOrphans(), 0);
+        await reclaimer(_UnreadableStore(storage.path)).reclaimOrphans(),
+        0,
+      );
       expect(objectFile(digest).existsSync(), isTrue);
       expect(await locks(), isEmpty);
     });
@@ -1101,13 +1231,15 @@ void main() {
   group('reclaiming orphans against the metadata', () {
     final reclaimAt = DateTime.now().add(const Duration(hours: 2));
 
-    TemporaryReclaimer reclaimer() =>
-        TemporaryReclaimer(FileStore(storage.path),
-            references: MongoArchiveReferences(db));
+    TemporaryReclaimer reclaimer() => TemporaryReclaimer(
+          FileStore(storage.path),
+          references: MongoArchiveReferences(db),
+        );
 
     test('removes what a replacement left behind, and only that', () async {
-      final app =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final app = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'first'), isNull);
       final first = (await storedVersion())['sha256'] as String;
       expect(await upload(app, 'second'), isNull);
@@ -1121,8 +1253,9 @@ void main() {
     });
 
     test('a fresh orphan is kept', () async {
-      final app =
-          buildApp(publish: const PublishConfig(requireVersionBump: false));
+      final app = buildApp(
+        publish: const PublishConfig(requireVersionBump: false),
+      );
       expect(await upload(app, 'first'), isNull);
       final first = (await storedVersion())['sha256'] as String;
       expect(await upload(app, 'second'), isNull);
@@ -1140,14 +1273,16 @@ void main() {
       await store.commitUpstream('proxied', '1.0.0', digest, temporary, 3);
       addTearDown(() => db.dropCollection(upstreamArchivesCollection));
 
-      await MongoUpstreamCacheStore(db).writeArchive(UpstreamArchiveRecord(
-        name: 'proxied',
-        version: '1.0.0',
-        sha256: digest,
-        bytes: 3,
-        fetchedAt: DateTime.now(),
-        verified: true,
-      ));
+      await MongoUpstreamCacheStore(db).writeArchive(
+        UpstreamArchiveRecord(
+          name: 'proxied',
+          version: '1.0.0',
+          sha256: digest,
+          bytes: 3,
+          fetchedAt: DateTime.now(),
+          verified: true,
+        ),
+      );
       expect(await reclaimer().reclaimOrphans(now: reclaimAt), 0);
       expect(await store.upstreamCached('proxied', '1.0.0', digest), isTrue);
 
@@ -1158,73 +1293,78 @@ void main() {
   });
 
   for (final backend in ['file', 's3']) {
-    group('a publisher stalled past its reservation, on $backend', () {
-      late PackageStore store;
+    group(
+      'a publisher stalled past its reservation, on $backend',
+      () {
+        late PackageStore store;
 
-      setUpAll(() async {
-        if (backend == 's3' && _s3Endpoint != null) {
-          final minio = _createMinio();
-          if (!await minio.bucketExists(_s3Bucket)) {
-            await minio.makeBucket(_s3Bucket);
+        setUpAll(() async {
+          if (backend == 's3' && _s3Endpoint != null) {
+            final minio = _createMinio();
+            if (!await minio.bucketExists(_s3Bucket)) {
+              await minio.makeBucket(_s3Bucket);
+            }
           }
-        }
-      });
+        });
 
-      setUp(() {
-        store = backend == 'file'
-            ? FileStore(storage.path)
-            : S3Store(_s3Bucket, minio: _createMinio());
-      });
+        setUp(() {
+          store = backend == 'file'
+              ? FileStore(storage.path)
+              : S3Store(_s3Bucket, minio: _createMinio());
+        });
 
-      Future<void> expire() => db
-          .collection(uploadReservationsCollection)
-          .deleteMany(where.eq('name', _name));
+        Future<void> expire() => db
+            .collection(uploadReservationsCollection)
+            .deleteMany(where.eq('name', _name));
 
-      test('a first publish loses and the winner is served', () async {
-        final stalling = _StallingStore(store);
-        final app = buildApp(packageStore: store);
-        final stalled = upload(buildApp(packageStore: stalling), 'stalled');
-        await stalling.reached.future;
-        await expire();
+        test('a first publish loses and the winner is served', () async {
+          final stalling = _StallingStore(store);
+          final app = buildApp(packageStore: store);
+          final stalled = upload(buildApp(packageStore: stalling), 'stalled');
+          await stalling.reached.future;
+          await expire();
 
-        expect(await upload(app, 'winner'), isNull);
-        final winner = (await storedVersion())['sha256'] as String;
-        await expectServedConsistent(app);
+          expect(await upload(app, 'winner'), isNull);
+          final winner = (await storedVersion())['sha256'] as String;
+          await expectServedConsistent(app);
 
-        stalling.resume.complete();
+          stalling.resume.complete();
 
-        expect(await stalled, contains('already exists'));
-        expect((await storedVersion())['sha256'], winner);
-        expect((await storedVersion())['pubspec']['description'], 'winner');
-        await expectServedConsistent(app);
-      });
+          expect(await stalled, contains('already exists'));
+          expect((await storedVersion())['sha256'], winner);
+          expect((await storedVersion())['pubspec']['description'], 'winner');
+          await expectServedConsistent(app);
+        });
 
-      test('a replacement loses and the winner is served', () async {
-        const publish = PublishConfig(requireVersionBump: false);
-        final app = buildApp(packageStore: store, publish: publish);
-        expect(await upload(app, 'original'), isNull);
+        test('a replacement loses and the winner is served', () async {
+          const publish = PublishConfig(requireVersionBump: false);
+          final app = buildApp(packageStore: store, publish: publish);
+          expect(await upload(app, 'original'), isNull);
 
-        final stalling = _StallingStore(store);
-        final stalled = upload(
-            buildApp(packageStore: stalling, publish: publish), 'stalled');
-        await stalling.reached.future;
-        await expire();
+          final stalling = _StallingStore(store);
+          final stalled = upload(
+            buildApp(packageStore: stalling, publish: publish),
+            'stalled',
+          );
+          await stalling.reached.future;
+          await expire();
 
-        expect(await upload(app, 'winner'), isNull);
-        final winner = (await storedVersion())['sha256'] as String;
-        await expectServedConsistent(app);
+          expect(await upload(app, 'winner'), isNull);
+          final winner = (await storedVersion())['sha256'] as String;
+          await expectServedConsistent(app);
 
-        stalling.resume.complete();
+          stalling.resume.complete();
 
-        expect(await stalled, contains('being published by another request'));
-        expect((await storedVersion())['sha256'], winner);
-        expect((await storedVersion())['pubspec']['description'], 'winner');
-        await expectServedConsistent(app);
-      });
-    },
-        skip: backend == 's3' && _s3Endpoint == null
-            ? 'UNPUB_TEST_S3_ENDPOINT is not set'
-            : false);
+          expect(await stalled, contains('being published by another request'));
+          expect((await storedVersion())['sha256'], winner);
+          expect((await storedVersion())['pubspec']['description'], 'winner');
+          await expectServedConsistent(app);
+        });
+      },
+      skip: backend == 's3' && _s3Endpoint == null
+          ? 'UNPUB_TEST_S3_ENDPOINT is not set'
+          : false,
+    );
   }
 
   test('the server clears crash leftovers when it starts', () async {
@@ -1232,8 +1372,8 @@ void main() {
       ..createSync(recursive: true)
       ..writeAsStringSync('partial')
       ..setLastModifiedSync(DateTime.now().subtract(const Duration(hours: 2)));
-    final server = await UnpubServer.start(Config.parse(
-      '''
+    final server = await UnpubServer.start(
+      Config.parse('''
 server:
   host: 127.0.0.1
   port: 0
@@ -1242,9 +1382,8 @@ mongo:
 storage:
   file:
     path: ${storage.path}
-''',
-      environment: const {},
-    ));
+''', environment: const {}),
+    );
     addTearDown(server.stop);
 
     for (var i = 0; i < 100 && left.existsSync(); i++) {
@@ -1259,24 +1398,32 @@ storage:
         ..reached = Completer<void>()
         ..resume = Completer<void>();
       final app = buildApp(
-          packageStore: store,
-          publish:
-              const PublishConfig(uploadTimeout: Duration(milliseconds: 200)));
+        packageStore: store,
+        publish: const PublishConfig(
+          uploadTimeout: Duration(milliseconds: 200),
+        ),
+      );
 
-      final response =
-          await app.handler(uploadRequest(pubspec('stalled'), _auth));
+      final response = await app.handler(
+        uploadRequest(pubspec('stalled'), _auth),
+      );
 
       final location = Uri.parse(response.headers['location']!);
       expect(
-          location.queryParameters['error'], contains('publish.uploadTimeout'));
+        location.queryParameters['error'],
+        contains('publish.uploadTimeout'),
+      );
       expect(location.queryParameters['retryable'], 'true');
       expect(await reservations(), isEmpty);
       expect(await db.collection(packageCollection).findOne(), isNull);
 
       store.resume!.complete();
       await store.finished.future;
-      expect(objects(), hasLength(1),
-          reason: 'reclamation removes it, nothing else may');
+      expect(
+        objects(),
+        hasLength(1),
+        reason: 'reclamation removes it, nothing else may',
+      );
       expect(temporaries(), isEmpty);
     });
 
@@ -1285,9 +1432,11 @@ storage:
         ..reached = Completer<void>()
         ..resume = Completer<void>();
       final app = buildApp(
-          packageStore: store,
-          publish:
-              const PublishConfig(uploadTimeout: Duration(milliseconds: 600)));
+        packageStore: store,
+        publish: const PublishConfig(
+          uploadTimeout: Duration(milliseconds: 600),
+        ),
+      );
 
       final running = upload(app, 'first');
       await store.reached!.future;
@@ -1304,9 +1453,11 @@ storage:
     test('a write that finishes in time is not renewed', () async {
       final store = _RenewalCountingStore(db);
       final app = buildApp(
-          metaStore: store,
-          publish:
-              const PublishConfig(uploadTimeout: Duration(milliseconds: 200)));
+        metaStore: store,
+        publish: const PublishConfig(
+          uploadTimeout: Duration(milliseconds: 200),
+        ),
+      );
       expect(await upload(app, 'first'), isNull);
       await Future<void>.delayed(const Duration(milliseconds: 250));
       expect(store.renewals, 0);
@@ -1322,8 +1473,10 @@ storage:
     test('is gone after the store fails', () async {
       final store = _PausingStore(storage.path)..failure = 'disk full';
 
-      expect(await upload(buildApp(packageStore: store), 'first'),
-          contains('disk full'));
+      expect(
+        await upload(buildApp(packageStore: store), 'first'),
+        contains('disk full'),
+      );
 
       expect(await reservations(), isEmpty);
       store.failure = null;
@@ -1332,7 +1485,8 @@ storage:
 
     test('is not taken for an upload the policies refuse', () async {
       final app = buildApp(
-          publish: const PublishConfig(allowedNamePrefixes: ['other_']));
+        publish: const PublishConfig(allowedNamePrefixes: ['other_']),
+      );
       expect(await upload(app, 'first'), contains('allowedNamePrefixes'));
       expect(await reservations(), isEmpty);
     });
@@ -1341,12 +1495,16 @@ storage:
       await MongoStore(db).ensureIndexes();
       final indexes =
           await db.collection(uploadReservationsCollection).getIndexes();
-      expect(indexes.singleWhere((i) => i['name'] == 'name_version')['unique'],
-          isTrue);
       expect(
-          indexes.singleWhere(
-              (i) => i['name'] == 'expires_at_ttl')['expireAfterSeconds'],
-          0);
+        indexes.singleWhere((i) => i['name'] == 'name_version')['unique'],
+        isTrue,
+      );
+      expect(
+        indexes.singleWhere(
+          (i) => i['name'] == 'expires_at_ttl',
+        )['expireAfterSeconds'],
+        0,
+      );
     });
 
     test('expires 15 minutes after it was taken', () async {

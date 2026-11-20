@@ -6,7 +6,7 @@ The design of the single-page client in `ui/`, made against [DESIGN_BRIEF.md](..
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `screens/`                | PNG of every artboard: `NN-screen-<width>-<theme>.png`. Start here.                                                                                  |
 | `html/`                   | The same artboards as plain HTML with `html/unpub.css`; open `html/03-package-list.html` in a browser to inspect markup and spacing.                 |
-| `artboards/`              | The source of the Design canvas (`.dc.html` files, `unpub.css`, `canvas.json`), to re-import or edit on claude.ai.                                   |
+| `artboards/`              | The source of the Design canvas (`.dc.html` files, `unpub.css` → symlink to `html/unpub.css`, `canvas.json`), to re-import or edit on claude.ai.     |
 | `tokens.css`              | The design tokens in the shadcn/ui theme format. The same values are in `ui/src/index.css`, which is the copy the client uses.                       |
 
 The canvas itself is a private claude.ai Design artifact owned by the author; ask for it to be shared if you want to comment on it there.
@@ -90,4 +90,4 @@ Phase 7 of [the roadmap](../ROADMAP.md) applied every board to the client. Behav
 
 **Account and administration (boards 10 to 18).** One dashboard shell in `src/components/dashboard` for both: the sidebar on `--surface` (a Sections drawer on phones) with the failed deliveries of the last 24 hours on Webhooks, the page heading, panels, a compact table. Account with Profile, Password and API tokens, the token command with a prompt. The overview with readiness badges, tiles, recent publishes and failed deliveries; users as a compact table with the last-administrator toast; packages and package moderation; the audit log as a compact table with a details row; webhooks as rows with delivery badges and the detail as drawn; settings as cards by section with the environment variable under every key.
 
-The unit tests, the end-to-end smoke test (`npm run test:e2e`, which fails on any console error and so on any CSP violation) cover the result. The screenshots of the implemented screens, on a seeded registry, are in [`docs/screenshots`](../screenshots/README.md).
+The unit tests, the end-to-end smoke test (`npm run test:e2e`, which fails on any console error and so on any CSP violation) cover the result. Regenerate live screenshots with `npm run screenshots` (see [`docs/screenshots`](../screenshots/README.md)); design boards stay in [`screens/`](screens/).

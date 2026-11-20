@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
-import 'package:http_parser/http_parser.dart' show MediaType;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart' as mime;
 import 'package:path/path.dart' as p;
@@ -9,7 +8,7 @@ import 'package:shelf/shelf.dart' as shelf;
 
 import '../http_cache.dart';
 import 'html.dart' show escapeHtml;
-import 'web_ui.dart' show contentSecurityPolicy, securityHeaders;
+import 'web_ui.dart' show contentSecurityPolicy, htmlQuality, securityHeaders;
 
 /// The policy of the shell of the single-page client: the one of the pages,
 /// and fonts from this server, which the client bundles.
@@ -49,40 +48,6 @@ const _contentTypes = {
   '.txt': 'text/plain; charset=utf-8',
   '.wasm': 'application/wasm',
 };
-
-/// The quality the `Accept` header [accept] gives `text/html`, from 0 to 1.
-///
-/// It is the `q` of the most specific media range matching `text/html`:
-/// `text/html`, else `text/*`, else `*/*`; 0 if none does or if there is no
-/// header. Ranges that cannot be read, or whose `q` cannot, are ignored.
-double htmlQuality(String? accept) {
-  if (accept == null) return 0;
-  var specificity = -1;
-  var quality = 0.0;
-  for (final raw in accept.split(',')) {
-    if (raw.trim().isEmpty) continue;
-    final MediaType range;
-    try {
-      range = MediaType.parse(raw.trim());
-    } on FormatException {
-      continue;
-    }
-    final rank =
-        switch ((range.type.toLowerCase(), range.subtype.toLowerCase())) {
-      ('text', 'html') => 2,
-      ('text', '*') => 1,
-      ('*', '*') => 0,
-      _ => -1,
-    };
-    if (rank <= specificity) continue;
-    final q = range.parameters['q'];
-    final parsed = q == null ? 1.0 : double.tryParse(q);
-    if (parsed == null || parsed.isNaN || parsed < 0 || parsed > 1) continue;
-    specificity = rank;
-    quality = parsed;
-  }
-  return quality;
-}
 
 /// The shell could not be read safely.
 class _ShellUnavailable implements Exception {
@@ -138,7 +103,10 @@ class SpaClient {
       : directory = Directory(directory).resolveSymbolicLinksSync() {
     if (_file(const ['index.html']) == null) {
       throw ArgumentError.value(
-          directory, 'directory', 'has no index.html inside it');
+        directory,
+        'directory',
+        'has no index.html inside it',
+      );
     }
   }
 
@@ -168,7 +136,8 @@ class SpaClient {
     if (request.method != 'GET' && request.method != 'HEAD') return null;
     final relative = _relativePath(request);
     if (relative == null) return null;
-    if (basePath.isEmpty && _isServerPath(relative)) return null;
+    // Under /app as well as at /: never claim server paths as SPA routes.
+    if (_isServerPath(relative)) return null;
 
     final segments = <String>[];
     for (final raw in relative.split('/')) {
@@ -235,16 +204,20 @@ class SpaClient {
     } on _ShellUnavailable catch (error) {
       _log.severe('not serving the shell of the client: ${error.reason}');
       return shelf.Response.internalServerError(
-          body: 'Internal Server Error',
-          headers: {HttpHeaders.cacheControlHeader: 'no-store'});
+        body: 'Internal Server Error',
+        headers: {HttpHeaders.cacheControlHeader: 'no-store'},
+      );
     }
-    return shelf.Response.ok(markup, headers: {
-      HttpHeaders.contentTypeHeader: 'text/html; charset=utf-8',
-      HttpHeaders.cacheControlHeader: 'no-store',
-      HttpHeaders.varyHeader: 'Accept',
-      ...securityHeaders,
-      'content-security-policy': spaContentSecurityPolicy,
-    });
+    return shelf.Response.ok(
+      markup,
+      headers: {
+        HttpHeaders.contentTypeHeader: 'text/html; charset=utf-8',
+        HttpHeaders.cacheControlHeader: 'no-store',
+        HttpHeaders.varyHeader: 'Accept',
+        ...securityHeaders,
+        'content-security-policy': spaContentSecurityPolicy,
+      },
+    );
   }
 
   /// `index.html` as it is served, read again when it changes.
@@ -255,7 +228,8 @@ class SpaClient {
     final path = _file(const ['index.html']);
     if (path == null) {
       throw _ShellUnavailable(
-          'index.html is missing or resolves outside $directory');
+        'index.html is missing or resolves outside $directory',
+      );
     }
     final file = File(path);
     final modified = await file.lastModified();
@@ -265,17 +239,24 @@ class SpaClient {
       await for (final entity in Directory(directory).list())
         p.basename(entity.path),
     }..remove('index.html');
-    final markup = shellFor(await file.readAsString(),
-        basePath: basePath, classicPath: classicPath, buildEntries: entries);
+    final markup = shellFor(
+      await file.readAsString(),
+      basePath: basePath,
+      classicPath: classicPath,
+      buildEntries: entries,
+    );
     _shell = (modified, markup);
     return markup;
   }
 
   Future<shelf.Response> _fileResponse(
-      shelf.Request request, SpaFile target) async {
+    shelf.Request request,
+    SpaFile target,
+  ) async {
     final file = File(target.path);
     final stat = await file.stat();
     final etag = await _etag(file, stat);
+    // Document CSP lives on the shell; hashed assets do not need their own.
     final headers = {
       HttpHeaders.contentTypeHeader: contentTypeOf(target.path),
       HttpHeaders.cacheControlHeader: target.hashed
@@ -283,15 +264,14 @@ class SpaClient {
           : 'public, max-age=3600',
       HttpHeaders.etagHeader: etag,
       'x-content-type-options': 'nosniff',
-      'content-security-policy': spaContentSecurityPolicy,
     };
     if (etagMatches(request.headers[HttpHeaders.ifNoneMatchHeader], etag)) {
       return shelf.Response.notModified(headers: headers);
     }
-    return shelf.Response.ok(file.openRead(), headers: {
-      ...headers,
-      HttpHeaders.contentLengthHeader: '${stat.size}',
-    });
+    return shelf.Response.ok(
+      file.openRead(),
+      headers: {...headers, HttpHeaders.contentLengthHeader: '${stat.size}'},
+    );
   }
 
   Future<String> _etag(File file, FileStat stat) async {
@@ -315,13 +295,17 @@ String contentTypeOf(String path) =>
     'application/octet-stream';
 
 final _head = RegExp(r'<head(\s[^>]*)?>', caseSensitive: false);
-final _reference = RegExp(r'''(\s(?:src|href)=["'])(\./|/(?!/))([^/"'?#]*)''',
-    caseSensitive: false);
+final _reference = RegExp(
+  r'''(\s(?:src|href)=["'])(\./|/(?!/))([^/"'?#]*)''',
+  caseSensitive: false,
+);
 
 /// A link of the shell to the server-rendered pages, written `/classic/...`
 /// as they are with `ui.mode: spa` and in development.
-final _classicLink =
-    RegExp(r'''(\shref=["'])/classic(?=[/"'?#])''', caseSensitive: false);
+final _classicLink = RegExp(
+  r'''(\shref=["'])/classic(?=[/"'?#])''',
+  caseSensitive: false,
+);
 
 /// [index], the `index.html` of a build, as served under [basePath]: with the
 /// meta tags telling the client where it and the server-rendered pages are,
@@ -329,10 +313,12 @@ final _classicLink =
 /// [buildEntries], made `<basePath>/x`, and with its links to the
 /// server-rendered pages, `href="/classic/..."`, moved to [classicPath], so
 /// that the `<noscript>` link leads to `/` with `ui.mode: ssr`.
-String shellFor(String index,
-    {required String basePath,
-    required String classicPath,
-    Set<String> buildEntries = const {'assets'}}) {
+String shellFor(
+  String index, {
+  required String basePath,
+  required String classicPath,
+  Set<String> buildEntries = const {'assets'},
+}) {
   final rebased = index.replaceAllMapped(_reference, (match) {
     final relative = match[2] == './';
     if (!relative && !buildEntries.contains(match[3])) return match[0]!;

@@ -103,11 +103,49 @@ bool _isApiPath(String path) {
       path.endsWith('.json');
 }
 
+/// The quality the `Accept` header [accept] gives `text/html`, from 0 to 1.
+///
+/// It is the `q` of the most specific media range matching `text/html`:
+/// `text/html`, else `text/*`, else `*/*`; 0 if none does or if there is no
+/// header. Ranges that cannot be read, or whose `q` cannot, are ignored.
+double htmlQuality(String? accept) {
+  if (accept == null) return 0;
+  var specificity = -1;
+  var quality = 0.0;
+  for (final raw in accept.split(',')) {
+    if (raw.trim().isEmpty) continue;
+    final MediaType range;
+    try {
+      range = MediaType.parse(raw.trim());
+    } on FormatException {
+      continue;
+    }
+    final rank = switch ((
+      range.type.toLowerCase(),
+      range.subtype.toLowerCase(),
+    )) {
+      ('text', 'html') => 2,
+      ('text', '*') => 1,
+      ('*', '*') => 0,
+      _ => -1,
+    };
+    if (rank <= specificity) continue;
+    final q = range.parameters['q'];
+    final parsed = q == null ? 1.0 : double.tryParse(q);
+    if (parsed == null || parsed.isNaN || parsed < 0 || parsed > 1) continue;
+    specificity = rank;
+    quality = parsed;
+  }
+  return quality;
+}
+
 /// Whether [request] comes from a browser expecting a page.
+///
+/// Uses the same [htmlQuality] negotiation as the SPA shell, so
+/// `text/html;q=0` is not treated as wanting HTML.
 bool wantsHtml(shelf.Request request) {
   if (_isApiPath(request.url.path)) return false;
-  final accept = request.headers[HttpHeaders.acceptHeader] ?? '';
-  return accept.contains('text/html');
+  return htmlQuality(request.headers[HttpHeaders.acceptHeader]) > 0;
 }
 
 /// A form submission that could not be read.
@@ -132,7 +170,10 @@ class WebUi {
     if (this.basePath.isNotEmpty &&
         (!this.basePath.startsWith('/') || this.basePath.endsWith('/'))) {
       throw ArgumentError.value(
-          basePath, 'basePath', 'must start with a slash and not end with one');
+        basePath,
+        'basePath',
+        'must start with a slash and not end with one',
+      );
     }
   }
 
@@ -205,12 +246,18 @@ class WebUi {
       ..get(_at('/admin/packages'), _guard(adminPackages))
       ..get(_at('/admin/packages/<name>'), _guard1(adminPackage))
       ..post(
-          _at('/admin/packages/<name>/discontinue'), _guard1(adminDiscontinue))
-      ..post(_at('/admin/packages/<name>/versions/<version>/<action>'),
-          _guard3(adminRetraction))
+        _at('/admin/packages/<name>/discontinue'),
+        _guard1(adminDiscontinue),
+      )
+      ..post(
+        _at('/admin/packages/<name>/versions/<version>/<action>'),
+        _guard3(adminRetraction),
+      )
       ..post(_at('/admin/packages/<name>/uploaders'), _guard1(adminAddUploader))
-      ..post(_at('/admin/packages/<name>/uploaders/remove'),
-          _guard1(adminRemoveUploader))
+      ..post(
+        _at('/admin/packages/<name>/uploaders/remove'),
+        _guard1(adminRemoveUploader),
+      )
       ..get(_at('/admin/settings'), _guard(adminSettings));
   }
 
@@ -236,31 +283,48 @@ class WebUi {
         ...securityHeaders,
       };
 
-  static shelf.Response _html(shelf.Request req, Html document,
-          {int status = HttpStatus.ok,
-          Map<String, Object> headers = const {}}) =>
-      shelf.Response(status,
-          body: document.markup, headers: {...pageHeaders(req), ...headers});
+  static shelf.Response _html(
+    shelf.Request req,
+    Html document, {
+    int status = HttpStatus.ok,
+    Map<String, Object> headers = const {},
+  }) =>
+      shelf.Response(
+        status,
+        body: document.markup,
+        headers: {...pageHeaders(req), ...headers},
+      );
 
   shelf.Response errorResponse(
-      shelf.Request req, int status, String title, String message) {
+    shelf.Request req,
+    int status,
+    String title,
+    String message,
+  ) {
     final requestId = status >= 500 ? requestIdOf(req) : null;
     return _html(
-        req,
-        errorPage(_context(req), status, title, message,
-            extra: requestId == null
-                ? null
-                : el('p', const {
-                    'class': 'request-id'
-                  }, [
-                    'Request id: ',
-                    el('code', const {}, requestId),
-                  ])),
-        status: status);
+      req,
+      errorPage(
+        _context(req),
+        status,
+        title,
+        message,
+        extra: requestId == null
+            ? null
+            : el(
+                'p',
+                const {'class': 'request-id'},
+                ['Request id: ', el('code', const {}, requestId)],
+              ),
+      ),
+      status: status,
+    );
   }
 
-  shelf.Response _notFoundPage(shelf.Request req,
-          [String message = 'There is nothing at this address.']) =>
+  shelf.Response _notFoundPage(
+    shelf.Request req, [
+    String message = 'There is nothing at this address.',
+  ]) =>
       errorResponse(req, HttpStatus.notFound, 'Not found', message);
 
   shelf.Response _forbiddenPage(shelf.Request req, String message) =>
@@ -268,11 +332,13 @@ class WebUi {
 
   /// A redirect to [location], a path of a page, under the base path of the
   /// page being rendered.
-  static shelf.Response _redirect(String location) =>
-      shelf.Response(HttpStatus.seeOther, headers: {
-        HttpHeaders.locationHeader: rebase(location),
-        HttpHeaders.cacheControlHeader: 'no-store',
-      });
+  static shelf.Response _redirect(String location) => shelf.Response(
+        HttpStatus.seeOther,
+        headers: {
+          HttpHeaders.locationHeader: rebase(location),
+          HttpHeaders.cacheControlHeader: 'no-store',
+        },
+      );
 
   /// Where a browser goes to log in and come back to [req], a request
   /// relative to the base path.
@@ -301,9 +367,10 @@ class WebUi {
       }
       if (error.code == 'csrf_failed') {
         return _forbiddenPage(
-            local,
-            'The form was sent without a valid security token. Reload the '
-            'page and try again.');
+          local,
+          'The form was sent without a valid security token. Reload the '
+          'page and try again.',
+        );
       }
       return _forbiddenPage(local, error.message);
     });
@@ -326,29 +393,37 @@ class WebUi {
         } catch (error, stackTrace) {
           if (!_wantsPage(req)) rethrow;
           _log.severe(
-              'error answering ${req.method} ${req.requestedUri.path}'
-              '${switch (requestIdOf(req)) {
-                final id? => ' (request $id)',
-                null => '',
-              }}',
-              error,
-              stackTrace);
-          return _rendering(() => errorResponse(
+            'error answering ${req.method} ${req.requestedUri.path}'
+            '${switch (requestIdOf(req)) {
+              final id? => ' (request $id)',
+              null => '',
+            }}',
+            error,
+            stackTrace,
+          );
+          return _rendering(
+            () => errorResponse(
               _local(req),
               HttpStatus.internalServerError,
               'Something went wrong',
-              'The server could not answer. Try again later.'));
+              'The server could not answer. Try again later.',
+            ),
+          );
         }
       };
 
   /// Shows the refusals routes throw as pages, and renders under the base
   /// path. [route] gets the request relative to it.
-  Future<shelf.Response> _reporting(shelf.Request outer,
-          Future<shelf.Response> Function(shelf.Request) route) =>
+  Future<shelf.Response> _reporting(
+    shelf.Request outer,
+    Future<shelf.Response> Function(shelf.Request) route,
+  ) =>
       _rendering(() => _report(_local(outer), route));
 
-  Future<shelf.Response> _report(shelf.Request req,
-      Future<shelf.Response> Function(shelf.Request) route) async {
+  Future<shelf.Response> _report(
+    shelf.Request req,
+    Future<shelf.Response> Function(shelf.Request) route,
+  ) async {
     try {
       return await route(req);
     } on AuthException catch (error) {
@@ -358,13 +433,25 @@ class WebUi {
       return _forbiddenPage(req, error.message);
     } on AccountException catch (error) {
       return errorResponse(
-          req, error.statusCode, 'Not possible', error.message);
+        req,
+        error.statusCode,
+        'Not possible',
+        error.message,
+      );
     } on ModerationException catch (error) {
       return errorResponse(
-          req, error.statusCode, 'Not possible', error.message);
+        req,
+        error.statusCode,
+        'Not possible',
+        error.message,
+      );
     } on _BadForm {
-      return errorResponse(req, HttpStatus.badRequest, 'Bad request',
-          'The form could not be read.');
+      return errorResponse(
+        req,
+        HttpStatus.badRequest,
+        'Bad request',
+        'The form could not be read.',
+      );
     }
   }
 
@@ -372,19 +459,21 @@ class WebUi {
       (req) => _reporting(req, route);
 
   Function _guard1(
-          Future<shelf.Response> Function(shelf.Request, String) route) =>
+    Future<shelf.Response> Function(shelf.Request, String) route,
+  ) =>
       (shelf.Request req, String a) =>
           _reporting(req, (local) => route(local, a));
 
   Function _guard2(
-          Future<shelf.Response> Function(shelf.Request, String, String)
-              route) =>
+    Future<shelf.Response> Function(shelf.Request, String, String) route,
+  ) =>
       (shelf.Request req, String a, String b) =>
           _reporting(req, (local) => route(local, a, b));
 
   Function _guard3(
-          Future<shelf.Response> Function(shelf.Request, String, String, String)
-              route) =>
+    Future<shelf.Response> Function(shelf.Request, String, String, String)
+        route,
+  ) =>
       (shelf.Request req, String a, String b, String c) =>
           _reporting(req, (local) => route(local, a, b, c));
 
@@ -458,26 +547,31 @@ class WebUi {
   shelf.Response _unknownPackage(shelf.Request req, String name) {
     final proxy = app.upstreamProxy;
     if (proxy != null && proxy.allows(name)) {
-      return shelf.Response.found(_upstream
-          .resolve('/packages/${Uri.encodeComponent(name)}')
-          .toString());
+      return shelf.Response.found(
+        _upstream.resolve('/packages/${Uri.encodeComponent(name)}').toString(),
+      );
     }
     return _html(
-        req,
-        errorPage(_context(req), HttpStatus.notFound, 'Package not found',
-            'There is no package $name on this server.',
-            extra: el('p', const {}, [
-              el(
-                  'a',
-                  {
-                    'href': _upstream
-                        .resolve('/packages/${Uri.encodeComponent(name)}')
-                        .toString(),
-                    'rel': 'noopener',
-                  },
-                  'Look for $name on ${_upstream.host}'),
-            ])),
-        status: HttpStatus.notFound);
+      req,
+      errorPage(
+        _context(req),
+        HttpStatus.notFound,
+        'Package not found',
+        'There is no package $name on this server.',
+        extra: el('p', const {}, [
+          el(
+              'a',
+              {
+                'href': _upstream
+                    .resolve('/packages/${Uri.encodeComponent(name)}')
+                    .toString(),
+                'rel': 'noopener',
+              },
+              'Look for $name on ${_upstream.host}'),
+        ]),
+      ),
+      status: HttpStatus.notFound,
+    );
   }
 
   Future<shelf.Response> showPackage(shelf.Request req, String name) =>
@@ -487,15 +581,21 @@ class WebUi {
       _packagePage(req, name, null, tab: PackageTab.stats);
 
   Future<shelf.Response> showVersion(
-      shelf.Request req, String name, String version) async {
+    shelf.Request req,
+    String name,
+    String version,
+  ) async {
     final decoded = parseVersionSegment(version);
     if (decoded == null) return _notFoundPage(req);
     return _packagePage(req, name, decoded);
   }
 
   Future<shelf.Response> _packagePage(
-      shelf.Request req, String name, String? versionName,
-      {PackageTab? tab}) async {
+    shelf.Request req,
+    String name,
+    String? versionName, {
+    PackageTab? tab,
+  }) async {
     if (!isValidPackageName(name)) return _notFoundPage(req);
     final package = await app.metaStore.queryPackage(name);
     if (package == null) return _unknownPackage(req, name);
@@ -504,8 +604,9 @@ class WebUi {
     if (versionName == null) {
       version = package.latest;
     } else {
-      final found = package.versions
-          .firstWhereOrNull((item) => item.version == versionName);
+      final found = package.versions.firstWhereOrNull(
+        (item) => item.version == versionName,
+      );
       if (found == null) {
         return _notFoundPage(req, '$name has no version $versionName.');
       }
@@ -529,8 +630,10 @@ class WebUi {
       versionPage: versionName != null,
       versions: versions,
       versionDownloads: tab == PackageTab.versions
-          ? await app.metaStore
-              .versionDownloadCounts(name, versions.map((item) => item.version))
+          ? await app.metaStore.versionDownloadCounts(
+              name,
+              versions.map((item) => item.version),
+            )
           : const {},
       localPackages: await app.metaStore.existingPackageNames(dependencies),
       tab: tab,
@@ -538,9 +641,12 @@ class WebUi {
       upstream: _upstream,
       authenticatedReads: app.readAccess == ReadAccess.authenticated,
       stats: tab == PackageTab.stats
-          ? await DownloadStats.load(app.metaStore, name,
+          ? await DownloadStats.load(
+              app.metaStore,
+              name,
               total: package.download ?? 0,
-              versions: versions.map((item) => item.version))
+              versions: versions.map((item) => item.version),
+            )
           : null,
     );
     return _html(req, packagePage(_context(req), view));
@@ -591,17 +697,24 @@ class WebUi {
   }
 
   /// The login form, with a fresh token for it in a cookie.
-  shelf.Response _loginForm(shelf.Request req,
-      {String? next,
-      String? email,
-      String? error,
-      int status = HttpStatus.ok,
-      Map<String, Object> headers = const {}}) {
+  shelf.Response _loginForm(
+    shelf.Request req, {
+    String? next,
+    String? email,
+    String? error,
+    int status = HttpStatus.ok,
+    Map<String, Object> headers = const {},
+  }) {
     final token = generateSecret();
     return _html(
       req,
-      loginPage(_context(req),
-          loginToken: token, next: next, email: email, error: error),
+      loginPage(
+        _context(req),
+        loginToken: token,
+        next: next,
+        email: email,
+        error: error,
+      ),
       status: status,
       headers: {HttpHeaders.setCookieHeader: _loginCookie(token), ...headers},
     );
@@ -631,20 +744,24 @@ class WebUi {
     if (expected == null ||
         presented == null ||
         !constantTimeEquals(expected, presented)) {
-      return _loginForm(req,
-          next: next,
-          email: email.isEmpty ? null : email,
-          error: 'The login form expired. Please try again.',
-          status: HttpStatus.forbidden);
+      return _loginForm(
+        req,
+        next: next,
+        email: email.isEmpty ? null : email,
+        error: 'The login form expired. Please try again.',
+        status: HttpStatus.forbidden,
+      );
     }
 
     const rejected = 'Invalid email or password.';
     if (!isValidEmail(email) || password.isEmpty) {
-      return _loginForm(req,
-          next: next,
-          email: email.isEmpty ? null : email,
-          error: rejected,
-          status: HttpStatus.unauthorized);
+      return _loginForm(
+        req,
+        next: next,
+        email: email.isEmpty ? null : email,
+        error: rejected,
+        status: HttpStatus.unauthorized,
+      );
     }
 
     final outcome = await attemptLogin(
@@ -657,27 +774,37 @@ class WebUi {
     );
     switch (outcome) {
       case LoggedIn(:final result):
-        return shelf.Response(HttpStatus.seeOther, headers: {
-          HttpHeaders.locationHeader: rebase(next ?? '/'),
-          HttpHeaders.cacheControlHeader: 'no-store',
-          HttpHeaders.setCookieHeader: [
-            sessionCookieHeader(result.cookieValue, secure: api.secureCookies),
-            _loginCookie('', clear: true),
-          ],
-        });
+        return shelf.Response(
+          HttpStatus.seeOther,
+          headers: {
+            HttpHeaders.locationHeader: rebase(next ?? '/'),
+            HttpHeaders.cacheControlHeader: 'no-store',
+            HttpHeaders.setCookieHeader: [
+              sessionCookieHeader(
+                result.cookieValue,
+                secure: api.secureCookies,
+              ),
+              _loginCookie('', clear: true),
+            ],
+          },
+        );
       case Throttled(:final wait):
-        return _loginForm(req,
-            next: next,
-            email: email,
-            error: 'Too many failed attempts. Try again later.',
-            status: HttpStatus.tooManyRequests,
-            headers: {HttpHeaders.retryAfterHeader: '${wait.inSeconds + 1}'});
+        return _loginForm(
+          req,
+          next: next,
+          email: email,
+          error: 'Too many failed attempts. Try again later.',
+          status: HttpStatus.tooManyRequests,
+          headers: {HttpHeaders.retryAfterHeader: '${wait.inSeconds + 1}'},
+        );
       default:
-        return _loginForm(req,
-            next: next,
-            email: email,
-            error: rejected,
-            status: HttpStatus.unauthorized);
+        return _loginForm(
+          req,
+          next: next,
+          email: email,
+          error: rejected,
+          status: HttpStatus.unauthorized,
+        );
     }
   }
 
@@ -685,12 +812,16 @@ class WebUi {
     final api = _accountApi;
     final cookie = sessionCookie(req);
     if (api != null && cookie != null) await api.accounts.logout(cookie);
-    return shelf.Response(HttpStatus.seeOther, headers: {
-      HttpHeaders.locationHeader: rebase('/'),
-      HttpHeaders.cacheControlHeader: 'no-store',
-      HttpHeaders.setCookieHeader:
-          clearedSessionCookieHeader(secure: api?.secureCookies ?? false),
-    });
+    return shelf.Response(
+      HttpStatus.seeOther,
+      headers: {
+        HttpHeaders.locationHeader: rebase('/'),
+        HttpHeaders.cacheControlHeader: 'no-store',
+        HttpHeaders.setCookieHeader: clearedSessionCookieHeader(
+          secure: api?.secureCookies ?? false,
+        ),
+      },
+    );
   }
 
   // Own account.
@@ -702,7 +833,8 @@ class WebUi {
     final api = _accountApi;
     if (api == null) {
       throw const AccountException.notFound(
-          'This server has no user accounts.');
+        'This server has no user accounts.',
+      );
     }
     final principal = principalOf(req);
     if (principal == null) {
@@ -713,8 +845,10 @@ class WebUi {
   }
 
   AuditContext _by(shelf.Request req, AccountApi api, Principal principal) =>
-      AuditContext.of(principal,
-          ip: clientAddress(req, trustForwardedFor: api.trustForwardedFor));
+      AuditContext.of(
+        principal,
+        ip: clientAddress(req, trustForwardedFor: api.trustForwardedFor),
+      );
 
   Future<shelf.Response> _accountPage(
     shelf.Request req,
@@ -735,8 +869,9 @@ class WebUi {
         AccountView(
           user: user,
           tokens: tokens,
-          grantableScopes:
-              principal.scopes.intersection(scopesAllowedFor(user.role)),
+          grantableScopes: principal.scopes.intersection(
+            scopesAllowedFor(user.role),
+          ),
           created: created,
           hostedUrl: _hostedUrl(req),
           now: api.accounts.clock(),
@@ -755,12 +890,16 @@ class WebUi {
       final session = _sessionId(req);
       final created =
           session == null ? null : _flash.take<CreatedToken>(session, 'token');
-      return _accountPage(req, api, principal,
-          created: created,
-          notice: created != null
-              ? null
-              : 'The token was created. Its secret is shown only once: if it '
-                  'was not copied, revoke the token and create another.');
+      return _accountPage(
+        req,
+        api,
+        principal,
+        created: created,
+        notice: created != null
+            ? null
+            : 'The token was created. Its secret is shown only once: if it '
+                'was not copied, revoke the token and create another.',
+      );
     }
     return _accountPage(req, api, principal, notice: _doneMessages[done]);
   }
@@ -782,16 +921,29 @@ class WebUi {
       );
       return switch (outcome) {
         PasswordChanged() => _redirect('/account?done=password-changed'),
-        Throttled() => await _accountPage(req, api, principal,
+        Throttled() => await _accountPage(
+            req,
+            api,
+            principal,
             error: 'Too many failed attempts. Try again later.',
-            status: HttpStatus.tooManyRequests),
-        _ => await _accountPage(req, api, principal,
+            status: HttpStatus.tooManyRequests,
+          ),
+        _ => await _accountPage(
+            req,
+            api,
+            principal,
             error: 'The current password is wrong.',
-            status: HttpStatus.forbidden),
+            status: HttpStatus.forbidden,
+          ),
       };
     } on AccountException catch (error) {
-      return _accountPage(req, api, principal,
-          error: _sentence(error.message), status: error.statusCode);
+      return _accountPage(
+        req,
+        api,
+        principal,
+        error: _sentence(error.message),
+        status: error.statusCode,
+      );
     }
   }
 
@@ -805,7 +957,10 @@ class WebUi {
         name: _field(form, 'name') ?? '',
         scopes: requestedScopes(form['scope'] ?? const [], principal, user),
         expiresAt: requestedExpiry(
-            _field(form, 'expiresIn'), principal, api.accounts.clock()),
+          _field(form, 'expiresIn'),
+          principal,
+          api.accounts.clock(),
+        ),
         by: _by(req, api, principal),
       );
       // Shown by the page this redirects to, so that reloading it does not
@@ -815,8 +970,13 @@ class WebUi {
       }
       return _redirect('/account?done=token-created');
     } on AccountException catch (error) {
-      return _accountPage(req, api, principal,
-          error: _sentence(error.message), status: error.statusCode);
+      return _accountPage(
+        req,
+        api,
+        principal,
+        error: _sentence(error.message),
+        status: error.statusCode,
+      );
     }
   }
 
@@ -845,13 +1005,15 @@ class WebUi {
     }
     if (!principal.isAdmin) {
       throw const AuthException.forbidden(
-          'Only administrators can see this page.');
+        'Only administrators can see this page.',
+      );
     }
     if (principal.credentialKind != CredentialKind.session) {
       throw const AuthException.forbidden(
-          'Log in with a password to see this page. API tokens cannot open '
-          'the administration pages.',
-          code: 'session_required');
+        'Log in with a password to see this page. API tokens cannot open '
+        'the administration pages.',
+        code: 'session_required',
+      );
     }
     return principal;
   }
@@ -860,30 +1022,42 @@ class WebUi {
     final api = _accountApi;
     if (api == null) {
       throw const AccountException.notFound(
-          'This server has no user accounts.');
+        'This server has no user accounts.',
+      );
     }
     return api;
   }
 
-  Future<shelf.Response> _usersPage(shelf.Request req, AccountApi api,
-      {String? notice, String? error, int status = HttpStatus.ok}) async {
+  Future<shelf.Response> _usersPage(
+    shelf.Request req,
+    AccountApi api, {
+    String? notice,
+    String? error,
+    int status = HttpStatus.ok,
+  }) async {
     final users = await api.accounts.store.listUsers();
     return _html(
-        req, adminUsersPage(_context(req), users, notice: notice, error: error),
-        status: status);
+      req,
+      adminUsersPage(_context(req), users, notice: notice, error: error),
+      status: status,
+    );
   }
 
   Future<shelf.Response> adminUsers(shelf.Request req) async {
     _administrator(req);
     final api = _requireAccounts();
-    return _usersPage(req, api,
-        notice: _doneMessages[req.url.queryParameters['done']]);
+    return _usersPage(
+      req,
+      api,
+      notice: _doneMessages[req.url.queryParameters['done']],
+    );
   }
 
   Future<shelf.Response> _changingUsers(
-      shelf.Request req,
-      Future<String> Function(AccountApi, Principal, Map<String, List<String>>)
-          change) async {
+    shelf.Request req,
+    Future<String> Function(AccountApi, Principal, Map<String, List<String>>)
+        change,
+  ) async {
     final principal = _administrator(req);
     final api = _requireAccounts();
     final form = await _form(req);
@@ -891,8 +1065,12 @@ class WebUi {
       final done = await change(api, principal, form);
       return _redirect('/admin/users?done=$done');
     } on AccountException catch (error) {
-      return _usersPage(req, api,
-          error: _sentence(error.message), status: error.statusCode);
+      return _usersPage(
+        req,
+        api,
+        error: _sentence(error.message),
+        status: error.statusCode,
+      );
     }
   }
 
@@ -901,7 +1079,8 @@ class WebUi {
         final role = Role.tryParse(_field(form, 'role'));
         if (role == null) {
           throw const AccountException.invalid(
-              'role must be one of admin, publisher, reader');
+            'role must be one of admin, publisher, reader',
+          );
         }
         await api.accounts.createUser(
           email: _field(form, 'email') ?? '',
@@ -921,14 +1100,16 @@ class WebUi {
         final role = roleName == null ? null : Role.tryParse(roleName);
         if (roleName != null && role == null) {
           throw const AccountException.invalid(
-              'role must be one of admin, publisher, reader');
+            'role must be one of admin, publisher, reader',
+          );
         }
         final disabled = switch (_field(form, 'disabled')) {
           null => null,
           'true' => true,
           'false' => false,
           _ => throw const AccountException.invalid(
-              'disabled must be true or false'),
+              'disabled must be true or false',
+            ),
         };
         final user = await api.accounts.requireUserById(id);
         await api.accounts.updateUser(
@@ -945,8 +1126,10 @@ class WebUi {
       _changingUsers(req, (api, principal, form) async {
         final user = await api.accounts.requireUserById(id);
         await api.accounts.setPassword(
-            user, form['password']?.firstOrNull ?? '',
-            by: _by(req, api, principal));
+          user,
+          form['password']?.firstOrNull ?? '',
+          by: _by(req, api, principal),
+        );
         return 'password-set';
       });
 
@@ -957,23 +1140,35 @@ class WebUi {
       ...req.url.queryParameters,
       'size': req.url.queryParameters['size'] ?? '$maxPageSize',
     });
-    final result = await app.metaStore.searchPackages(PackageSearch(
-      text: list.query,
-      includeDiscontinued: true,
-      sort: PackageSort.name,
-      page: list.page - 1,
-      size: list.size,
-    ));
+    final result = await app.metaStore.searchPackages(
+      PackageSearch(
+        text: list.query,
+        includeDiscontinued: true,
+        sort: PackageSort.name,
+        page: list.page - 1,
+        size: list.size,
+      ),
+    );
     return _html(
-        req,
-        adminPackagesPage(_context(req), list.query, result,
-            page: list.page,
-            size: list.size,
-            notice: _doneMessages[req.url.queryParameters['done']]));
+      req,
+      adminPackagesPage(
+        _context(req),
+        list.query,
+        result,
+        page: list.page,
+        size: list.size,
+        notice: _doneMessages[req.url.queryParameters['done']],
+      ),
+    );
   }
 
-  Future<shelf.Response> _adminPackagePage(shelf.Request req, String name,
-      {String? notice, String? error, int status = HttpStatus.ok}) async {
+  Future<shelf.Response> _adminPackagePage(
+    shelf.Request req,
+    String name, {
+    String? notice,
+    String? error,
+    int status = HttpStatus.ok,
+  }) async {
     final package = isValidPackageName(name)
         ? await app.metaStore.queryPackage(name)
         : null;
@@ -983,24 +1178,33 @@ class WebUi {
     final versions = [...package.versions]
       ..sort((a, b) => _compareVersions(b.version, a.version));
     return _html(
-        req,
-        adminPackagePage(_context(req), package, versions,
-            notice: notice, error: error),
-        status: status);
+      req,
+      adminPackagePage(
+        _context(req),
+        package,
+        versions,
+        notice: notice,
+        error: error,
+      ),
+      status: status,
+    );
   }
 
   Future<shelf.Response> adminPackage(shelf.Request req, String name) async {
     _administrator(req);
-    return _adminPackagePage(req, name,
-        notice: _doneMessages[req.url.queryParameters['done']]);
+    return _adminPackagePage(
+      req,
+      name,
+      notice: _doneMessages[req.url.queryParameters['done']],
+    );
   }
 
   /// Runs a [change] of the package [name] and goes back to its page.
   Future<shelf.Response> _changingPackage(
-      shelf.Request req,
-      String name,
-      Future<String> Function(Principal, Map<String, List<String>>)
-          change) async {
+    shelf.Request req,
+    String name,
+    Future<String> Function(Principal, Map<String, List<String>>) change,
+  ) async {
     final principal = _administrator(req);
     if (!isValidPackageName(name)) return _notFoundPage(req);
     final form = await _form(req);
@@ -1012,8 +1216,12 @@ class WebUi {
           await app.metaStore.queryPackage(name) == null) {
         return _notFoundPage(req, 'There is no package $name on this server.');
       }
-      return _adminPackagePage(req, name,
-          error: _sentence(error.message), status: error.statusCode);
+      return _adminPackagePage(
+        req,
+        name,
+        error: _sentence(error.message),
+        status: error.statusCode,
+      );
     }
   }
 
@@ -1021,9 +1229,13 @@ class WebUi {
       _changingPackage(req, name, (principal, form) async {
         final discontinued = _field(form, 'discontinued') == '1';
         final replacedBy = _field(form, 'replacedBy');
-        await _moderation.setDiscontinued(req, principal, name,
-            discontinued: discontinued,
-            replacedBy: discontinued ? replacedBy : null);
+        await _moderation.setDiscontinued(
+          req,
+          principal,
+          name,
+          discontinued: discontinued,
+          replacedBy: discontinued ? replacedBy : null,
+        );
         return 'package-saved';
       });
 
@@ -1034,7 +1246,11 @@ class WebUi {
   }
 
   Future<shelf.Response> adminRetraction(
-      shelf.Request req, String name, String version, String action) async {
+    shelf.Request req,
+    String name,
+    String version,
+    String action,
+  ) async {
     _administrator(req);
     final retracted = switch (action) {
       'retract' => true,
@@ -1044,8 +1260,13 @@ class WebUi {
     final decoded = parseVersionSegment(version);
     if (retracted == null || decoded == null) return _notFoundPage(req);
     return _changingPackage(req, name, (principal, form) async {
-      await _moderation.setRetracted(req, principal, name, decoded,
-          retracted: retracted);
+      await _moderation.setRetracted(
+        req,
+        principal,
+        name,
+        decoded,
+        retracted: retracted,
+      );
       return retracted ? 'version-retracted' : 'version-restored';
     });
   }
@@ -1066,7 +1287,11 @@ class WebUi {
   Future<shelf.Response> adminRemoveUploader(shelf.Request req, String name) =>
       _changingPackage(req, name, (principal, form) async {
         await _moderation.removeUploader(
-            req, principal, name, _field(form, 'email') ?? '');
+          req,
+          principal,
+          name,
+          _field(form, 'email') ?? '',
+        );
         return 'uploader-removed';
       });
 
@@ -1074,9 +1299,12 @@ class WebUi {
     _administrator(req);
     final config = app.config;
     return _html(
-        req,
-        adminSettingsPage(
-            _context(req), config == null ? null : settingsOverview(config)));
+      req,
+      adminSettingsPage(
+        _context(req),
+        config == null ? null : settingsOverview(config),
+      ),
+    );
   }
 
   /// [message] from a service, which starts lowercase, as a sentence.

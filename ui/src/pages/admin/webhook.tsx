@@ -297,26 +297,40 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
   // The open delivery, on the page it was opened on: the selection is
   // derived from the current list, so a delivery that a refetch dropped,
   // for example when newer ones pushed it off the page, closes its panel
-  // and cannot reopen it from another page.
+  // and cannot reopen it from another page. Ids that left the page are
+  // remembered so a later refetch of the same page does not reopen them.
   const [open, setOpen] = useState<{ id: string; page: number } | null>(null)
+  const [closedIds, setClosedIds] = useState(() => new Set<string>())
   const retention = settingDays(settings.data, 'webhooks.retentionDays')
   const maxAttempts = settingNumber(settings.data, 'webhooks.maxAttempts')
-  const openId = open?.page === page ? open.id : null
+  const candidateId = open?.page === page ? open.id : null
+  const onPage =
+    candidateId !== null && !!deliveries.data?.items.some((delivery) => delivery.id === candidateId)
+  const dropped =
+    candidateId !== null && deliveries.data !== undefined && !onPage && !closedIds.has(candidateId)
+  if (dropped && candidateId) {
+    setClosedIds(new Set(closedIds).add(candidateId))
+    setOpen(null)
+  }
+  const openId = candidateId && !closedIds.has(candidateId) ? candidateId : null
   const selected = deliveries.data?.items.find((delivery) => delivery.id === openId)
   const close = (id: string) => {
     setOpen(null)
     document.getElementById(`delivery-${id}`)?.focus()
   }
-  // When the panel left with its delivery, the focus went to the body: it
-  // lands on the first delivery left, or on the Refresh button.
-  const dropped = openId !== null && deliveries.data !== undefined && selected === undefined
+  // When the payload left with its delivery, focus may have fallen to the
+  // body: move it to the first delivery left, or to the Refresh button.
+  const hadSelection = useRef(false)
   useEffect(() => {
-    if (!dropped || document.activeElement !== document.body) return
-    const next =
-      document.querySelector<HTMLElement>('button[id^="delivery-"]') ??
-      document.getElementById('deliveries-refresh')
-    next?.focus()
-  }, [dropped])
+    const has = selected !== undefined
+    if (hadSelection.current && !has && document.activeElement === document.body) {
+      const next =
+        document.querySelector<HTMLElement>('button[id^="delivery-"]') ??
+        document.getElementById('deliveries-refresh')
+      next?.focus()
+    }
+    hadSelection.current = has
+  })
 
   return (
     <>
@@ -395,7 +409,19 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
                           aria-expanded={expanded}
                           aria-controls={`payload-${delivery.id}`}
                           title={formatDateTime(delivery.createdAt)}
-                          onClick={() => setOpen(expanded ? null : { id: delivery.id, page })}
+                          onClick={() => {
+                            if (expanded) {
+                              setOpen(null)
+                              return
+                            }
+                            setClosedIds((current) => {
+                              if (!current.has(delivery.id)) return current
+                              const next = new Set(current)
+                              next.delete(delivery.id)
+                              return next
+                            })
+                            setOpen({ id: delivery.id, page })
+                          }}
                           className="rounded-sm font-medium whitespace-nowrap text-primary hover:underline"
                         >
                           {formatRelative(delivery.createdAt)}

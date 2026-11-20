@@ -84,15 +84,29 @@ describe('login', () => {
       const button = screen.getByRole('button', { name: 'Log in' })
       expect(button).toBeDisabled()
 
-      act(() => vi.advanceTimersByTime((left - 5) * 1000))
+      // useCountdown re-arms a 1s timeout from useEffect, so advance one
+      // second at a time and let act flush the next schedule.
+      for (let i = 0; i < left - 5; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
       expect(within(alert).getByText(/^Try again in 0:0[45]\.$/)).toBeInTheDocument()
       expect(button).toBeDisabled()
 
-      act(() => vi.advanceTimersByTime(6_000))
+      for (let i = 0; i < 6; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
       expect(alert).toHaveTextContent('Too many attempts. You can try again now.')
       expect(within(alert).queryByText(/Try again in/)).toBeNull()
       expect(button).toBeEnabled()
-      act(() => vi.advanceTimersByTime(5_000))
+      for (let i = 0; i < 5; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
       expect(alert).toHaveTextContent('You can try again now.')
 
       await user.type(screen.getByLabelText('Password'), 'whatever2')
@@ -155,7 +169,7 @@ describe('logout', () => {
 
   it('ends the session', async () => {
     packages()
-    const logouts = capture('post', '/webapi/logout', { done: true })
+    const logouts = capture('post', '/webapi/logout', { success: true })
     const { user } = renderApp('/', { me: f.me() })
     await logOut(user)
     expect(await screen.findByText('Logged out')).toBeInTheDocument()
@@ -171,7 +185,7 @@ describe('logout', () => {
         const token = request.headers.get('X-CSRF-Token')
         tokens.push(token)
         return token === 'csrf-new'
-          ? HttpResponse.json({ done: true })
+          ? HttpResponse.json({ success: true })
           : error(403, 'csrf_failed', 'CSRF token mismatch.')
       }),
     )
@@ -181,6 +195,24 @@ describe('logout', () => {
     await logOut(user)
     expect(await screen.findByText('Logged out')).toBeInTheDocument()
     expect(tokens).toEqual(['csrf-old', 'csrf-new'])
+  })
+
+  it('keeps the session when CSRF refresh cannot see the user', async () => {
+    packages()
+    server.use(
+      http.post(url('/webapi/logout'), () => error(403, 'csrf_failed', 'CSRF token mismatch.')),
+    )
+    const { user } = renderApp('/', { me: f.me() })
+    // Install the null /me after bootstrap: renderApp seeds me, and a handler
+    // registered before that would be overridden by the seed.
+    await screen.findByRole('button', { name: 'Account menu for admin@company.example' })
+    server.use(http.get(url('/webapi/me'), () => HttpResponse.json({ user: null })))
+    await logOut(user)
+    expect(await screen.findByText('Logging out failed')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Account menu for admin@company.example' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Log in' })).toBeNull()
   })
 
   it('keeps the session when the logout fails', async () => {
