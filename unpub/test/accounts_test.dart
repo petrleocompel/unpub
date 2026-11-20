@@ -367,6 +367,7 @@ void main() {
     test('an uploader can add and remove', () async {
       final publisher = await user('p@b.c', Role.publisher);
       final secret = await token(publisher);
+      await user('new@b.c', Role.publisher);
       await addPackage('owned', ['p@b.c']);
 
       expect((await add('owned', 'New@B.c', bearer: secret)).status,
@@ -418,6 +419,7 @@ void main() {
     test('an admin can manage any package', () async {
       final admin = await user('a@b.c', Role.admin);
       final secret = await token(admin);
+      await user('new@b.c', Role.publisher);
       await addPackage('foreign', ['other@b.c']);
       expect((await add('foreign', 'new@b.c', bearer: secret)).status,
           HttpStatus.ok);
@@ -428,6 +430,7 @@ void main() {
 
     test('an admin can give a package without uploaders its first', () async {
       final admin = await user('a@b.c', Role.admin);
+      await user('new@b.c', Role.publisher);
       await addPackage('legacy', null);
       expect(
           (await add('legacy', 'new@b.c', bearer: await token(admin))).status,
@@ -440,6 +443,15 @@ void main() {
       expect(
           (await add('missing', 'new@b.c', bearer: await token(admin))).status,
           HttpStatus.notFound);
+    });
+
+    test('needs an existing user when accounts are enabled', () async {
+      final admin = await user('a@b.c', Role.admin);
+      await addPackage('owned', ['a@b.c']);
+      final reply = await add('owned', 'nobody@b.c', bearer: await token(admin));
+      expect(reply.status, HttpStatus.notFound);
+      expect(reply.body['error']['message'],
+          'there is no user with the email nobody@b.c');
     });
 
     test('a read-scoped token cannot manage uploaders', () async {
@@ -782,6 +794,7 @@ void main() {
     });
 
     test('a form write with the field passes and keeps its body', () async {
+      await user('new@b.c', Role.publisher);
       final reply = await send('POST', '/api/packages/owned/uploaders',
           browser: browser,
           sendCsrf: false,
@@ -2475,6 +2488,7 @@ void main() {
     test('records uploader changes', () async {
       final publisher = await user('p@b.c', Role.publisher);
       final secret = await token(publisher);
+      await user('new@b.c', Role.publisher);
       await addPackage('owned', ['p@b.c', 'gone@b.c']);
       await send('POST', '/api/packages/owned/uploaders',
           bearer: secret, form: 'email=new%40b.c');
