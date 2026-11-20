@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Package page, stats</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 1800px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Package · Stats, proxied from pub.dev <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: dark"><i class="i i-moon"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for jane.doe@company.example"><span class="avatar">JD</span><span class="hide-sm">jane.doe@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="pkg-head">
+<div class="container pkg-head-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="PackageList.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">http</span></nav>
+<div class="pkg-title"><h1>http</h1><span class="ver">1.2.2</span><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Copy http: ^1.2.2"><i class="i i-copy i-sm"></i></button></div>
+<p class="t-md muted" style="max-width: 760px;">A composable, multi-platform, Future-based API for HTTP requests.</p>
+<div class="pkg-sub">
+<span>Published <time class="fg" title="2 Sep 2026">2 months ago</time></span><span class="sep" aria-hidden="true"></span>
+<span class="flex items-center gap-1"><i class="i i-download i-sm"></i><b class="fg fw-5 tnum">12 980</b> downloads through unpub</span>
+</div>
+<div class="flex wrap gap-1h"><span class="sdk">Dart</span><span class="badge primary"><i class="i i-star"></i>Latest</span><span class="badge"><i class="i i-cloud"></i>From pub.dev</span></div>
+<div class="alert info" role="note"><i class="i i-cloud"></i><div><b>Cached from pub.dev.</b> unpub serves a copy for builds without internet access; publishing, retracting and uploaders happen on <a class="link" href="#">pub.dev/packages/http <i class="i i-external i-xs"></i></a>.</div></div>
+<nav class="tabs" aria-label="Package sections" style="border-bottom: 0;">
+<a href="Package.dc.html">README</a>
+<a href="#">Changelog</a>
+<a href="PackageVersions.dc.html">Versions <span class="n">38</span></a>
+<a href="PackageInstall.dc.html">Install</a>
+<a href="#" aria-current="page">Stats</a>
+</nav>
+</div>
+</div>
+
+<div class="container main col gap-6">
+<div class="grid gap-4 cols-1-sm" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+<div class="card stat"><p class="l">Total downloads</p><p class="v">12 980</p><p class="t-xs muted">since first cached, 14 Jan 2025</p></div>
+<div class="card stat"><p class="l">Last 30 days</p><p class="v">1 824</p><p class="t-xs t-success flex items-center gap-1"><i class="i i-arrow-down i-xs" style="transform: rotate(180deg);"></i>12 % on the 30 days before</p></div>
+<div class="card stat"><p class="l">Busiest day</p><p class="v">142</p><p class="t-xs muted">Tue 4 Nov 2026</p></div>
+</div>
+
+<section class="card">
+<div class="card-h"><h2>Downloads per day, last 30 days</h2><div class="seg" role="group" aria-label="Display"><button type="button" aria-pressed="true"><i class="i i-chart i-sm"></i> Chart</button><button type="button" aria-pressed="false">Table</button></div></div>
+<div class="card-b">
+<svg class="chart" viewBox="0 0 900 236" role="img" aria-label="Downloads per day from 12 Oct to 10 Nov 2026: 1 824 in total, busiest 4 Nov with 142, weekends near zero.">
+<line class="grid-l" x1="36" y1="10" x2="900" y2="10"></line><line class="grid-l" x1="36" y1="76.7" x2="900" y2="76.7"></line><line class="grid-l" x1="36" y1="143.3" x2="900" y2="143.3"></line><line class="grid-l" x1="36" y1="210" x2="900" y2="210"></line>
+<text class="ax" x="28" y="14" text-anchor="end">150</text><text class="ax" x="28" y="81" text-anchor="end">100</text><text class="ax" x="28" y="147" text-anchor="end">50</text><text class="ax" x="28" y="214" text-anchor="end">0</text>
+<rect class="bar" x="40.0" y="95.3" width="21" height="114.7" rx="2"></rect><rect class="bar" x="68.6" y="124.7" width="21" height="85.3" rx="2"></rect><rect class="bar" x="97.2" y="83.3" width="21" height="126.7" rx="2"></rect><rect class="bar" x="125.8" y="142.0" width="21" height="68.0" rx="2"></rect><rect class="bar" x="154.4" y="202.0" width="21" height="8.0" rx="2"></rect><rect class="bar" x="183.0" y="202.0" width="21" height="8.0" rx="2"></rect><rect class="bar" x="211.6" y="88.7" width="21" height="121.3" rx="2"></rect><rect class="bar" x="240.2" y="140.7" width="21" height="69.3" rx="2"></rect><rect class="bar" x="268.8" y="64.7" width="21" height="145.3" rx="2"></rect><rect class="bar" x="297.4" y="114.0" width="21" height="96.0" rx="2"></rect><rect class="bar" x="326.0" y="144.7" width="21" height="65.3" rx="2"></rect><rect class="bar" x="354.6" y="202.0" width="21" height="8.0" rx="2"></rect><rect class="bar" x="383.2" y="146.0" width="21" height="64.0" rx="2"></rect><rect class="bar" x="411.8" y="79.3" width="21" height="130.7" rx="2"></rect><rect class="bar" x="440.4" y="139.3" width="21" height="70.7" rx="2"></rect><rect class="bar" x="469.0" y="110.0" width="21" height="100.0" rx="2"></rect><rect class="bar" x="497.6" y="135.3" width="21" height="74.7" rx="2"></rect><rect class="bar" x="526.2" y="78.0" width="21" height="132.0" rx="2"></rect><rect class="bar" x="554.8" y="202.0" width="21" height="8.0" rx="2"></rect><rect class="bar" x="583.4" y="199.3" width="21" height="10.7" rx="2"></rect><rect class="bar" x="612.0" y="112.7" width="21" height="97.3" rx="2"></rect><rect class="bar" x="640.6" y="140.7" width="21" height="69.3" rx="2"></rect><rect class="bar" x="669.2" y="83.3" width="21" height="126.7" rx="2"></rect><rect class="bar hl" x="697.8" y="20.7" width="21" height="189.3" rx="2"></rect><rect class="bar" x="726.4" y="112.7" width="21" height="97.3" rx="2"></rect><rect class="bar" x="755.0" y="202.0" width="21" height="8.0" rx="2"></rect><rect class="bar" x="783.6" y="196.7" width="21" height="13.3" rx="2"></rect><rect class="bar" x="812.2" y="100.7" width="21" height="109.3" rx="2"></rect><rect class="bar" x="840.8" y="79.3" width="21" height="130.7" rx="2"></rect><rect class="bar" x="869.4" y="126.0" width="21" height="84.0" rx="2"></rect>
+<text class="ax" x="40" y="230">12 Oct</text><text class="ax" x="440" y="230">26 Oct</text><text class="ax" x="890" y="230" text-anchor="end">10 Nov</text>
+</svg>
+<div class="flex items-center gap-2" style="margin-top: 10px;"><span class="tip">Tue 4 Nov · 142 downloads</span><span class="hint">Bars take focus with the arrow keys; the Table view lists every day for screen readers.</span></div>
+</div>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Downloads per version</h2><span class="t-xs muted">all time</span></div>
+<div class="card-b">
+<ul class="col gap-3">
+<li class="grid items-center gap-3" style="grid-template-columns: 120px minmax(0, 1fr) 70px;"><a class="link mono t-sm" href="#">1.2.2</a><div class="meter"><span style="width: 47%;"></span></div><span class="text-right tnum t-sm">6 120</span></li>
+<li class="grid items-center gap-3" style="grid-template-columns: 120px minmax(0, 1fr) 70px;"><a class="link mono t-sm" href="#">1.2.1</a><div class="meter"><span style="width: 26%;"></span></div><span class="text-right tnum t-sm">3 410</span></li>
+<li class="grid items-center gap-3" style="grid-template-columns: 120px minmax(0, 1fr) 70px;"><a class="link mono t-sm" href="#">1.2.0</a><div class="meter"><span style="width: 15%;"></span></div><span class="text-right tnum t-sm">2 004</span></li>
+<li class="grid items-center gap-3" style="grid-template-columns: 120px minmax(0, 1fr) 70px;"><a class="link mono t-sm" href="#">1.1.0</a><div class="meter"><span style="width: 11%;"></span></div><span class="text-right tnum t-sm">1 446</span></li>
+</ul>
+</div>
+</section>
+</div>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":1800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440' },
+        { label: '1440 · Dark', cls: 'w1440 dark' },
+        { label: '390 · Light', cls: 'w390' },
+        { label: '390 · Dark', cls: 'w390 dark' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

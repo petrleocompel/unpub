@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin users</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 1260px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Admin · Users, row menu open, 409 toast <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app" style="position: relative;">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="#" aria-current="page"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Users</h1><p>37 accounts. There is no self sign-up and no invite email: hand new users their password yourself.</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-primary btn-sm" type="button"><i class="i i-user-plus"></i>Create user</button></div>
+</div>
+
+<div class="toolbar">
+<div class="input-icon grow" style="max-width: 360px; min-width: 200px;"><i class="i i-search"></i><input class="input sm" type="search" placeholder="Search email or name" aria-label="Search users"></div>
+<label class="flex items-center gap-2"><span class="lbl">Role</span><div class="sel"><select class="select sm" style="width: 130px;"><option>All roles</option><option>admin</option><option>publisher</option><option>reader</option></select><i class="i i-chevron-down"></i></div></label>
+<label class="flex items-center gap-2"><span class="lbl">Status</span><div class="sel"><select class="select sm" style="width: 120px;"><option>Any</option><option>Enabled</option><option>Disabled</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+
+<div class="tbl-box" style="overflow: visible;">
+<div style="overflow-x: auto; border-radius: 8px;">
+<table class="tbl sticky-first">
+<thead><tr><th aria-sort="ascending"><button class="sort" type="button">Email <i class="i i-arrow-down i-xs"></i></button></th><th>Display name</th><th>Role</th><th>Status</th><th><button class="sort" type="button">Created <i class="i i-chevrons i-xs"></i></button></th><th><button class="sort" type="button">Last login <i class="i i-chevrons i-xs"></i></button></th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+<sc-for list="{{users}}" as="u" hint-placeholder-count="10">
+<tr class="{{u.rowCls}}">
+<td class="fw-5">{{u.email}}</td>
+<td>{{u.name}}</td>
+<td><sc-if value="{{u.admin}}" hint-placeholder-val="{{false}}"><span class="badge solid"><i class="i i-shield-check"></i>admin</span></sc-if><sc-if value="{{u.publisher}}" hint-placeholder-val="{{false}}"><span class="badge neutral">publisher</span></sc-if><sc-if value="{{u.reader}}" hint-placeholder-val="{{false}}"><span class="badge">reader</span></sc-if></td>
+<td><sc-if value="{{u.disabled}}" hint-placeholder-val="{{false}}"><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></sc-if><sc-if value="{{u.enabled}}" hint-placeholder-val="{{true}}"><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></sc-if></td>
+<td class="muted" title="{{u.createdAbs}}">{{u.created}}</td>
+<td class="muted">{{u.last}}</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for {{u.email}}"><i class="i i-more"></i></button></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>1–10 of 37</span><nav class="pages" aria-label="User pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><a href="#">4</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav><label class="flex items-center gap-2">Rows<div class="sel"><select class="select sm" style="width: 72px;"><option>10</option><option>50</option></select><i class="i i-chevron-down"></i></div></label></div>
+</div>
+
+<div class="menu hide-sm" role="menu" aria-label="Actions for ada.lovelace" style="position: absolute; right: 48px; top: 286px; width: 230px; z-index: 10;">
+<div class="menu-l">ada.lovelace@company.example</div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-shield"></i>Change role…</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-key"></i>Set password…</button>
+<div class="menu-sep"></div>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-ban"></i>Disable</button>
+</div>
+</main>
+</div>
+
+<div class="toast error toast-float" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Could not change the role</p><p class="d">409 · ada.lovelace is the last administrator and cannot be demoted.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":1260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const U = (email, name, role, created, last, disabled) => ({ email, name, admin: role === 'admin', publisher: role === 'publisher', reader: role === 'reader', disabled: !!disabled, enabled: !disabled, rowCls: disabled ? 'muted-row' : (email.startsWith('ada') ? 'expanded' : ''), created, createdAbs: created, last });
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440' },
+        { label: '1440 · Dark', cls: 'w1440 dark' },
+        { label: '390 · Light', cls: 'w390' },
+        { label: '390 · Dark', cls: 'w390 dark' }
+      ],
+      users: [
+        U('ada.lovelace@company.example', 'Ada Lovelace', 'admin', '12 Jan 2025', '2 hours ago'),
+        U('ci-bot@company.example', 'CI', 'publisher', '20 Jan 2025', 'token only'),
+        U('eva.svobodova@company.example', 'Eva Svobodová', 'reader', '3 Mar 2026', '1 week ago'),
+        U('jane.doe@company.example', 'Jane Doe', 'publisher', '12 Jan 2025', 'yesterday'),
+        U('jan.kral@company.example', '—', 'publisher', '8 Oct 2026', 'never'),
+        U('lukas.dvorak@company.example', 'Lukáš Dvořák', 'publisher', '14 Feb 2025', '3 days ago'),
+        U('old.contractor@company.example', 'Contractor', 'reader', '2 Jun 2025', '4 months ago', true),
+        U('petr.novy@company.example', 'Petr Nový', 'publisher', '9 Apr 2025', 'today'),
+        U('qa-device-farm@company.example', 'QA farm', 'reader', '30 Jul 2025', '5 minutes ago'),
+        U('tomas.novak@company.example', 'Tomáš Novák', 'publisher', '12 Jan 2025', '8 months ago', true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

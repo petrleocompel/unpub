@@ -14,27 +14,28 @@ UnpubVersion _$UnpubVersionFromJson(Map<String, dynamic> json) => UnpubVersion(
       json['readme'] as String?,
       json['changelog'] as String?,
       identity(json['createdAt'] as DateTime),
+      sha256: json['sha256'] as String?,
+      archiveLayout: json['archiveLayout'] as String?,
+      isRetracted: json['isRetracted'] as bool? ?? false,
+      retractedAt: optionalIdentity(json['retractedAt'] as DateTime?),
+      retractedBy: json['retractedBy'] as String?,
     );
 
-Map<String, dynamic> _$UnpubVersionToJson(UnpubVersion instance) {
-  final val = <String, dynamic>{
-    'version': instance.version,
-    'pubspec': instance.pubspec,
-  };
-
-  void writeNotNull(String key, dynamic value) {
-    if (value != null) {
-      val[key] = value;
-    }
-  }
-
-  writeNotNull('pubspecYaml', instance.pubspecYaml);
-  writeNotNull('uploader', instance.uploader);
-  writeNotNull('readme', instance.readme);
-  writeNotNull('changelog', instance.changelog);
-  writeNotNull('createdAt', identity(instance.createdAt));
-  return val;
-}
+Map<String, dynamic> _$UnpubVersionToJson(UnpubVersion instance) =>
+    <String, dynamic>{
+      'version': instance.version,
+      'pubspec': instance.pubspec,
+      'pubspecYaml': instance.pubspecYaml,
+      'uploader': instance.uploader,
+      'readme': instance.readme,
+      'changelog': instance.changelog,
+      'createdAt': identity(instance.createdAt),
+      'sha256': instance.sha256,
+      'archiveLayout': instance.archiveLayout,
+      'isRetracted': instance.isRetracted,
+      'retractedAt': optionalIdentity(instance.retractedAt),
+      'retractedBy': instance.retractedBy,
+    };
 
 UnpubPackage _$UnpubPackageFromJson(Map<String, dynamic> json) => UnpubPackage(
       json['name'] as String,
@@ -45,30 +46,16 @@ UnpubPackage _$UnpubPackageFromJson(Map<String, dynamic> json) => UnpubPackage(
       (json['uploaders'] as List<dynamic>?)?.map((e) => e as String).toList(),
       identity(json['createdAt'] as DateTime),
       identity(json['updatedAt'] as DateTime),
-      json['download'] as int?,
+      (json['download'] as num?)?.toInt(),
+      isDiscontinued: json['isDiscontinued'] as bool? ?? false,
+      replacedBy: json['replacedBy'] as String?,
+      discontinuedAt: optionalIdentity(json['discontinuedAt'] as DateTime?),
     );
-
-Map<String, dynamic> _$UnpubPackageToJson(UnpubPackage instance) =>
-    <String, dynamic>{
-      'name': instance.name,
-      'versions': instance.versions,
-      'private': instance.private,
-      'uploaders': instance.uploaders,
-      'createdAt': identity(instance.createdAt),
-      'updatedAt': identity(instance.updatedAt),
-      'download': instance.download,
-    };
 
 UnpubQueryResult _$UnpubQueryResultFromJson(Map<String, dynamic> json) =>
     UnpubQueryResult(
-      json['count'] as int,
+      (json['count'] as num).toInt(),
       (json['packages'] as List<dynamic>)
           .map((e) => UnpubPackage.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
-
-Map<String, dynamic> _$UnpubQueryResultToJson(UnpubQueryResult instance) =>
-    <String, dynamic>{
-      'count': instance.count,
-      'packages': instance.packages,
-    };

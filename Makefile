@@ -1,15 +1,21 @@
-dev-web:
-	cd unpub_web &&\
-	dart pub global activate webdev 2.7.4 &&\
-	dart pub global activate webdev_proxy 0.1.1 &&\
-	dart pub global run webdev_proxy serve -- --auto=refresh --log-requests
+.PHONY: dev test format analyze generate docker
 
-dev-api:
-	cd unpub &&	dart run build_runner watch
+# Start MongoDB for local development and tests.
+dev:
+	docker compose -f docker-compose.dev.yml up -d mongo
 
-build:
-	cd unpub_web &&\
-	dart pub global activate webdev 2.7.4 &&\
-	dart pub global run webdev build
-	dart unpub/tool/pre_publish.dart
-	dart format **/*.dart
+test:
+	cd unpub && dart test
+
+format:
+	cd unpub && dart format .
+
+analyze:
+	cd unpub && dart analyze
+
+# Regenerate *.g.dart after changing the JSON models.
+generate:
+	cd unpub && dart run build_runner build --delete-conflicting-outputs
+
+docker:
+	docker build -t unpub .

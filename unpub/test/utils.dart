@@ -1,13 +1,21 @@
+import 'dart:convert';
 import 'dart:io';
-import 'package:path/path.dart' as path;
+
+import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
-import 'package:unpub/unpub.dart' as unpub;
 import 'package:mongo_dart/mongo_dart.dart';
+import 'package:path/path.dart' as path;
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:test/test.dart';
+import 'package:unpub/unpub.dart' as unpub;
 
 final notExistingPacakge = 'not_existing_package';
 final baseDir = path.absolute('unpub-packages');
 final pubHostedUrl = 'http://localhost:4000';
 final baseUri = Uri.parse(pubHostedUrl);
+
+final testMongoUri = Platform.environment['UNPUB_TEST_MONGO_URI'] ??
+    'mongodb://localhost:27017/dart_pub_test';
 
 final package0 = 'package_0';
 final package1 = 'package_1';
@@ -16,20 +24,138 @@ final email1 = 'email1@example.com';
 final email2 = 'email2@example.com';
 final email3 = 'email3@example.com';
 
-createServer(String opEmail) async {
-  final db = Db('mongodb://localhost:27017/dart_pub_test');
-  await db.open();
-  var mongoStore = unpub.MongoStore(db);
+/// The token the pub client presents in tests.
+const testToken = 'test-bootstrap-token';
 
-  var app = unpub.App(
-    metaStore: mongoStore,
+/// Accepts one Bearer token as a fixed identity, a publisher by default.
+class FakeAuthenticator implements unpub.Authenticator {
+  final String? token;
+  final String email;
+  final unpub.Role role;
+
+  const FakeAuthenticator(
+    this.token,
+    this.email, {
+    this.role = unpub.Role.publisher,
+  });
+
+  @override
+  Future<unpub.Principal?> authenticate(shelf.Request request) async {
+    if (token == null || unpub.bearerToken(request) != token) return null;
+    return unpub.Principal(email, role: role);
+  }
+}
+
+/// A server where [token] authenticates the publisher [opEmail].
+Future<HttpServer> createServer(
+  String opEmail, {
+  String? token = testToken,
+  bool authenticatedReads = false,
+  unpub.Role role = unpub.Role.publisher,
+  unpub.PublishConfig publish = const unpub.PublishConfig(),
+  Future<void> Function(Map<String, dynamic>, String)? uploadValidator,
+}) async {
+  final db = Db(testMongoUri);
+  await db.open();
+  addTearDown(db.close);
+  // The database of a test starts empty, and an archive with no published
+  // version would be reported as corrupt storage.
+  if (Directory(baseDir).existsSync()) {
+    await Directory(baseDir).delete(recursive: true);
+  }
+  await Directory(baseDir).create(recursive: true);
+
+  final app = unpub.App(
+    metaStore: unpub.MongoStore(db),
     packageStore: unpub.FileStore(baseDir),
-    overrideUploaderEmail: opEmail,
+    authenticator: FakeAuthenticator(token, opEmail, role: role),
+    readAccess: authenticatedReads
+        ? unpub.ReadAccess.authenticated
+        : unpub.ReadAccess.public,
+    publishPolicy: unpub.PublishPolicy(publish),
+    uploadValidator: uploadValidator,
   );
 
-  var server = await app.serve('0.0.0.0', 4000);
-  return server;
+  return app.serve('0.0.0.0', 4000);
 }
+
+final _tarballs = <String, List<int>>{};
+
+/// A `dart pub publish` upload of an archive holding [pubspec].
+///
+/// The same [pubspec] always gives the same bytes, and so the same digest,
+/// because gzip records the time and a test may cross a second boundary.
+shelf.Request uploadRequest(String pubspec, Map<String, String> headers) =>
+    _uploadRequestOfBytes(
+        _tarballs.putIfAbsent(
+            pubspec,
+            () => _pack(Archive()
+              ..addFile(ArchiveFile.string('pubspec.yaml', pubspec)))),
+        headers);
+
+/// A `dart pub publish` upload of [archive], packed as a `.tar.gz`.
+shelf.Request uploadRequestOf(Archive archive, Map<String, String> headers) =>
+    _uploadRequestOfBytes(_pack(archive), headers);
+
+List<int> _pack(Archive archive) =>
+    GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
+
+shelf.Request _uploadRequestOfBytes(
+    List<int> tarball, Map<String, String> headers) {
+  const boundary = 'test-boundary';
+  return shelf.Request(
+    'POST',
+    Uri.parse('http://internal:4000/api/packages/versions/newUpload'),
+    headers: {
+      ...headers,
+      'content-type': 'multipart/form-data; boundary=$boundary',
+    },
+    body: [
+      ...utf8.encode('--$boundary\r\n'
+          'content-disposition: form-data; name="file"; filename="p.tar.gz"\r\n'
+          'content-type: application/octet-stream\r\n\r\n'),
+      ...tarball,
+      ...utf8.encode('\r\n--$boundary--\r\n'),
+    ],
+  );
+}
+
+late Directory _pubHome;
+late Map<String, String> _pubEnvironment;
+
+/// Gives the pub client an isolated home that holds [testToken].
+///
+/// Keeps tests away from the credentials of whoever runs them. pub reads its
+/// config from `$HOME` on macOS and from `$XDG_CONFIG_HOME` on Linux.
+Future<void> setUpPubClient() async {
+  _pubHome = await Directory.systemTemp.createTemp('unpub-test-pub-');
+  _pubEnvironment = {
+    'HOME': _pubHome.path,
+    'XDG_CONFIG_HOME': path.join(_pubHome.path, 'config'),
+    'PUB_CACHE': path.join(_pubHome.path, 'cache'),
+    'PUB_HOSTED_URL': pubHostedUrl,
+  };
+  await addPubToken();
+}
+
+/// Stores [token] in the pub client, which forgets a token after a 401.
+Future<void> addPubToken([String token = testToken]) async {
+  final process = await Process.start(
+    'dart',
+    ['pub', 'token', 'add', pubHostedUrl],
+    environment: _pubEnvironment,
+  );
+  process.stdin.writeln(token);
+  await process.stdin.close();
+  final out = process.stdout.transform(utf8.decoder).join();
+  final err = process.stderr.transform(utf8.decoder).join();
+  final code = await process.exitCode;
+  if (code != 0) {
+    throw StateError('dart pub token add failed: ${await out}${await err}');
+  }
+}
+
+Future<void> tearDownPubClient() => _pubHome.delete(recursive: true);
 
 Future<http.Response> getVersions(String package) {
   package = Uri.encodeComponent(package);
@@ -45,13 +171,98 @@ Future<http.Response> getSpecificVersion(String package, String version) {
 Future<ProcessResult> pubPublish(String name, String version) {
   return Process.run('dart', ['pub', 'publish', '--force'],
       workingDirectory: path.absolute('test/fixtures', name, version),
-      environment: {'PUB_HOSTED_URL': pubHostedUrl});
+      environment: _pubEnvironment);
 }
 
-Future<ProcessResult> pubUploader(String name, String operation, String email) {
-  assert(['add', 'remove'].contains(operation), 'operation error');
+/// Publishes a generated package holding [files], and a LICENSE because pub
+/// refuses to publish without one.
+Future<ProcessResult> pubPublishGenerated(
+  String name,
+  String version, {
+  Map<String, String> files = const {},
+  List<String> arguments = const [],
+}) async {
+  final directory = await _pubHome.createTemp('package-');
+  await File(path.join(directory.path, 'pubspec.yaml')).writeAsString('''
+name: $name
+description: A package generated by the tests for the publishing policies.
+version: $version
+homepage: https://example.com
+environment:
+  sdk: ^3.5.0
+''');
+  await File(path.join(directory.path, 'LICENSE')).writeAsString('MIT');
+  for (final entry in files.entries) {
+    await File(path.join(directory.path, entry.key)).writeAsString(entry.value);
+  }
+  return Process.run('dart', ['pub', 'publish', '--force', ...arguments],
+      workingDirectory: directory.path, environment: _pubEnvironment);
+}
 
-  return Process.run('dart', ['pub', 'uploader', operation, email],
-      workingDirectory: path.absolute('test/fixtures', name, '0.0.1'),
-      environment: {'PUB_HOSTED_URL': pubHostedUrl});
+/// Forgets the version listings pub cached, as a later run would not trust.
+Future<void> clearPubListingCache() async {
+  final hosted = Directory(path.join(_pubHome.path, 'cache', 'hosted'));
+  if (!await hosted.exists()) return;
+  await for (final server in hosted.list()) {
+    final cache = Directory(path.join(server.path, '.cache'));
+    if (await cache.exists()) await cache.delete(recursive: true);
+  }
+}
+
+/// A throwaway package that depends on [name] with the [constraint].
+Future<Directory> createConsumer(String name, String constraint) async {
+  final directory = await _pubHome.createTemp('consumer-');
+  await File(path.join(directory.path, 'pubspec.yaml')).writeAsString('''
+name: consumer
+environment:
+  sdk: ^3.5.0
+dependencies:
+  $name: $constraint
+''');
+  return directory;
+}
+
+Future<ProcessResult> pubGet(Directory consumer) =>
+    Process.run('dart', ['pub', 'get'],
+        workingDirectory: consumer.path, environment: _pubEnvironment);
+
+/// The version of [name] that `pubspec.lock` in [consumer] holds.
+String lockedVersion(Directory consumer, String name) {
+  final lock =
+      File(path.join(consumer.path, 'pubspec.lock')).readAsStringSync();
+  final section = lock.substring(lock.indexOf('  $name:'));
+  return RegExp(r'version: "([^"]+)"').firstMatch(section)!.group(1)!;
+}
+
+/// Runs `dart pub get` in a throwaway package depending on [name] [version].
+Future<ProcessResult> pubGetConsumer(String name, String version) async {
+  final directory = await _pubHome.createTemp('consumer-');
+  await File(path.join(directory.path, 'pubspec.yaml')).writeAsString('''
+name: consumer
+environment:
+  sdk: ^3.5.0
+dependencies:
+  $name: $version
+''');
+  return Process.run('dart', ['pub', 'get'],
+      workingDirectory: directory.path, environment: _pubEnvironment);
+}
+
+const _authorized = {HttpHeaders.authorizationHeader: 'Bearer $testToken'};
+
+// `dart pub uploader` no longer talks to servers, so these use the API directly.
+Future<http.Response> addUploader(String name, String email) {
+  return http.post(
+    baseUri.resolve('/api/packages/$name/uploaders'),
+    headers: _authorized,
+    body: 'email=${Uri.encodeQueryComponent(email)}',
+  );
+}
+
+Future<http.Response> removeUploader(String name, String email) {
+  return http.delete(
+    baseUri
+        .resolve('/api/packages/$name/uploaders/${Uri.encodeComponent(email)}'),
+    headers: _authorized,
+  );
 }

@@ -1,0 +1,698 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Admin users</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 4060px; height: 1260px;">
+
+<div class="variant">
+<p class="vlabel">Admin · Users, row menu open, 409 toast <span>· 1440 · Light</span></p>
+<div class="frame w1440">
+<div class="app" style="position: relative;">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="#" aria-current="page"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Users</h1><p>37 accounts. There is no self sign-up and no invite email: hand new users their password yourself.</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-primary btn-sm" type="button"><i class="i i-user-plus"></i>Create user</button></div>
+</div>
+
+<div class="toolbar">
+<div class="input-icon grow" style="max-width: 360px; min-width: 200px;"><i class="i i-search"></i><input class="input sm" type="search" placeholder="Search email or name" aria-label="Search users"></div>
+<label class="flex items-center gap-2"><span class="lbl">Role</span><div class="sel"><select class="select sm" style="width: 130px;"><option>All roles</option><option>admin</option><option>publisher</option><option>reader</option></select><i class="i i-chevron-down"></i></div></label>
+<label class="flex items-center gap-2"><span class="lbl">Status</span><div class="sel"><select class="select sm" style="width: 120px;"><option>Any</option><option>Enabled</option><option>Disabled</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+
+<div class="tbl-box" style="overflow: visible;">
+<div style="overflow-x: auto; border-radius: 8px;">
+<table class="tbl sticky-first">
+<thead><tr><th aria-sort="ascending"><button class="sort" type="button">Email <i class="i i-arrow-down i-xs"></i></button></th><th>Display name</th><th>Role</th><th>Status</th><th><button class="sort" type="button">Created <i class="i i-chevrons i-xs"></i></button></th><th><button class="sort" type="button">Last login <i class="i i-chevrons i-xs"></i></button></th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+
+<tr class="expanded">
+<td class="fw-5">ada.lovelace@company.example</td>
+<td>Ada Lovelace</td>
+<td><span class="badge solid"><i class="i i-shield-check"></i>admin</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">2 hours ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ada.lovelace@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">ci-bot@company.example</td>
+<td>CI</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="20 Jan 2025">20 Jan 2025</td>
+<td class="muted">token only</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ci-bot@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">eva.svobodova@company.example</td>
+<td>Eva Svobodová</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="3 Mar 2026">3 Mar 2026</td>
+<td class="muted">1 week ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for eva.svobodova@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jane.doe@company.example</td>
+<td>Jane Doe</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">yesterday</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jane.doe@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jan.kral@company.example</td>
+<td>—</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="8 Oct 2026">8 Oct 2026</td>
+<td class="muted">never</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jan.kral@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">lukas.dvorak@company.example</td>
+<td>Lukáš Dvořák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="14 Feb 2025">14 Feb 2025</td>
+<td class="muted">3 days ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for lukas.dvorak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">old.contractor@company.example</td>
+<td>Contractor</td>
+<td><span class="badge">reader</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="2 Jun 2025">2 Jun 2025</td>
+<td class="muted">4 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for old.contractor@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">petr.novy@company.example</td>
+<td>Petr Nový</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="9 Apr 2025">9 Apr 2025</td>
+<td class="muted">today</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for petr.novy@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">qa-device-farm@company.example</td>
+<td>QA farm</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="30 Jul 2025">30 Jul 2025</td>
+<td class="muted">5 minutes ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for qa-device-farm@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">tomas.novak@company.example</td>
+<td>Tomáš Novák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">8 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for tomas.novak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>1–10 of 37</span><nav class="pages" aria-label="User pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><a href="#">4</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav><label class="flex items-center gap-2">Rows<div class="sel"><select class="select sm" style="width: 72px;"><option>10</option><option>50</option></select><i class="i i-chevron-down"></i></div></label></div>
+</div>
+
+<div class="menu hide-sm" role="menu" aria-label="Actions for ada.lovelace" style="position: absolute; right: 48px; top: 286px; width: 230px; z-index: 10;">
+<div class="menu-l">ada.lovelace@company.example</div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-shield"></i>Change role…</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-key"></i>Set password…</button>
+<div class="menu-sep"></div>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-ban"></i>Disable</button>
+</div>
+</main>
+</div>
+
+<div class="toast error toast-float" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Could not change the role</p><p class="d">409 · ada.lovelace is the last administrator and cannot be demoted.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Users, row menu open, 409 toast <span>· 1440 · Dark</span></p>
+<div class="frame w1440 dark">
+<div class="app" style="position: relative;">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="#" aria-current="page"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Users</h1><p>37 accounts. There is no self sign-up and no invite email: hand new users their password yourself.</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-primary btn-sm" type="button"><i class="i i-user-plus"></i>Create user</button></div>
+</div>
+
+<div class="toolbar">
+<div class="input-icon grow" style="max-width: 360px; min-width: 200px;"><i class="i i-search"></i><input class="input sm" type="search" placeholder="Search email or name" aria-label="Search users"></div>
+<label class="flex items-center gap-2"><span class="lbl">Role</span><div class="sel"><select class="select sm" style="width: 130px;"><option>All roles</option><option>admin</option><option>publisher</option><option>reader</option></select><i class="i i-chevron-down"></i></div></label>
+<label class="flex items-center gap-2"><span class="lbl">Status</span><div class="sel"><select class="select sm" style="width: 120px;"><option>Any</option><option>Enabled</option><option>Disabled</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+
+<div class="tbl-box" style="overflow: visible;">
+<div style="overflow-x: auto; border-radius: 8px;">
+<table class="tbl sticky-first">
+<thead><tr><th aria-sort="ascending"><button class="sort" type="button">Email <i class="i i-arrow-down i-xs"></i></button></th><th>Display name</th><th>Role</th><th>Status</th><th><button class="sort" type="button">Created <i class="i i-chevrons i-xs"></i></button></th><th><button class="sort" type="button">Last login <i class="i i-chevrons i-xs"></i></button></th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+
+<tr class="expanded">
+<td class="fw-5">ada.lovelace@company.example</td>
+<td>Ada Lovelace</td>
+<td><span class="badge solid"><i class="i i-shield-check"></i>admin</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">2 hours ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ada.lovelace@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">ci-bot@company.example</td>
+<td>CI</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="20 Jan 2025">20 Jan 2025</td>
+<td class="muted">token only</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ci-bot@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">eva.svobodova@company.example</td>
+<td>Eva Svobodová</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="3 Mar 2026">3 Mar 2026</td>
+<td class="muted">1 week ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for eva.svobodova@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jane.doe@company.example</td>
+<td>Jane Doe</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">yesterday</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jane.doe@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jan.kral@company.example</td>
+<td>—</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="8 Oct 2026">8 Oct 2026</td>
+<td class="muted">never</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jan.kral@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">lukas.dvorak@company.example</td>
+<td>Lukáš Dvořák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="14 Feb 2025">14 Feb 2025</td>
+<td class="muted">3 days ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for lukas.dvorak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">old.contractor@company.example</td>
+<td>Contractor</td>
+<td><span class="badge">reader</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="2 Jun 2025">2 Jun 2025</td>
+<td class="muted">4 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for old.contractor@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">petr.novy@company.example</td>
+<td>Petr Nový</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="9 Apr 2025">9 Apr 2025</td>
+<td class="muted">today</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for petr.novy@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">qa-device-farm@company.example</td>
+<td>QA farm</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="30 Jul 2025">30 Jul 2025</td>
+<td class="muted">5 minutes ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for qa-device-farm@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">tomas.novak@company.example</td>
+<td>Tomáš Novák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">8 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for tomas.novak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>1–10 of 37</span><nav class="pages" aria-label="User pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><a href="#">4</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav><label class="flex items-center gap-2">Rows<div class="sel"><select class="select sm" style="width: 72px;"><option>10</option><option>50</option></select><i class="i i-chevron-down"></i></div></label></div>
+</div>
+
+<div class="menu hide-sm" role="menu" aria-label="Actions for ada.lovelace" style="position: absolute; right: 48px; top: 286px; width: 230px; z-index: 10;">
+<div class="menu-l">ada.lovelace@company.example</div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-shield"></i>Change role…</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-key"></i>Set password…</button>
+<div class="menu-sep"></div>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-ban"></i>Disable</button>
+</div>
+</main>
+</div>
+
+<div class="toast error toast-float" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Could not change the role</p><p class="d">409 · ada.lovelace is the last administrator and cannot be demoted.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Users, row menu open, 409 toast <span>· 390 · Light</span></p>
+<div class="frame w390">
+<div class="app" style="position: relative;">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="#" aria-current="page"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Users</h1><p>37 accounts. There is no self sign-up and no invite email: hand new users their password yourself.</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-primary btn-sm" type="button"><i class="i i-user-plus"></i>Create user</button></div>
+</div>
+
+<div class="toolbar">
+<div class="input-icon grow" style="max-width: 360px; min-width: 200px;"><i class="i i-search"></i><input class="input sm" type="search" placeholder="Search email or name" aria-label="Search users"></div>
+<label class="flex items-center gap-2"><span class="lbl">Role</span><div class="sel"><select class="select sm" style="width: 130px;"><option>All roles</option><option>admin</option><option>publisher</option><option>reader</option></select><i class="i i-chevron-down"></i></div></label>
+<label class="flex items-center gap-2"><span class="lbl">Status</span><div class="sel"><select class="select sm" style="width: 120px;"><option>Any</option><option>Enabled</option><option>Disabled</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+
+<div class="tbl-box" style="overflow: visible;">
+<div style="overflow-x: auto; border-radius: 8px;">
+<table class="tbl sticky-first">
+<thead><tr><th aria-sort="ascending"><button class="sort" type="button">Email <i class="i i-arrow-down i-xs"></i></button></th><th>Display name</th><th>Role</th><th>Status</th><th><button class="sort" type="button">Created <i class="i i-chevrons i-xs"></i></button></th><th><button class="sort" type="button">Last login <i class="i i-chevrons i-xs"></i></button></th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+
+<tr class="expanded">
+<td class="fw-5">ada.lovelace@company.example</td>
+<td>Ada Lovelace</td>
+<td><span class="badge solid"><i class="i i-shield-check"></i>admin</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">2 hours ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ada.lovelace@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">ci-bot@company.example</td>
+<td>CI</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="20 Jan 2025">20 Jan 2025</td>
+<td class="muted">token only</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ci-bot@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">eva.svobodova@company.example</td>
+<td>Eva Svobodová</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="3 Mar 2026">3 Mar 2026</td>
+<td class="muted">1 week ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for eva.svobodova@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jane.doe@company.example</td>
+<td>Jane Doe</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">yesterday</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jane.doe@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jan.kral@company.example</td>
+<td>—</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="8 Oct 2026">8 Oct 2026</td>
+<td class="muted">never</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jan.kral@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">lukas.dvorak@company.example</td>
+<td>Lukáš Dvořák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="14 Feb 2025">14 Feb 2025</td>
+<td class="muted">3 days ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for lukas.dvorak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">old.contractor@company.example</td>
+<td>Contractor</td>
+<td><span class="badge">reader</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="2 Jun 2025">2 Jun 2025</td>
+<td class="muted">4 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for old.contractor@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">petr.novy@company.example</td>
+<td>Petr Nový</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="9 Apr 2025">9 Apr 2025</td>
+<td class="muted">today</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for petr.novy@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">qa-device-farm@company.example</td>
+<td>QA farm</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="30 Jul 2025">30 Jul 2025</td>
+<td class="muted">5 minutes ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for qa-device-farm@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">tomas.novak@company.example</td>
+<td>Tomáš Novák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">8 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for tomas.novak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>1–10 of 37</span><nav class="pages" aria-label="User pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><a href="#">4</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav><label class="flex items-center gap-2">Rows<div class="sel"><select class="select sm" style="width: 72px;"><option>10</option><option>50</option></select><i class="i i-chevron-down"></i></div></label></div>
+</div>
+
+<div class="menu hide-sm" role="menu" aria-label="Actions for ada.lovelace" style="position: absolute; right: 48px; top: 286px; width: 230px; z-index: 10;">
+<div class="menu-l">ada.lovelace@company.example</div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-shield"></i>Change role…</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-key"></i>Set password…</button>
+<div class="menu-sep"></div>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-ban"></i>Disable</button>
+</div>
+</main>
+</div>
+
+<div class="toast error toast-float" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Could not change the role</p><p class="d">409 · ada.lovelace is the last administrator and cannot be demoted.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Users, row menu open, 409 toast <span>· 390 · Dark</span></p>
+<div class="frame w390 dark">
+<div class="app" style="position: relative;">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="#" aria-current="page"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Users</h1><p>37 accounts. There is no self sign-up and no invite email: hand new users their password yourself.</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><button class="btn btn-primary btn-sm" type="button"><i class="i i-user-plus"></i>Create user</button></div>
+</div>
+
+<div class="toolbar">
+<div class="input-icon grow" style="max-width: 360px; min-width: 200px;"><i class="i i-search"></i><input class="input sm" type="search" placeholder="Search email or name" aria-label="Search users"></div>
+<label class="flex items-center gap-2"><span class="lbl">Role</span><div class="sel"><select class="select sm" style="width: 130px;"><option>All roles</option><option>admin</option><option>publisher</option><option>reader</option></select><i class="i i-chevron-down"></i></div></label>
+<label class="flex items-center gap-2"><span class="lbl">Status</span><div class="sel"><select class="select sm" style="width: 120px;"><option>Any</option><option>Enabled</option><option>Disabled</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+
+<div class="tbl-box" style="overflow: visible;">
+<div style="overflow-x: auto; border-radius: 8px;">
+<table class="tbl sticky-first">
+<thead><tr><th aria-sort="ascending"><button class="sort" type="button">Email <i class="i i-arrow-down i-xs"></i></button></th><th>Display name</th><th>Role</th><th>Status</th><th><button class="sort" type="button">Created <i class="i i-chevrons i-xs"></i></button></th><th><button class="sort" type="button">Last login <i class="i i-chevrons i-xs"></i></button></th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+
+<tr class="expanded">
+<td class="fw-5">ada.lovelace@company.example</td>
+<td>Ada Lovelace</td>
+<td><span class="badge solid"><i class="i i-shield-check"></i>admin</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">2 hours ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ada.lovelace@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">ci-bot@company.example</td>
+<td>CI</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="20 Jan 2025">20 Jan 2025</td>
+<td class="muted">token only</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ci-bot@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">eva.svobodova@company.example</td>
+<td>Eva Svobodová</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="3 Mar 2026">3 Mar 2026</td>
+<td class="muted">1 week ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for eva.svobodova@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jane.doe@company.example</td>
+<td>Jane Doe</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">yesterday</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jane.doe@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">jan.kral@company.example</td>
+<td>—</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="8 Oct 2026">8 Oct 2026</td>
+<td class="muted">never</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jan.kral@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">lukas.dvorak@company.example</td>
+<td>Lukáš Dvořák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="14 Feb 2025">14 Feb 2025</td>
+<td class="muted">3 days ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for lukas.dvorak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">old.contractor@company.example</td>
+<td>Contractor</td>
+<td><span class="badge">reader</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="2 Jun 2025">2 Jun 2025</td>
+<td class="muted">4 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for old.contractor@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">petr.novy@company.example</td>
+<td>Petr Nový</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="9 Apr 2025">9 Apr 2025</td>
+<td class="muted">today</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for petr.novy@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="">
+<td class="fw-5">qa-device-farm@company.example</td>
+<td>QA farm</td>
+<td><span class="badge">reader</span></td>
+<td><span class="t-sm muted flex items-center gap-1"><i class="i i-check i-xs t-success"></i>Enabled</span></td>
+<td class="muted" title="30 Jul 2025">30 Jul 2025</td>
+<td class="muted">5 minutes ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for qa-device-farm@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+<tr class="muted-row">
+<td class="fw-5">tomas.novak@company.example</td>
+<td>Tomáš Novák</td>
+<td><span class="badge neutral">publisher</span></td>
+<td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td>
+<td class="muted" title="12 Jan 2025">12 Jan 2025</td>
+<td class="muted">8 months ago</td>
+<td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for tomas.novak@company.example"><i class="i i-more"></i></button></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>1–10 of 37</span><nav class="pages" aria-label="User pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><a href="#">4</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav><label class="flex items-center gap-2">Rows<div class="sel"><select class="select sm" style="width: 72px;"><option>10</option><option>50</option></select><i class="i i-chevron-down"></i></div></label></div>
+</div>
+
+<div class="menu hide-sm" role="menu" aria-label="Actions for ada.lovelace" style="position: absolute; right: 48px; top: 286px; width: 230px; z-index: 10;">
+<div class="menu-l">ada.lovelace@company.example</div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-shield"></i>Change role…</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-key"></i>Set password…</button>
+<div class="menu-sep"></div>
+<button class="menu-i danger" role="menuitem" type="button"><i class="i i-ban"></i>Disable</button>
+</div>
+</main>
+</div>
+
+<div class="toast error toast-float" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Could not change the role</p><p class="d">409 · ada.lovelace is the last administrator and cannot be demoted.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>

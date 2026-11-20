@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Package list</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 4060px; height: 2290px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="4">
+<div class="variant">
+<p class="vlabel">Package list <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="#" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="#" aria-current="page"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<a class="btn btn-outline btn-sm" href="#"><i class="i i-login"></i>Log in</a>
+</div>
+</div>
+</header>
+
+<main class="container main col gap-6">
+<div class="flex wrap items-end justify-between gap-4">
+<div class="col gap-1">
+<h1 class="page-title">Packages</h1>
+<p class="t-sm muted">142 packages on <span class="mono">pub.company.example</span></p>
+</div>
+<div class="toolbar" role="group" aria-label="Filters and sorting">
+<div class="seg" role="group" aria-label="SDK"><button type="button" aria-pressed="true">All</button><button type="button" aria-pressed="false">Dart</button><button type="button" aria-pressed="false">Flutter</button></div>
+<label class="flex items-center gap-2 t-sm"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Show discontinued"></button>Show discontinued</label>
+<label class="flex items-center gap-2"><span class="lbl">Sort</span><div class="sel"><select class="select sm" style="width: 168px;"><option>Downloads</option><option>Recently updated</option><option>Name</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+</div>
+
+<ul class="pkg-list" aria-label="Packages">
+<sc-for list="{{pkgs}}" as="p" hint-placeholder-count="10">
+<li class="pkg-row">
+<div class="col gap-1h min-w-0">
+<div class="flex wrap items-baseline gap-3"><a class="pkg-name" href="Package.dc.html">{{p.name}}</a><span class="ver">{{p.ver}}</span></div>
+<p class="t-sm muted clamp-2">{{p.desc}}</p>
+<div class="flex wrap gap-1h"><span class="sdk {{p.sdkCls}}">{{p.sdk}}</span><sc-if value="{{p.proxied}}" hint-placeholder-val="{{false}}"><span class="badge"><i class="i i-cloud"></i>From pub.dev</span></sc-if></div>
+</div>
+<dl class="pkg-meta"><div class="flex items-center gap-1"><dt><i class="i i-download i-sm"></i><span class="sr-only">Downloads</span></dt><dd class="fg fw-5">{{p.dl}}</dd></div><div><dt class="sr-only">Updated</dt><dd title="{{p.abs}}">{{p.upd}}</dd></div></dl>
+</li>
+</sc-for>
+</ul>
+
+<div class="pager">
+<span>1–20 of 142</span>
+<nav class="pages" aria-label="Package pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><span>…</span><a href="#">8</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav>
+<label class="flex items-center gap-2">Per page<div class="sel"><select class="select sm" style="width: 72px;"><option>20</option><option>50</option><option>100</option></select><i class="i i-chevron-down"></i></div></label>
+</div>
+</main>
+
+<footer class="ftr"><div class="container ftr-in"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":4060,"height":2290}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const P = (name, ver, sdk, dl, upd, desc, proxied) => ({ name, ver, sdk, sdkCls: sdk === 'Flutter' ? 'flutter' : '', dl, upd, abs: upd, desc, proxied: !!proxied });
+    return {
+      variants: [
+        { label: '1440 · Light', cls: 'w1440' },
+        { label: '1440 · Dark', cls: 'w1440 dark' },
+        { label: '390 · Light', cls: 'w390' },
+        { label: '390 · Dark', cls: 'w390 dark' }
+      ],
+      pkgs: [
+        P('my_company_core', '1.4.0', 'Dart', '48 213', '3 days ago', 'Core models, the HTTP client and error types shared by every Company app.'),
+        P('company_design_system', '5.2.1', 'Flutter', '31 877', 'yesterday', 'Widgets, themes and icons of the Company design system, with golden tests.'),
+        P('flutter_bloc_extensions', '1.8.2', 'Flutter', '22 410', '2 weeks ago', 'Retry, debounce and pagination helpers on top of flutter_bloc, used by the mobile apps.'),
+        P('company_auth', '3.1.0', 'Flutter', '19 702', '5 days ago', 'Sign-in with the Company SSO, token refresh and secure storage.'),
+        P('api_client_generated', '12.0.0+5', 'Dart', '17 455', 'today', 'Generated OpenAPI client for the Orders, Billing and Catalog services.'),
+        P('analysis_rules', '4.0.1', 'Dart', '15 001', '1 month ago', 'Lint rules every Company package and app enables.'),
+        P('http', '1.2.2', 'Dart', '12 980', '2 months ago', 'A composable, multi-platform, Future-based API for HTTP requests.', true),
+        P('feature_flags', '0.7.0', 'Flutter', '8 344', '3 weeks ago', 'Remote feature flags with local overrides for QA builds.'),
+        P('l10n_tools', '2.3.0', 'Dart', '6 120', '4 months ago', 'Extracts, checks and merges ARB files across the app repositories.'),
+        P('geo_utils', '1.0.0', 'Dart', '3 870', '6 months ago', 'Distance, bounding boxes and geohash helpers.')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

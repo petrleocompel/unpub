@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>unpub components</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./unpub.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 3120px; height: 2000px;">
+<sc-for list="{{variants}}" as="v" hint-placeholder-count="2">
+<div class="variant">
+<p class="vlabel">Components <span>· {{v.label}}</span></p>
+<div class="frame {{v.cls}}" style="min-height: 1700px;">
+
+<header class="hdr">
+<div class="container hdr-in">
+<a class="brand" href="#" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="#" aria-current="page">Packages</a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for jane.doe@company.example"><span class="avatar">JD</span><span>jane.doe@company.example</span><i class="i i-chevron-down i-sm muted"></i></button>
+</div>
+</div>
+</header>
+
+<div class="grid gap-10" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 40px 48px 56px;">
+
+<div class="col gap-10">
+
+<section class="col gap-4">
+<h2 class="section-h">Buttons</h2>
+<div class="flex wrap items-center gap-3">
+<button class="btn btn-primary" type="button"><i class="i i-plus"></i>Create token</button>
+<button class="btn btn-outline" type="button">Cancel</button>
+<button class="btn btn-secondary" type="button">Secondary</button>
+<button class="btn btn-ghost" type="button">Ghost</button>
+<button class="btn btn-destructive" type="button"><i class="i i-trash"></i>Delete package</button>
+<button class="btn btn-danger-outline" type="button">Revoke</button>
+<button class="btn btn-primary" type="button" disabled>Saving…</button>
+</div>
+<div class="flex wrap items-center gap-3">
+<button class="btn btn-outline btn-sm" type="button"><i class="i i-rotate"></i>Retry</button>
+<button class="btn btn-outline btn-xs" type="button"><i class="i i-send"></i>Redeliver</button>
+<button class="btn btn-outline btn-sm" type="button">Actions<i class="i i-chevron-down i-sm"></i></button>
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Copy"><i class="i i-copy"></i></button>
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="More actions"><i class="i i-more"></i></button>
+<a class="link t-sm" href="#">View on pub.dev <i class="i i-external i-sm"></i></a>
+</div>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Form controls</h2>
+<div class="grid gap-4" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+<div class="field"><label class="label" for="c-email{{v.k}}">Email</label><input class="input" id="c-email{{v.k}}" value="jane.doe@company.example"><p class="hint">The account's sign-in name.</p></div>
+<div class="field"><label class="label" for="c-pw{{v.k}}">New password</label><input class="input invalid" id="c-pw{{v.k}}" type="password" value="short" aria-invalid="true"><p class="err"><i class="i i-circle-alert i-xs"></i>At least 8 characters.</p></div>
+<div class="field"><label class="label" for="c-role{{v.k}}">Role</label><div class="sel"><select class="select" id="c-role{{v.k}}"><option>publisher</option><option>admin</option><option>reader</option></select><i class="i i-chevron-down"></i></div></div>
+<div class="field"><label class="label" for="c-q{{v.k}}">Filter</label><div class="input-icon"><i class="i i-search"></i><input class="input" id="c-q{{v.k}}" placeholder="Search users"></div></div>
+</div>
+<div class="flex wrap items-center gap-6">
+<div class="seg" role="group" aria-label="SDK"><button type="button" aria-pressed="true">All</button><button type="button" aria-pressed="false">Dart</button><button type="button" aria-pressed="false">Flutter</button></div>
+<label class="flex items-center gap-2 t-sm"><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Show discontinued"></button>Show discontinued</label>
+<label class="flex items-center gap-2 t-sm"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Enabled"></button>Enabled</label>
+<label class="check"><input type="checkbox" checked>read</label>
+<label class="check"><input type="checkbox">publish</label>
+</div>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Badges — every state has an icon or a word, never colour alone</h2>
+<div class="flex wrap gap-2">
+<span class="sdk">Dart</span><span class="sdk flutter">Flutter</span>
+<span class="badge primary"><i class="i i-star"></i>Latest</span>
+<span class="badge"><i class="i i-flask"></i>Prerelease</span>
+<span class="badge danger"><i class="i i-ban"></i>Retracted</span>
+<span class="badge warning"><i class="i i-archive"></i>Discontinued</span>
+<a class="badge" href="#">Replaced by <b class="mono fw-5">core_v2</b><i class="i i-chevron-right"></i></a>
+<span class="badge"><i class="i i-cloud"></i>From pub.dev</span>
+</div>
+<div class="flex wrap gap-2">
+<span class="badge solid"><i class="i i-shield-check"></i>admin</span>
+<span class="badge neutral">publisher</span>
+<span class="badge">reader</span>
+<span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span>
+<span class="badge mono sq">read</span><span class="badge mono sq">publish</span>
+<span class="badge success"><span class="dot"></span>Delivered</span>
+<span class="badge warning"><span class="dot"></span>Pending</span>
+<span class="badge danger"><span class="dot"></span>Failed</span>
+<span class="chip">package.published</span>
+</div>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Tabs</h2>
+<div class="tabs" role="tablist" aria-label="Package">
+<button role="tab" aria-selected="true" type="button">README</button>
+<button role="tab" aria-selected="false" type="button">Changelog</button>
+<button role="tab" aria-selected="false" type="button">Versions <span class="n">14</span></button>
+<button role="tab" aria-selected="false" type="button">Install</button>
+<button role="tab" aria-selected="false" type="button">Stats</button>
+</div>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Package row</h2>
+<ul class="pkg-list" aria-label="Packages">
+<li class="pkg-row">
+<div class="col gap-1h min-w-0">
+<div class="flex items-baseline gap-3"><a class="pkg-name" href="#">my_company_core</a><span class="ver">1.4.0</span></div>
+<p class="t-sm muted clamp-2">Core models, the HTTP client and error types shared by every Company app.</p>
+<div class="flex wrap gap-1h"><span class="sdk">Dart</span></div>
+</div>
+<dl class="pkg-meta"><div class="flex items-center gap-1"><dt><i class="i i-download i-sm"></i><span class="sr-only">Downloads</span></dt><dd class="fg fw-5">48 213</dd></div><div><dt class="sr-only">Updated</dt><dd title="2026-11-07 09:12 UTC">3 days ago</dd></div></dl>
+</li>
+<li class="pkg-row">
+<div class="col gap-1h min-w-0">
+<div class="flex items-baseline gap-3"><a class="pkg-name" href="#">legacy_auth</a><span class="ver">0.9.2</span></div>
+<p class="t-sm muted clamp-2">Session and token helpers for the old SSO.</p>
+<div class="flex wrap gap-1h"><span class="sdk flutter">Flutter</span><span class="badge warning"><i class="i i-archive"></i>Discontinued</span><a class="badge" href="#">Replaced by <b class="mono fw-5">company_auth</b></a></div>
+</div>
+<dl class="pkg-meta"><div class="flex items-center gap-1"><dt><i class="i i-download i-sm"></i><span class="sr-only">Downloads</span></dt><dd class="fg fw-5">2 940</dd></div><div><dt class="sr-only">Updated</dt><dd>8 months ago</dd></div></dl>
+</li>
+</ul>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Code block with copy</h2>
+<div class="code"><pre><span class="pr">$ </span>dart pub add my_company_core --hosted-url https://pub.company.example</pre><button class="btn btn-ghost btn-icon btn-sm copy" type="button" aria-label="Copy command"><i class="i i-copy"></i></button></div>
+<div class="code"><div class="code-h"><span>pubspec.yaml</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-check t-success"></i>Copied</button></div><pre><span class="k">dependencies</span>:
+  <span class="k">my_company_core</span>:
+    <span class="k">hosted</span>: <span class="s">https://pub.company.example</span>
+    <span class="k">version</span>: <span class="s">^1.4.0</span></pre></div>
+</section>
+
+</div>
+
+<div class="col gap-10">
+
+<section class="col gap-4">
+<h2 class="section-h">Table — sortable, 40 px rows, pagination</h2>
+<div class="tbl-box">
+<table class="tbl">
+<thead><tr>
+<th aria-sort="ascending"><button class="sort" type="button">Email <i class="i i-arrow-down i-xs"></i></button></th>
+<th>Role</th><th>Status</th>
+<th><button class="sort" type="button">Last login <i class="i i-chevrons i-xs"></i></button></th>
+<th><span class="sr-only">Actions</span></th>
+</tr></thead>
+<tbody>
+<tr><td class="fw-5">ada.lovelace@company.example</td><td><span class="badge solid"><i class="i i-shield-check"></i>admin</span></td><td><span class="muted">Enabled</span></td><td class="muted" title="2026-11-10 08:02 UTC">2 hours ago</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ada.lovelace"><i class="i i-more"></i></button></td></tr>
+<tr><td class="fw-5">jane.doe@company.example</td><td><span class="badge neutral">publisher</span></td><td><span class="muted">Enabled</span></td><td class="muted">yesterday</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for jane.doe"><i class="i i-more"></i></button></td></tr>
+<tr class="muted-row"><td class="fw-5">old.contractor@company.example</td><td><span class="badge">reader</span></td><td><span class="badge danger"><i class="i i-circle-alert"></i>Disabled</span></td><td>4 months ago</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for old.contractor"><i class="i i-more"></i></button></td></tr>
+<tr><td class="fw-5">ci-bot@company.example</td><td><span class="badge">reader</span></td><td><span class="muted">Enabled</span></td><td class="muted">never</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Actions for ci-bot"><i class="i i-more"></i></button></td></tr>
+</tbody>
+</table>
+<div class="tbl-foot">
+<span>1–4 of 4 users</span>
+<div class="flex items-center gap-3"><label class="flex items-center gap-2">Rows<div class="sel"><select class="select sm" style="width: 72px;" aria-label="Rows per page"><option>50</option></select><i class="i i-chevron-down"></i></div></label>
+<nav class="pages" aria-label="Pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#" aria-disabled="true" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav></div>
+</div>
+</div>
+</section>
+
+<section class="grid gap-6" style="grid-template-columns: minmax(0, 1fr) 260px;">
+<div class="col gap-4">
+<h2 class="section-h">One-shot secret</h2>
+<div class="secret" role="status">
+<div class="flex items-start gap-3"><i class="i i-key t-warning" style="margin-top: 3px;"></i><div class="col gap-1"><p class="fw-6">Copy your new token now</p><p class="t-sm muted">It will not be shown again. Leaving this page hides it.</p></div></div>
+<div class="secret-v"><span>unpub_pat_7Hq2v9KxR4mT1sLw8eZc3NbY6uPfA0dG</span><button class="btn btn-primary btn-sm" type="button"><i class="i i-copy"></i>Copy</button></div>
+</div>
+</div>
+<div class="col gap-4">
+<h2 class="section-h">Menu</h2>
+<div class="menu" role="menu" aria-label="Account">
+<div class="menu-l"><p class="fg t-sm truncate">jane.doe@company.example</p><span class="badge neutral" style="margin-top: 6px;">publisher</span></div>
+<div class="menu-sep"></div>
+<button class="menu-i hl" role="menuitem" type="button"><i class="i i-user"></i>Account</button>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-shield"></i>Admin</button>
+<div class="menu-sep"></div>
+<div class="menu-l">Theme</div>
+<div class="flex gap-1" style="padding: 0 6px 6px;"><div class="seg w-full" role="group" aria-label="Theme"><button type="button" aria-pressed="false" aria-label="Light"><i class="i i-sun i-sm"></i></button><button type="button" aria-pressed="false" aria-label="Dark"><i class="i i-moon i-sm"></i></button><button type="button" aria-pressed="true" aria-label="System"><i class="i i-monitor i-sm"></i></button></div></div>
+<div class="menu-sep"></div>
+<button class="menu-i" role="menuitem" type="button"><i class="i i-logout"></i>Log out</button>
+</div>
+</div>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Alerts and notices</h2>
+<div class="alert warn"><i class="i i-archive"></i><div><b>Discontinued.</b> Use <a class="link" href="#">company_auth</a> instead.</div></div>
+<div class="alert danger"><i class="i i-ban"></i><div><b>Version 2.1.0 is retracted.</b> pub will not pick it for new resolutions; existing lockfiles keep working.</div></div>
+<div class="alert info"><i class="i i-cloud"></i><div>Cached from <a class="link" href="#">pub.dev</a>. Changes happen there, not here.</div></div>
+<div class="alert success"><i class="i i-circle-check"></i><div>Password changed. Your other sessions were logged out.</div></div>
+</section>
+
+<section class="grid gap-6" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+<div class="col gap-4">
+<h2 class="section-h">Toasts</h2>
+<div class="toast success" role="status"><i class="i i-circle-check"></i><div class="grow"><p class="t">Version 2.1.0 retracted</p><p class="d">my_company_core</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+<div class="toast error" role="alert"><i class="i i-circle-alert"></i><div class="grow"><p class="t">Could not demote</p><p class="d">The last administrator cannot be demoted.</p></div><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-label="Dismiss"><i class="i i-x"></i></button></div>
+<div class="toast info" role="status"><i class="i i-check"></i><div class="grow"><p class="t">Copied to clipboard</p></div></div>
+</div>
+<div class="col gap-4">
+<h2 class="section-h">Bar chart — SVG, classes only</h2>
+<div class="card card-b">
+<svg class="chart" viewBox="0 0 300 120" role="img" aria-label="Downloads per day, last 14 days, peak 412 on 4 Nov">
+<line class="grid-l" x1="0" y1="20" x2="300" y2="20"></line><line class="grid-l" x1="0" y1="60" x2="300" y2="60"></line><line class="grid-l" x1="0" y1="100" x2="300" y2="100"></line>
+<rect class="bar" x="2" y="62" width="17" height="38" rx="2"></rect><rect class="bar" x="23" y="50" width="17" height="50" rx="2"></rect><rect class="bar" x="44" y="70" width="17" height="30" rx="2"></rect><rect class="bar" x="65" y="88" width="17" height="12" rx="2"></rect><rect class="bar" x="86" y="86" width="17" height="14" rx="2"></rect><rect class="bar" x="107" y="44" width="17" height="56" rx="2"></rect><rect class="bar hl" x="128" y="22" width="17" height="78" rx="2"></rect><rect class="bar" x="149" y="40" width="17" height="60" rx="2"></rect><rect class="bar" x="170" y="56" width="17" height="44" rx="2"></rect><rect class="bar" x="191" y="58" width="17" height="42" rx="2"></rect><rect class="bar" x="212" y="84" width="17" height="16" rx="2"></rect><rect class="bar" x="233" y="90" width="17" height="10" rx="2"></rect><rect class="bar" x="254" y="48" width="17" height="52" rx="2"></rect><rect class="bar" x="275" y="38" width="17" height="62" rx="2"></rect>
+<text class="ax" x="0" y="116">28 Oct</text><text class="ax" x="300" y="116" text-anchor="end">10 Nov</text>
+</svg>
+<p class="hint" style="margin-top: 8px;">Hover or focus a bar: <span class="tip">4 Nov · 412 downloads</span></p>
+</div>
+</div>
+</section>
+
+<section class="col gap-4">
+<h2 class="section-h">Skeleton, empty, error</h2>
+<div class="grid gap-4" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+<div class="card card-b col gap-3" aria-busy="true" aria-label="Loading"><span class="skel" style="width: 60%; height: 16px;"></span><span class="skel" style="width: 95%; height: 10px;"></span><span class="skel" style="width: 80%; height: 10px;"></span><div class="flex gap-2"><span class="skel" style="width: 44px; height: 20px;"></span><span class="skel" style="width: 64px; height: 20px;"></span></div></div>
+<div class="state" style="padding: 24px 16px;"><span class="ic"><i class="i i-key"></i></span><h3 class="t-base">No tokens yet</h3><p class="t-sm">Create one for <code class="inl">dart pub</code> or CI.</p></div>
+<div class="state" style="padding: 24px 16px;"><span class="ic t-danger"><i class="i i-circle-alert"></i></span><h3 class="t-base">Could not load users</h3><p class="t-sm">503 · Mongo is not reachable.</p><button class="btn btn-outline btn-sm" type="button"><i class="i i-rotate"></i>Retry</button></div>
+</div>
+</section>
+
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3120,"height":2000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      variants: [
+        { label: 'Light', cls: 'w1440', k: 'l' },
+        { label: 'Dark', cls: 'w1440 dark', k: 'd' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

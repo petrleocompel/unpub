@@ -1,0 +1,1086 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Admin settings</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 4060px; height: 3730px;">
+
+<div class="variant">
+<p class="vlabel">Admin · Settings (read-only) <span>· 1440 · Light</span></p>
+<div class="frame w1440">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="#" aria-current="page"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Settings</h1><p>The effective configuration: <span class="mono">unpub.yaml</span>, then environment variables on top. Change it there and restart.</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+<div class="alert info"><i class="i i-lock"></i><div>Secrets are redacted. Each key can be overridden by the variable shown under it, for example <code class="inl">UNPUB_SERVER_PUBLIC_URL</code>.</div></div>
+
+<div class="grid gap-4 cols-1-sm items-start" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">server</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">host</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_HOST</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">0.0.0.0</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">port</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PORT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">4000</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">publicUrl</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PUBLIC_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.company.example</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">trustForwardedFor</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_TRUST_FORWARDED_FOR</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">mongo</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">uri</span><span class="mono muted" style="font-size: 11px;">UNPUB_MONGO_URI</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">mongodb://unpub:•••••@mongo:27017/dart_pub</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">storage</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">type</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_TYPE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">s3</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.bucket</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_BUCKET</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company-pub-packages</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.region</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_REGION</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">eu-central-1</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.secretKey</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_SECRET_KEY</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">upstream</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">url</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.dev</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">mode</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MODE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">proxy</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">cacheTtl</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_CACHE_TTL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10m</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxConcurrentFetches</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MAX_CONCURRENT_FETCHES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">4</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">auth</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">readAccess</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_READ_ACCESS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">authenticated</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapEmail</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_EMAIL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">admin@localhost</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapToken</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">not set</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">publish</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowedNamePrefixes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company_, my_company_</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxArchiveBytes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_MAX_ARCHIVE_BYTES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">100 MiB</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">requireVersionBump</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_REQUIRE_VERSION_BUMP</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retractionWindow</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_RETRACTION_WINDOW</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">7d</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">audit</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUDIT_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">365</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">webhooks</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">timeout</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_TIMEOUT</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10s</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxAttempts</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_MAX_ATTEMPTS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">5</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowPrivateNetworks</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ALLOW_PRIVATE_NETWORKS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">30</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">metrics</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">token</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">logging</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">level</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_LEVEL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">info</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">format</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_FORMAT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">json</dd>
+</div>
+
+</dl>
+</section>
+
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Settings (read-only) <span>· 1440 · Dark</span></p>
+<div class="frame w1440 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="#" aria-current="page"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Settings</h1><p>The effective configuration: <span class="mono">unpub.yaml</span>, then environment variables on top. Change it there and restart.</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+<div class="alert info"><i class="i i-lock"></i><div>Secrets are redacted. Each key can be overridden by the variable shown under it, for example <code class="inl">UNPUB_SERVER_PUBLIC_URL</code>.</div></div>
+
+<div class="grid gap-4 cols-1-sm items-start" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">server</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">host</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_HOST</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">0.0.0.0</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">port</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PORT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">4000</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">publicUrl</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PUBLIC_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.company.example</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">trustForwardedFor</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_TRUST_FORWARDED_FOR</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">mongo</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">uri</span><span class="mono muted" style="font-size: 11px;">UNPUB_MONGO_URI</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">mongodb://unpub:•••••@mongo:27017/dart_pub</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">storage</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">type</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_TYPE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">s3</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.bucket</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_BUCKET</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company-pub-packages</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.region</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_REGION</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">eu-central-1</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.secretKey</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_SECRET_KEY</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">upstream</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">url</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.dev</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">mode</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MODE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">proxy</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">cacheTtl</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_CACHE_TTL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10m</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxConcurrentFetches</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MAX_CONCURRENT_FETCHES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">4</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">auth</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">readAccess</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_READ_ACCESS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">authenticated</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapEmail</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_EMAIL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">admin@localhost</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapToken</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">not set</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">publish</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowedNamePrefixes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company_, my_company_</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxArchiveBytes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_MAX_ARCHIVE_BYTES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">100 MiB</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">requireVersionBump</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_REQUIRE_VERSION_BUMP</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retractionWindow</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_RETRACTION_WINDOW</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">7d</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">audit</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUDIT_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">365</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">webhooks</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">timeout</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_TIMEOUT</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10s</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxAttempts</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_MAX_ATTEMPTS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">5</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowPrivateNetworks</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ALLOW_PRIVATE_NETWORKS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">30</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">metrics</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">token</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">logging</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">level</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_LEVEL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">info</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">format</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_FORMAT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">json</dd>
+</div>
+
+</dl>
+</section>
+
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Settings (read-only) <span>· 390 · Light</span></p>
+<div class="frame w390">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="#" aria-current="page"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Settings</h1><p>The effective configuration: <span class="mono">unpub.yaml</span>, then environment variables on top. Change it there and restart.</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+<div class="alert info"><i class="i i-lock"></i><div>Secrets are redacted. Each key can be overridden by the variable shown under it, for example <code class="inl">UNPUB_SERVER_PUBLIC_URL</code>.</div></div>
+
+<div class="grid gap-4 cols-1-sm items-start" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">server</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">host</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_HOST</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">0.0.0.0</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">port</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PORT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">4000</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">publicUrl</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PUBLIC_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.company.example</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">trustForwardedFor</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_TRUST_FORWARDED_FOR</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">mongo</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">uri</span><span class="mono muted" style="font-size: 11px;">UNPUB_MONGO_URI</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">mongodb://unpub:•••••@mongo:27017/dart_pub</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">storage</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">type</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_TYPE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">s3</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.bucket</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_BUCKET</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company-pub-packages</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.region</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_REGION</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">eu-central-1</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.secretKey</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_SECRET_KEY</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">upstream</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">url</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.dev</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">mode</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MODE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">proxy</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">cacheTtl</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_CACHE_TTL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10m</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxConcurrentFetches</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MAX_CONCURRENT_FETCHES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">4</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">auth</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">readAccess</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_READ_ACCESS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">authenticated</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapEmail</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_EMAIL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">admin@localhost</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapToken</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">not set</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">publish</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowedNamePrefixes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company_, my_company_</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxArchiveBytes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_MAX_ARCHIVE_BYTES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">100 MiB</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">requireVersionBump</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_REQUIRE_VERSION_BUMP</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retractionWindow</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_RETRACTION_WINDOW</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">7d</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">audit</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUDIT_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">365</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">webhooks</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">timeout</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_TIMEOUT</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10s</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxAttempts</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_MAX_ATTEMPTS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">5</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowPrivateNetworks</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ALLOW_PRIVATE_NETWORKS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">30</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">metrics</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">token</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">logging</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">level</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_LEVEL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">info</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">format</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_FORMAT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">json</dd>
+</div>
+
+</dl>
+</section>
+
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Settings (read-only) <span>· 390 · Dark</span></p>
+<div class="frame w390 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="#" aria-current="page"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Settings</h1><p>The effective configuration: <span class="mono">unpub.yaml</span>, then environment variables on top. Change it there and restart.</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+<div class="alert info"><i class="i i-lock"></i><div>Secrets are redacted. Each key can be overridden by the variable shown under it, for example <code class="inl">UNPUB_SERVER_PUBLIC_URL</code>.</div></div>
+
+<div class="grid gap-4 cols-1-sm items-start" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">server</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">host</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_HOST</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">0.0.0.0</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">port</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PORT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">4000</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">publicUrl</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_PUBLIC_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.company.example</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">trustForwardedFor</span><span class="mono muted" style="font-size: 11px;">UNPUB_SERVER_TRUST_FORWARDED_FOR</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">mongo</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">uri</span><span class="mono muted" style="font-size: 11px;">UNPUB_MONGO_URI</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">mongodb://unpub:•••••@mongo:27017/dart_pub</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">storage</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">type</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_TYPE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">s3</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.bucket</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_BUCKET</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company-pub-packages</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.region</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_REGION</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">eu-central-1</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">s3.secretKey</span><span class="mono muted" style="font-size: 11px;">UNPUB_STORAGE_S3_SECRET_KEY</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">upstream</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">url</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_URL</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">https://pub.dev</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">mode</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MODE</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">proxy</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">cacheTtl</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_CACHE_TTL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10m</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxConcurrentFetches</span><span class="mono muted" style="font-size: 11px;">UNPUB_UPSTREAM_MAX_CONCURRENT_FETCHES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">4</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">auth</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">readAccess</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_READ_ACCESS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">authenticated</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapEmail</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_EMAIL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">admin@localhost</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">bootstrapToken</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUTH_BOOTSTRAP_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">not set</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">publish</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowedNamePrefixes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_ALLOWED_NAME_PREFIXES</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">company_, my_company_</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxArchiveBytes</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_MAX_ARCHIVE_BYTES</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">100 MiB</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">requireVersionBump</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_REQUIRE_VERSION_BUMP</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retractionWindow</span><span class="mono muted" style="font-size: 11px;">UNPUB_PUBLISH_RETRACTION_WINDOW</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">7d</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">audit</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_AUDIT_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">365</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">webhooks</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">timeout</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_TIMEOUT</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">10s</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">maxAttempts</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_MAX_ATTEMPTS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">5</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">allowPrivateNetworks</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_ALLOW_PRIVATE_NETWORKS</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">retentionDays</span><span class="mono muted" style="font-size: 11px;">UNPUB_WEBHOOKS_RETENTION_DAYS</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">30</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">metrics</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">enabled</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_ENABLED</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">true</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">token</span><span class="mono muted" style="font-size: 11px;">UNPUB_METRICS_TOKEN</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">••••• redacted</dd>
+</div>
+
+</dl>
+</section>
+
+<section class="card">
+<div class="card-h" style="padding-top: 10px; padding-bottom: 10px;"><h2 class="mono" style="font-size: 14px;">logging</h2></div>
+<dl class="divide">
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">level</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_LEVEL</span></dt>
+<dd class="mono t-sm muted" style="word-break: break-all;">info</dd>
+</div>
+
+<div class="grid gap-1 cols-1-sm" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); padding: 9px 18px;">
+<dt class="col"><span class="mono t-sm">format</span><span class="mono muted" style="font-size: 11px;">UNPUB_LOGGING_FORMAT</span></dt>
+<dd class="mono t-sm " style="word-break: break-all;">json</dd>
+</div>
+
+</dl>
+</section>
+
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>

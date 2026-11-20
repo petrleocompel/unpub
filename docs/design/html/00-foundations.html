@@ -1,0 +1,444 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>unpub foundations</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 3120px; height: 1700px;">
+
+<div class="variant">
+<p class="vlabel">Foundations <span>· Light</span></p>
+<div class="frame w1440" style="min-height: 1420px;">
+<div class="col gap-10" style="padding: 56px 64px;">
+
+<div class="flex items-end justify-between">
+<div class="col gap-2">
+<p class="section-h">unpub design system</p>
+<h1 class="t-3xl fw-6">Calm, dense, readable all day</h1>
+<p class="muted t-md" style="max-width: 640px;">Slate neutrals with one Dart-adjacent blue. Every value below is a CSS variable in the shadcn/ui theme format, defined for <code class="inl">:root</code> and <code class="inl">.dark</code>.</p>
+</div>
+<div class="flex items-center gap-6">
+<div class="brand" style="font-size: 34px; gap: 12px;">
+<svg width="48" height="48" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+<span>unpub</span>
+</div>
+<div class="flex items-end gap-3">
+<svg width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Favicon 16 px"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.8" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+<svg width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Favicon 32 px"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+<svg width="64" height="64" viewBox="0 0 24 24" role="img" aria-label="Favicon 64 px"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+</div>
+</div>
+</div>
+
+<div class="hr"></div>
+
+<section class="col gap-4">
+<h2 class="t-lg fw-6">Colour</h2>
+<div class="grid gap-4" style="grid-template-columns: repeat(9, minmax(0, 1fr));">
+
+<div class="sw">
+<div class="sw-c bg-background"></div>
+<p class="sw-n">--background</p>
+<p class="sw-v">oklch(1 0 0)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-foreground"></div>
+<p class="sw-n">--foreground</p>
+<p class="sw-v">oklch(.205 .02 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-surface"></div>
+<p class="sw-n">--surface</p>
+<p class="sw-v">oklch(.982 .003 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-card"></div>
+<p class="sw-n">--card</p>
+<p class="sw-v">oklch(1 0 0)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-popover"></div>
+<p class="sw-n">--popover</p>
+<p class="sw-v">oklch(1 0 0)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-muted"></div>
+<p class="sw-n">--muted</p>
+<p class="sw-v">oklch(.97 .005 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-muted-fg"></div>
+<p class="sw-n">--muted-foreground</p>
+<p class="sw-v">oklch(.49 .02 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-secondary"></div>
+<p class="sw-n">--secondary</p>
+<p class="sw-v">oklch(.962 .008 255)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-accent"></div>
+<p class="sw-n">--accent</p>
+<p class="sw-v">oklch(.95 .014 255)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-primary"></div>
+<p class="sw-n">--primary</p>
+<p class="sw-v">oklch(.5 .15 255)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-border"></div>
+<p class="sw-n">--border</p>
+<p class="sw-v">oklch(.92 .006 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-input"></div>
+<p class="sw-n">--input</p>
+<p class="sw-v">oklch(.87 .01 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-ring"></div>
+<p class="sw-n">--ring</p>
+<p class="sw-v">oklch(.56 .16 255)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-code"></div>
+<p class="sw-n">--code</p>
+<p class="sw-v">oklch(.972 .005 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-chart"></div>
+<p class="sw-n">--chart-bar</p>
+<p class="sw-v">oklch(.56 .15 255)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-success"></div>
+<p class="sw-n">--success</p>
+<p class="sw-v">oklch(.5 .12 155)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-warning"></div>
+<p class="sw-n">--warning</p>
+<p class="sw-v">oklch(.54 .13 65)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-destructive"></div>
+<p class="sw-n">--destructive</p>
+<p class="sw-v">oklch(.53 .2 27)</p>
+</div>
+
+</div>
+<p class="hint">Text pairs checked for WCAG 2.1 AA: foreground, muted-foreground and primary on background, surface and card are all ≥ 4.5 : 1. State colours are never used alone: every status also carries an icon and a word.</p>
+</section>
+
+<div class="hr"></div>
+
+<div class="grid gap-10" style="grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);">
+<section class="col gap-4">
+<h2 class="t-lg fw-6">Type — system UI sans + system mono, bundled nothing</h2>
+<div class="col gap-3">
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">3xl · 30/38 · 600</span><span class="t-3xl fw-6">flutter_bloc_extensions</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">2xl · 24/32 · 600</span><span class="t-2xl fw-6">Packages</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">xl · 20/28 · 600</span><span class="t-xl fw-6">Getting started</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">lg · 17/24 · 600</span><span class="t-lg fw-6">my_company_core</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">md · 15/26 · 400</span><span class="t-md">README body: core models and HTTP client shared by every app.</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">base · 14/22 · 400</span><span class="t-base">Default UI text, forms, menus and dialogs.</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">sm · 13/20 · 400</span><span class="t-sm">Dashboard tables, sidebar, metadata.</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">xs · 12/16 · 500</span><span class="t-xs fw-5 muted">Badges, captions, hints</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">mono · 13/21</span><span class="mono t-sm">2.0.0-beta.3 · 9f86d081884c · dart pub add my_company_core</span></div>
+</div>
+</section>
+<section class="col gap-6">
+<div class="col gap-3">
+<h2 class="t-lg fw-6">Spacing — 4 px grid</h2>
+<div class="flex items-end gap-3">
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 4px; height: 4px; border-radius: 1px;"></span><span class="sw-v">1</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 8px; height: 8px; border-radius: 1px;"></span><span class="sw-v">2</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 12px; height: 12px; border-radius: 2px;"></span><span class="sw-v">3</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 16px; height: 16px; border-radius: 2px;"></span><span class="sw-v">4</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 24px; height: 24px; border-radius: 3px;"></span><span class="sw-v">6</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 32px; height: 32px; border-radius: 3px;"></span><span class="sw-v">8</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 48px; height: 48px; border-radius: 4px;"></span><span class="sw-v">12</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 64px; height: 64px; border-radius: 4px;"></span><span class="sw-v">16</span></div>
+</div>
+<p class="hint">Public pages: 24–48 px section gaps, 16–20 px row padding. Dashboard: 12–20 px gaps, 40 px table rows (50 rows ≈ 2 000 px).</p>
+</div>
+<div class="col gap-3">
+<h2 class="t-lg fw-6">Radius — --radius: 8px</h2>
+<div class="flex gap-4">
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 4px;"></div><span class="sw-v">sm 4 · chips</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 6px;"></div><span class="sw-v">md 6 · controls</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 8px;"></div><span class="sw-v">lg 8 · cards</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 12px;"></div><span class="sw-v">xl 12 · dialogs</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 999px;"></div><span class="sw-v">full · badges</span></div>
+</div>
+</div>
+<div class="col gap-3">
+<h2 class="t-lg fw-6">Elevation</h2>
+<div class="grid gap-4" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
+<div class="col gap-2"><div class="sh-box sh-xs"></div><span class="sw-v">xs · inputs, buttons</span></div>
+<div class="col gap-2"><div class="sh-box sh-sm"></div><span class="sw-v">sm · login card</span></div>
+<div class="col gap-2"><div class="sh-box sh-md"></div><span class="sw-v">md · menus</span></div>
+<div class="col gap-2"><div class="sh-box sh-lg"></div><span class="sw-v">lg · dialogs, toasts</span></div>
+</div>
+</div>
+</section>
+</div>
+
+<div class="hr"></div>
+
+<section class="grid gap-6" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+<div class="col gap-2">
+<h2 class="t-lg fw-6">Focus</h2>
+<div class="flex items-center gap-3"><button class="btn btn-primary focus" type="button">Publish token</button><input class="input focused" style="width: 200px;" aria-label="Focused input" value="jane.doe@company.example"></div>
+<p class="hint">2 px ring in --ring, offset 2 px, on every focusable element; inputs add a 3 px soft halo.</p>
+</div>
+<div class="col gap-2">
+<h2 class="t-lg fw-6">Icons</h2>
+<div class="flex gap-4 muted"><i class="i i-package"></i><i class="i i-search"></i><i class="i i-download"></i><i class="i i-copy"></i><i class="i i-shield-check"></i><i class="i i-key"></i><i class="i i-webhook"></i><i class="i i-scroll"></i><i class="i i-users"></i><i class="i i-settings"></i><i class="i i-archive"></i><i class="i i-ban"></i><i class="i i-flask"></i><i class="i i-cloud"></i></div>
+<p class="hint">Lucide, imported per icon from lucide-react and bundled; 16 px in UI, 12 px in badges, stroke 2.</p>
+</div>
+<div class="col gap-2">
+<h2 class="t-lg fw-6">Motion</h2>
+<p class="t-sm muted">120 ms for hover and toggles, 160 ms ease-out for menus and dialogs, toasts slide 200 ms. All motion collapses to 0.01 ms under prefers-reduced-motion.</p>
+</div>
+</section>
+
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Foundations <span>· Dark</span></p>
+<div class="frame w1440 dark" style="min-height: 1420px;">
+<div class="col gap-10" style="padding: 56px 64px;">
+
+<div class="flex items-end justify-between">
+<div class="col gap-2">
+<p class="section-h">unpub design system</p>
+<h1 class="t-3xl fw-6">Calm, dense, readable all day</h1>
+<p class="muted t-md" style="max-width: 640px;">Slate neutrals with one Dart-adjacent blue. Every value below is a CSS variable in the shadcn/ui theme format, defined for <code class="inl">:root</code> and <code class="inl">.dark</code>.</p>
+</div>
+<div class="flex items-center gap-6">
+<div class="brand" style="font-size: 34px; gap: 12px;">
+<svg width="48" height="48" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+<span>unpub</span>
+</div>
+<div class="flex items-end gap-3">
+<svg width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Favicon 16 px"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.8" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+<svg width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Favicon 32 px"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+<svg width="64" height="64" viewBox="0 0 24 24" role="img" aria-label="Favicon 64 px"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg>
+</div>
+</div>
+</div>
+
+<div class="hr"></div>
+
+<section class="col gap-4">
+<h2 class="t-lg fw-6">Colour</h2>
+<div class="grid gap-4" style="grid-template-columns: repeat(9, minmax(0, 1fr));">
+
+<div class="sw">
+<div class="sw-c bg-background"></div>
+<p class="sw-n">--background</p>
+<p class="sw-v">oklch(.165 .014 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-foreground"></div>
+<p class="sw-n">--foreground</p>
+<p class="sw-v">oklch(.955 .005 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-surface"></div>
+<p class="sw-n">--surface</p>
+<p class="sw-v">oklch(.145 .012 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-card"></div>
+<p class="sw-n">--card</p>
+<p class="sw-v">oklch(.195 .016 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-popover"></div>
+<p class="sw-n">--popover</p>
+<p class="sw-v">oklch(.215 .017 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-muted"></div>
+<p class="sw-n">--muted</p>
+<p class="sw-v">oklch(.225 .016 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-muted-fg"></div>
+<p class="sw-n">--muted-foreground</p>
+<p class="sw-v">oklch(.72 .016 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-secondary"></div>
+<p class="sw-n">--secondary</p>
+<p class="sw-v">oklch(.26 .018 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-accent"></div>
+<p class="sw-n">--accent</p>
+<p class="sw-v">oklch(.27 .022 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-primary"></div>
+<p class="sw-n">--primary</p>
+<p class="sw-v">oklch(.73 .13 252)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-border"></div>
+<p class="sw-n">--border</p>
+<p class="sw-v">oklch(.3 .016 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-input"></div>
+<p class="sw-n">--input</p>
+<p class="sw-v">oklch(.36 .018 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-ring"></div>
+<p class="sw-n">--ring</p>
+<p class="sw-v">oklch(.72 .13 252)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-code"></div>
+<p class="sw-n">--code</p>
+<p class="sw-v">oklch(.205 .016 258)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-chart"></div>
+<p class="sw-n">--chart-bar</p>
+<p class="sw-v">oklch(.7 .13 252)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-success"></div>
+<p class="sw-n">--success</p>
+<p class="sw-v">oklch(.76 .14 155)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-warning"></div>
+<p class="sw-n">--warning</p>
+<p class="sw-v">oklch(.82 .13 80)</p>
+</div>
+
+<div class="sw">
+<div class="sw-c bg-destructive"></div>
+<p class="sw-n">--destructive</p>
+<p class="sw-v">oklch(.69 .18 24)</p>
+</div>
+
+</div>
+<p class="hint">Text pairs checked for WCAG 2.1 AA: foreground, muted-foreground and primary on background, surface and card are all ≥ 4.5 : 1. State colours are never used alone: every status also carries an icon and a word.</p>
+</section>
+
+<div class="hr"></div>
+
+<div class="grid gap-10" style="grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);">
+<section class="col gap-4">
+<h2 class="t-lg fw-6">Type — system UI sans + system mono, bundled nothing</h2>
+<div class="col gap-3">
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">3xl · 30/38 · 600</span><span class="t-3xl fw-6">flutter_bloc_extensions</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">2xl · 24/32 · 600</span><span class="t-2xl fw-6">Packages</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">xl · 20/28 · 600</span><span class="t-xl fw-6">Getting started</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">lg · 17/24 · 600</span><span class="t-lg fw-6">my_company_core</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">md · 15/26 · 400</span><span class="t-md">README body: core models and HTTP client shared by every app.</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">base · 14/22 · 400</span><span class="t-base">Default UI text, forms, menus and dialogs.</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">sm · 13/20 · 400</span><span class="t-sm">Dashboard tables, sidebar, metadata.</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">xs · 12/16 · 500</span><span class="t-xs fw-5 muted">Badges, captions, hints</span></div>
+<div class="flex items-baseline gap-6"><span class="sw-v" style="width: 150px;">mono · 13/21</span><span class="mono t-sm">2.0.0-beta.3 · 9f86d081884c · dart pub add my_company_core</span></div>
+</div>
+</section>
+<section class="col gap-6">
+<div class="col gap-3">
+<h2 class="t-lg fw-6">Spacing — 4 px grid</h2>
+<div class="flex items-end gap-3">
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 4px; height: 4px; border-radius: 1px;"></span><span class="sw-v">1</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 8px; height: 8px; border-radius: 1px;"></span><span class="sw-v">2</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 12px; height: 12px; border-radius: 2px;"></span><span class="sw-v">3</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 16px; height: 16px; border-radius: 2px;"></span><span class="sw-v">4</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 24px; height: 24px; border-radius: 3px;"></span><span class="sw-v">6</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 32px; height: 32px; border-radius: 3px;"></span><span class="sw-v">8</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 48px; height: 48px; border-radius: 4px;"></span><span class="sw-v">12</span></div>
+<div class="col gap-1 items-center"><span class="bg-primary" style="width: 64px; height: 64px; border-radius: 4px;"></span><span class="sw-v">16</span></div>
+</div>
+<p class="hint">Public pages: 24–48 px section gaps, 16–20 px row padding. Dashboard: 12–20 px gaps, 40 px table rows (50 rows ≈ 2 000 px).</p>
+</div>
+<div class="col gap-3">
+<h2 class="t-lg fw-6">Radius — --radius: 8px</h2>
+<div class="flex gap-4">
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 4px;"></div><span class="sw-v">sm 4 · chips</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 6px;"></div><span class="sw-v">md 6 · controls</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 8px;"></div><span class="sw-v">lg 8 · cards</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 12px;"></div><span class="sw-v">xl 12 · dialogs</span></div>
+<div class="col gap-1"><div class="sh-box" style="width: 72px; height: 48px; border-radius: 999px;"></div><span class="sw-v">full · badges</span></div>
+</div>
+</div>
+<div class="col gap-3">
+<h2 class="t-lg fw-6">Elevation</h2>
+<div class="grid gap-4" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
+<div class="col gap-2"><div class="sh-box sh-xs"></div><span class="sw-v">xs · inputs, buttons</span></div>
+<div class="col gap-2"><div class="sh-box sh-sm"></div><span class="sw-v">sm · login card</span></div>
+<div class="col gap-2"><div class="sh-box sh-md"></div><span class="sw-v">md · menus</span></div>
+<div class="col gap-2"><div class="sh-box sh-lg"></div><span class="sw-v">lg · dialogs, toasts</span></div>
+</div>
+</div>
+</section>
+</div>
+
+<div class="hr"></div>
+
+<section class="grid gap-6" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+<div class="col gap-2">
+<h2 class="t-lg fw-6">Focus</h2>
+<div class="flex items-center gap-3"><button class="btn btn-primary focus" type="button">Publish token</button><input class="input focused" style="width: 200px;" aria-label="Focused input" value="jane.doe@company.example"></div>
+<p class="hint">2 px ring in --ring, offset 2 px, on every focusable element; inputs add a 3 px soft halo.</p>
+</div>
+<div class="col gap-2">
+<h2 class="t-lg fw-6">Icons</h2>
+<div class="flex gap-4 muted"><i class="i i-package"></i><i class="i i-search"></i><i class="i i-download"></i><i class="i i-copy"></i><i class="i i-shield-check"></i><i class="i i-key"></i><i class="i i-webhook"></i><i class="i i-scroll"></i><i class="i i-users"></i><i class="i i-settings"></i><i class="i i-archive"></i><i class="i i-ban"></i><i class="i i-flask"></i><i class="i i-cloud"></i></div>
+<p class="hint">Lucide, imported per icon from lucide-react and bundled; 16 px in UI, 12 px in badges, stroke 2.</p>
+</div>
+<div class="col gap-2">
+<h2 class="t-lg fw-6">Motion</h2>
+<p class="t-sm muted">120 ms for hover and toggles, 160 ms ease-out for menus and dialogs, toasts slide 200 ms. All motion collapses to 0.01 ms under prefers-reduced-motion.</p>
+</div>
+</section>
+
+</div>
+</div>
+</div>
+
+</div>
+</body></html>

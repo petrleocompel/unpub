@@ -1,0 +1,342 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Audit log</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 4060px; height: 1560px;">
+
+<div class="variant">
+<p class="vlabel">Admin · Audit log, one row expanded <span>· 1440 · Light</span></p>
+<div class="frame w1440">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="#" aria-current="page"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Audit log</h1><p class="flex items-center gap-1"><i class="i i-clock i-xs"></i>Entries are kept for 365 days (<span class="mono">audit.retentionDays</span>).</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+
+<form class="card card-b grid gap-3 items-end cols-2-sm" style="grid-template-columns: 1.2fr 1.2fr 1fr 0.8fr 0.8fr auto; padding: 14px;" aria-label="Filters">
+<div class="field"><label class="label t-xs" for="f-act-a">Action</label><div class="sel w-full"><select class="select sm" id="f-act-a"><option>All actions</option><option>version.retracted</option></select><i class="i i-chevron-down"></i></div></div>
+<div class="field"><label class="label t-xs" for="f-actor-a">Actor</label><input class="input sm" id="f-actor-a" placeholder="email"></div>
+<div class="field"><label class="label t-xs" for="f-pkg-a">Package</label><input class="input sm mono" id="f-pkg-a" value="my_company_core"></div>
+<div class="field"><label class="label t-xs" for="f-from-a">From</label><input class="input sm" id="f-from-a" type="date" value="2026-10-01"></div>
+<div class="field"><label class="label t-xs" for="f-to-a">To</label><input class="input sm" id="f-to-a" type="date"></div>
+<button class="btn btn-ghost btn-sm" type="reset"><i class="i i-rotate"></i>Reset</button>
+</form>
+
+<div class="tbl-box">
+<table class="tbl sticky-first">
+<thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Target</th><th>IP</th><th><span class="sr-only">Details</span></th></tr></thead>
+<tbody>
+<tr><td><div class="col"><span>10 Nov, 09:41</span><span class="t-xs muted">1 hour ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">ci-bot@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.4</a></td><td class="mono t-xs muted">10.20.4.17</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td><div class="col"><span>9 Nov, 16:02</span><span class="t-xs muted">yesterday</span></div></td><td><span class="chip">version.retracted</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="PackageVersions.dc.html">my_company_core 1.3.1</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="true" aria-label="Hide details" style="transform: rotate(180deg);"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td colspan="6" style="height: auto; padding: 0 12px 12px; white-space: normal;"><div class="code"><div class="code-h"><span>Details · request 01JC9X4T2M7Q</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-copy"></i>Copy JSON</button></div><pre>{
+  <span class="k">"package"</span>: <span class="s">"my_company_core"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.3.1"</span>,
+  <span class="k">"reason"</span>: <span class="s">"breaks null-safety migration"</span>,
+  <span class="k">"userAgent"</span>: <span class="s">"Mozilla/5.0 (Macintosh)"</span>
+}</pre></div></td></tr>
+
+<tr><td><div class="col"><span>8 Nov, 11:04</span><span class="t-xs muted">2 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.3</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>7 Nov, 10:12</span><span class="t-xs muted">3 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 1.4.0</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>6 Nov, 14:30</span><span class="t-xs muted">4 days ago</span></div></td><td><span class="chip">uploader.added</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">my_company_core · ada.lovelace</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>2 Nov, 08:55</span><span class="t-xs muted">1 week ago</span></div></td><td><span class="chip">token.created</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">token laptop-pub</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>28 Oct, 17:20</span><span class="t-xs muted">2 weeks ago</span></div></td><td><span class="chip">package.discontinued</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">legacy_auth → company_auth</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>14 Oct, 09:02</span><span class="t-xs muted">4 weeks ago</span></div></td><td><span class="chip">user.role_changed</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">jane.doe · reader → publisher</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+</tbody>
+</table>
+<div class="tbl-foot"><span>1–50 of 1 204</span><nav class="pages" aria-label="Audit pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><span>…</span><a href="#">25</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav></div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Audit log, one row expanded <span>· 1440 · Dark</span></p>
+<div class="frame w1440 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="#" aria-current="page"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Audit log</h1><p class="flex items-center gap-1"><i class="i i-clock i-xs"></i>Entries are kept for 365 days (<span class="mono">audit.retentionDays</span>).</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+
+<form class="card card-b grid gap-3 items-end cols-2-sm" style="grid-template-columns: 1.2fr 1.2fr 1fr 0.8fr 0.8fr auto; padding: 14px;" aria-label="Filters">
+<div class="field"><label class="label t-xs" for="f-act-b">Action</label><div class="sel w-full"><select class="select sm" id="f-act-b"><option>All actions</option><option>version.retracted</option></select><i class="i i-chevron-down"></i></div></div>
+<div class="field"><label class="label t-xs" for="f-actor-b">Actor</label><input class="input sm" id="f-actor-b" placeholder="email"></div>
+<div class="field"><label class="label t-xs" for="f-pkg-b">Package</label><input class="input sm mono" id="f-pkg-b" value="my_company_core"></div>
+<div class="field"><label class="label t-xs" for="f-from-b">From</label><input class="input sm" id="f-from-b" type="date" value="2026-10-01"></div>
+<div class="field"><label class="label t-xs" for="f-to-b">To</label><input class="input sm" id="f-to-b" type="date"></div>
+<button class="btn btn-ghost btn-sm" type="reset"><i class="i i-rotate"></i>Reset</button>
+</form>
+
+<div class="tbl-box">
+<table class="tbl sticky-first">
+<thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Target</th><th>IP</th><th><span class="sr-only">Details</span></th></tr></thead>
+<tbody>
+<tr><td><div class="col"><span>10 Nov, 09:41</span><span class="t-xs muted">1 hour ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">ci-bot@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.4</a></td><td class="mono t-xs muted">10.20.4.17</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td><div class="col"><span>9 Nov, 16:02</span><span class="t-xs muted">yesterday</span></div></td><td><span class="chip">version.retracted</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="PackageVersions.dc.html">my_company_core 1.3.1</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="true" aria-label="Hide details" style="transform: rotate(180deg);"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td colspan="6" style="height: auto; padding: 0 12px 12px; white-space: normal;"><div class="code"><div class="code-h"><span>Details · request 01JC9X4T2M7Q</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-copy"></i>Copy JSON</button></div><pre>{
+  <span class="k">"package"</span>: <span class="s">"my_company_core"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.3.1"</span>,
+  <span class="k">"reason"</span>: <span class="s">"breaks null-safety migration"</span>,
+  <span class="k">"userAgent"</span>: <span class="s">"Mozilla/5.0 (Macintosh)"</span>
+}</pre></div></td></tr>
+
+<tr><td><div class="col"><span>8 Nov, 11:04</span><span class="t-xs muted">2 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.3</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>7 Nov, 10:12</span><span class="t-xs muted">3 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 1.4.0</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>6 Nov, 14:30</span><span class="t-xs muted">4 days ago</span></div></td><td><span class="chip">uploader.added</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">my_company_core · ada.lovelace</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>2 Nov, 08:55</span><span class="t-xs muted">1 week ago</span></div></td><td><span class="chip">token.created</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">token laptop-pub</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>28 Oct, 17:20</span><span class="t-xs muted">2 weeks ago</span></div></td><td><span class="chip">package.discontinued</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">legacy_auth → company_auth</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>14 Oct, 09:02</span><span class="t-xs muted">4 weeks ago</span></div></td><td><span class="chip">user.role_changed</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">jane.doe · reader → publisher</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+</tbody>
+</table>
+<div class="tbl-foot"><span>1–50 of 1 204</span><nav class="pages" aria-label="Audit pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><span>…</span><a href="#">25</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav></div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Audit log, one row expanded <span>· 390 · Light</span></p>
+<div class="frame w390">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="#" aria-current="page"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Audit log</h1><p class="flex items-center gap-1"><i class="i i-clock i-xs"></i>Entries are kept for 365 days (<span class="mono">audit.retentionDays</span>).</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+
+<form class="card card-b grid gap-3 items-end cols-2-sm" style="grid-template-columns: 1.2fr 1.2fr 1fr 0.8fr 0.8fr auto; padding: 14px;" aria-label="Filters">
+<div class="field"><label class="label t-xs" for="f-act-c">Action</label><div class="sel w-full"><select class="select sm" id="f-act-c"><option>All actions</option><option>version.retracted</option></select><i class="i i-chevron-down"></i></div></div>
+<div class="field"><label class="label t-xs" for="f-actor-c">Actor</label><input class="input sm" id="f-actor-c" placeholder="email"></div>
+<div class="field"><label class="label t-xs" for="f-pkg-c">Package</label><input class="input sm mono" id="f-pkg-c" value="my_company_core"></div>
+<div class="field"><label class="label t-xs" for="f-from-c">From</label><input class="input sm" id="f-from-c" type="date" value="2026-10-01"></div>
+<div class="field"><label class="label t-xs" for="f-to-c">To</label><input class="input sm" id="f-to-c" type="date"></div>
+<button class="btn btn-ghost btn-sm" type="reset"><i class="i i-rotate"></i>Reset</button>
+</form>
+
+<div class="tbl-box">
+<table class="tbl sticky-first">
+<thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Target</th><th>IP</th><th><span class="sr-only">Details</span></th></tr></thead>
+<tbody>
+<tr><td><div class="col"><span>10 Nov, 09:41</span><span class="t-xs muted">1 hour ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">ci-bot@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.4</a></td><td class="mono t-xs muted">10.20.4.17</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td><div class="col"><span>9 Nov, 16:02</span><span class="t-xs muted">yesterday</span></div></td><td><span class="chip">version.retracted</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="PackageVersions.dc.html">my_company_core 1.3.1</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="true" aria-label="Hide details" style="transform: rotate(180deg);"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td colspan="6" style="height: auto; padding: 0 12px 12px; white-space: normal;"><div class="code"><div class="code-h"><span>Details · request 01JC9X4T2M7Q</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-copy"></i>Copy JSON</button></div><pre>{
+  <span class="k">"package"</span>: <span class="s">"my_company_core"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.3.1"</span>,
+  <span class="k">"reason"</span>: <span class="s">"breaks null-safety migration"</span>,
+  <span class="k">"userAgent"</span>: <span class="s">"Mozilla/5.0 (Macintosh)"</span>
+}</pre></div></td></tr>
+
+<tr><td><div class="col"><span>8 Nov, 11:04</span><span class="t-xs muted">2 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.3</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>7 Nov, 10:12</span><span class="t-xs muted">3 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 1.4.0</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>6 Nov, 14:30</span><span class="t-xs muted">4 days ago</span></div></td><td><span class="chip">uploader.added</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">my_company_core · ada.lovelace</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>2 Nov, 08:55</span><span class="t-xs muted">1 week ago</span></div></td><td><span class="chip">token.created</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">token laptop-pub</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>28 Oct, 17:20</span><span class="t-xs muted">2 weeks ago</span></div></td><td><span class="chip">package.discontinued</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">legacy_auth → company_auth</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>14 Oct, 09:02</span><span class="t-xs muted">4 weeks ago</span></div></td><td><span class="chip">user.role_changed</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">jane.doe · reader → publisher</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+</tbody>
+</table>
+<div class="tbl-foot"><span>1–50 of 1 204</span><nav class="pages" aria-label="Audit pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><span>…</span><a href="#">25</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav></div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Audit log, one row expanded <span>· 390 · Dark</span></p>
+<div class="frame w390 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html"><i class="i i-package"></i>Packages</a>
+<a href="#" aria-current="page"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-4">
+<div class="admin-head" style="margin-bottom: 4px;">
+<div class="col gap-1"><h1>Audit log</h1><p class="flex items-center gap-1"><i class="i i-clock i-xs"></i>Entries are kept for 365 days (<span class="mono">audit.retentionDays</span>).</p></div>
+<button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button>
+</div>
+
+<form class="card card-b grid gap-3 items-end cols-2-sm" style="grid-template-columns: 1.2fr 1.2fr 1fr 0.8fr 0.8fr auto; padding: 14px;" aria-label="Filters">
+<div class="field"><label class="label t-xs" for="f-act-d">Action</label><div class="sel w-full"><select class="select sm" id="f-act-d"><option>All actions</option><option>version.retracted</option></select><i class="i i-chevron-down"></i></div></div>
+<div class="field"><label class="label t-xs" for="f-actor-d">Actor</label><input class="input sm" id="f-actor-d" placeholder="email"></div>
+<div class="field"><label class="label t-xs" for="f-pkg-d">Package</label><input class="input sm mono" id="f-pkg-d" value="my_company_core"></div>
+<div class="field"><label class="label t-xs" for="f-from-d">From</label><input class="input sm" id="f-from-d" type="date" value="2026-10-01"></div>
+<div class="field"><label class="label t-xs" for="f-to-d">To</label><input class="input sm" id="f-to-d" type="date"></div>
+<button class="btn btn-ghost btn-sm" type="reset"><i class="i i-rotate"></i>Reset</button>
+</form>
+
+<div class="tbl-box">
+<table class="tbl sticky-first">
+<thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Target</th><th>IP</th><th><span class="sr-only">Details</span></th></tr></thead>
+<tbody>
+<tr><td><div class="col"><span>10 Nov, 09:41</span><span class="t-xs muted">1 hour ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">ci-bot@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.4</a></td><td class="mono t-xs muted">10.20.4.17</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td><div class="col"><span>9 Nov, 16:02</span><span class="t-xs muted">yesterday</span></div></td><td><span class="chip">version.retracted</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="PackageVersions.dc.html">my_company_core 1.3.1</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="true" aria-label="Hide details" style="transform: rotate(180deg);"><i class="i i-chevron-down"></i></button></td></tr>
+<tr class="expanded"><td colspan="6" style="height: auto; padding: 0 12px 12px; white-space: normal;"><div class="code"><div class="code-h"><span>Details · request 01JC9X4T2M7Q</span><button class="btn btn-ghost btn-xs" type="button"><i class="i i-copy"></i>Copy JSON</button></div><pre>{
+  <span class="k">"package"</span>: <span class="s">"my_company_core"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.3.1"</span>,
+  <span class="k">"reason"</span>: <span class="s">"breaks null-safety migration"</span>,
+  <span class="k">"userAgent"</span>: <span class="s">"Mozilla/5.0 (Macintosh)"</span>
+}</pre></div></td></tr>
+
+<tr><td><div class="col"><span>8 Nov, 11:04</span><span class="t-xs muted">2 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 2.0.0-beta.3</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>7 Nov, 10:12</span><span class="t-xs muted">3 days ago</span></div></td><td><span class="chip">package.published</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">token</span></div></td><td><a class="link mono" href="#">my_company_core 1.4.0</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>6 Nov, 14:30</span><span class="t-xs muted">4 days ago</span></div></td><td><span class="chip">uploader.added</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">my_company_core · ada.lovelace</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>2 Nov, 08:55</span><span class="t-xs muted">1 week ago</span></div></td><td><span class="chip">token.created</span></td><td><div class="flex items-center gap-2">jane.doe@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">token laptop-pub</a></td><td class="mono t-xs muted">10.20.7.110</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>28 Oct, 17:20</span><span class="t-xs muted">2 weeks ago</span></div></td><td><span class="chip">package.discontinued</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">legacy_auth → company_auth</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+<tr><td><div class="col"><span>14 Oct, 09:02</span><span class="t-xs muted">4 weeks ago</span></div></td><td><span class="chip">user.role_changed</span></td><td><div class="flex items-center gap-2">ada.lovelace@company.example<span class="badge mono sq">session</span></div></td><td><a class="link mono" href="#">jane.doe · reader → publisher</a></td><td class="mono t-xs muted">10.20.1.4</td><td class="text-right"><button class="btn btn-ghost btn-icon btn-xs" type="button" aria-expanded="false" aria-label="Show details"><i class="i i-chevron-down"></i></button></td></tr>
+
+</tbody>
+</table>
+<div class="tbl-foot"><span>1–50 of 1 204</span><nav class="pages" aria-label="Audit pages"><a href="#" aria-disabled="true" aria-label="Previous page"><i class="i i-chevron-left"></i></a><a href="#" aria-current="page">1</a><a href="#">2</a><a href="#">3</a><span>…</span><a href="#">25</a><a href="#" aria-label="Next page"><i class="i i-chevron-right"></i></a></nav></div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>

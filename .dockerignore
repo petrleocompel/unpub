@@ -1,0 +1,13 @@
+**
+!unpub/
+unpub/.dart_tool/
+unpub/build/
+unpub/unpub-packages/
+unpub/unpub.yaml
+unpub/test/
+!ui/
+ui/node_modules/
+ui/dist/
+ui/coverage/
+ui/playwright-report/
+ui/test-results/

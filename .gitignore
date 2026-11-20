@@ -5,5 +5,10 @@
 # Conventional directory for build output.
 */build/
 
-# pubspec.lock
-*/pubspec.lock
+# Local configuration, which may hold secrets.
+/unpub.yaml
+/unpub/unpub.yaml
+
+# The web client: dependencies and build output.
+/ui/node_modules/
+/ui/dist/

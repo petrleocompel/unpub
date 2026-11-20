@@ -1,0 +1,394 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Admin package</title><link rel="stylesheet" href="unpub.css"><style>body{margin:0}</style></head><body>
+
+<div class="board" style="width: 4060px; height: 1810px;">
+
+<div class="variant">
+<p class="vlabel">Admin · Package moderation <span>· 1440 · Light</span></p>
+<div class="frame w1440">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html" aria-current="page"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-5">
+<div class="col gap-2">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="AdminPackages.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">company_auth</span></nav>
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1 class="flex wrap items-center gap-2">company_auth <span class="ver" style="font-size: 15px;">3.1.0</span></h1><p>19 versions · 19 702 downloads · created 14 Feb 2025</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><a class="btn btn-outline btn-sm" href="Package.dc.html"><i class="i i-external"></i>Public page</a></div>
+</div>
+</div>
+
+<div class="grid gap-6 cols-1-sm items-start" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);">
+
+<section class="card">
+<div class="card-h"><h2>Versions</h2><span class="t-xs muted">Retracting is reversible; deleting is not.</span></div>
+<div style="overflow-x: auto;">
+<table class="tbl sticky-first">
+<thead><tr><th>Version</th><th>Published</th><th>By</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+<tbody>
+<tr><td class="mono">3.1.0</td><td>5 days ago</td><td class="muted">ci-bot</td><td><span class="badge primary"><i class="i i-star"></i>Latest</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.1.0-rc.1</td><td>2 weeks ago</td><td class="muted">jane.doe</td><td><span class="badge"><i class="i i-flask"></i>Prerelease</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0-rc.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr class="muted-row"><td class="mono">3.0.2</td><td>1 month ago</td><td>jane.doe</td><td><span class="badge danger"><i class="i i-ban"></i>Retracted</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-undo"></i>Restore</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.2"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.1</td><td>2 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.0</td><td>3 months ago</td><td class="muted">ada.lovelace</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">2.9.4</td><td>5 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 2.9.4"><i class="i i-trash"></i></button></div></td></tr>
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>6 of 19</span><a class="link" href="#">Show all versions</a></div>
+</section>
+
+<div class="col gap-6">
+<section class="card">
+<div class="card-h"><h2>Discontinue</h2></div>
+<form class="card-b col gap-4">
+<label class="check"><input type="checkbox">Mark as discontinued</label>
+<div class="field"><label class="label" for="rb-a">Replaced by <span class="muted fw-4">(optional)</span></label><input class="input mono" id="rb-a" placeholder="package_name"><p class="hint">Shown as a link on the package page and in search.</p></div>
+<div class="flex justify-end"><button class="btn btn-outline btn-sm" type="submit">Save</button></div>
+</form>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Uploaders</h2><span class="t-xs muted">Can publish and retract</span></div>
+<ul class="divide">
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">JD</span><span class="grow t-sm truncate">jane.doe@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove jane.doe as uploader">Remove</button></li>
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">CI</span><span class="grow t-sm truncate">ci-bot@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove ci-bot as uploader">Remove</button></li>
+</ul>
+<form class="card-f" style="justify-content: stretch;"><label class="sr-only" for="add-up-a">Add an uploader by email</label><input class="input sm grow" id="add-up-a" type="email" placeholder="name@company.example"><button class="btn btn-outline btn-sm" type="submit"><i class="i i-plus"></i>Add</button></form>
+</section>
+
+<section class="card" style="border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));">
+<div class="card-h"><h2 class="t-danger">Danger zone</h2></div>
+<div class="divide">
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Transfer ownership</p><p class="t-xs muted">Replace every uploader with one account.</p></div><button class="btn btn-outline btn-sm" type="button"><i class="i i-transfer"></i>Transfer…</button></div>
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Delete package</p><p class="t-xs muted">All 19 versions and archives. Cannot be undone.</p></div><button class="btn btn-destructive btn-sm" type="button"><i class="i i-trash"></i>Delete…</button></div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Package moderation <span>· 1440 · Dark</span></p>
+<div class="frame w1440 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html" aria-current="page"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-5">
+<div class="col gap-2">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="AdminPackages.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">company_auth</span></nav>
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1 class="flex wrap items-center gap-2">company_auth <span class="ver" style="font-size: 15px;">3.1.0</span></h1><p>19 versions · 19 702 downloads · created 14 Feb 2025</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><a class="btn btn-outline btn-sm" href="Package.dc.html"><i class="i i-external"></i>Public page</a></div>
+</div>
+</div>
+
+<div class="grid gap-6 cols-1-sm items-start" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);">
+
+<section class="card">
+<div class="card-h"><h2>Versions</h2><span class="t-xs muted">Retracting is reversible; deleting is not.</span></div>
+<div style="overflow-x: auto;">
+<table class="tbl sticky-first">
+<thead><tr><th>Version</th><th>Published</th><th>By</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+<tbody>
+<tr><td class="mono">3.1.0</td><td>5 days ago</td><td class="muted">ci-bot</td><td><span class="badge primary"><i class="i i-star"></i>Latest</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.1.0-rc.1</td><td>2 weeks ago</td><td class="muted">jane.doe</td><td><span class="badge"><i class="i i-flask"></i>Prerelease</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0-rc.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr class="muted-row"><td class="mono">3.0.2</td><td>1 month ago</td><td>jane.doe</td><td><span class="badge danger"><i class="i i-ban"></i>Retracted</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-undo"></i>Restore</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.2"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.1</td><td>2 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.0</td><td>3 months ago</td><td class="muted">ada.lovelace</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">2.9.4</td><td>5 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 2.9.4"><i class="i i-trash"></i></button></div></td></tr>
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>6 of 19</span><a class="link" href="#">Show all versions</a></div>
+</section>
+
+<div class="col gap-6">
+<section class="card">
+<div class="card-h"><h2>Discontinue</h2></div>
+<form class="card-b col gap-4">
+<label class="check"><input type="checkbox">Mark as discontinued</label>
+<div class="field"><label class="label" for="rb-b">Replaced by <span class="muted fw-4">(optional)</span></label><input class="input mono" id="rb-b" placeholder="package_name"><p class="hint">Shown as a link on the package page and in search.</p></div>
+<div class="flex justify-end"><button class="btn btn-outline btn-sm" type="submit">Save</button></div>
+</form>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Uploaders</h2><span class="t-xs muted">Can publish and retract</span></div>
+<ul class="divide">
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">JD</span><span class="grow t-sm truncate">jane.doe@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove jane.doe as uploader">Remove</button></li>
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">CI</span><span class="grow t-sm truncate">ci-bot@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove ci-bot as uploader">Remove</button></li>
+</ul>
+<form class="card-f" style="justify-content: stretch;"><label class="sr-only" for="add-up-b">Add an uploader by email</label><input class="input sm grow" id="add-up-b" type="email" placeholder="name@company.example"><button class="btn btn-outline btn-sm" type="submit"><i class="i i-plus"></i>Add</button></form>
+</section>
+
+<section class="card" style="border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));">
+<div class="card-h"><h2 class="t-danger">Danger zone</h2></div>
+<div class="divide">
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Transfer ownership</p><p class="t-xs muted">Replace every uploader with one account.</p></div><button class="btn btn-outline btn-sm" type="button"><i class="i i-transfer"></i>Transfer…</button></div>
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Delete package</p><p class="t-xs muted">All 19 versions and archives. Cannot be undone.</p></div><button class="btn btn-destructive btn-sm" type="button"><i class="i i-trash"></i>Delete…</button></div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Package moderation <span>· 390 · Light</span></p>
+<div class="frame w390">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html" aria-current="page"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-5">
+<div class="col gap-2">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="AdminPackages.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">company_auth</span></nav>
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1 class="flex wrap items-center gap-2">company_auth <span class="ver" style="font-size: 15px;">3.1.0</span></h1><p>19 versions · 19 702 downloads · created 14 Feb 2025</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><a class="btn btn-outline btn-sm" href="Package.dc.html"><i class="i i-external"></i>Public page</a></div>
+</div>
+</div>
+
+<div class="grid gap-6 cols-1-sm items-start" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);">
+
+<section class="card">
+<div class="card-h"><h2>Versions</h2><span class="t-xs muted">Retracting is reversible; deleting is not.</span></div>
+<div style="overflow-x: auto;">
+<table class="tbl sticky-first">
+<thead><tr><th>Version</th><th>Published</th><th>By</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+<tbody>
+<tr><td class="mono">3.1.0</td><td>5 days ago</td><td class="muted">ci-bot</td><td><span class="badge primary"><i class="i i-star"></i>Latest</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.1.0-rc.1</td><td>2 weeks ago</td><td class="muted">jane.doe</td><td><span class="badge"><i class="i i-flask"></i>Prerelease</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0-rc.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr class="muted-row"><td class="mono">3.0.2</td><td>1 month ago</td><td>jane.doe</td><td><span class="badge danger"><i class="i i-ban"></i>Retracted</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-undo"></i>Restore</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.2"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.1</td><td>2 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.0</td><td>3 months ago</td><td class="muted">ada.lovelace</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">2.9.4</td><td>5 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 2.9.4"><i class="i i-trash"></i></button></div></td></tr>
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>6 of 19</span><a class="link" href="#">Show all versions</a></div>
+</section>
+
+<div class="col gap-6">
+<section class="card">
+<div class="card-h"><h2>Discontinue</h2></div>
+<form class="card-b col gap-4">
+<label class="check"><input type="checkbox">Mark as discontinued</label>
+<div class="field"><label class="label" for="rb-c">Replaced by <span class="muted fw-4">(optional)</span></label><input class="input mono" id="rb-c" placeholder="package_name"><p class="hint">Shown as a link on the package page and in search.</p></div>
+<div class="flex justify-end"><button class="btn btn-outline btn-sm" type="submit">Save</button></div>
+</form>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Uploaders</h2><span class="t-xs muted">Can publish and retract</span></div>
+<ul class="divide">
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">JD</span><span class="grow t-sm truncate">jane.doe@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove jane.doe as uploader">Remove</button></li>
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">CI</span><span class="grow t-sm truncate">ci-bot@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove ci-bot as uploader">Remove</button></li>
+</ul>
+<form class="card-f" style="justify-content: stretch;"><label class="sr-only" for="add-up-c">Add an uploader by email</label><input class="input sm grow" id="add-up-c" type="email" placeholder="name@company.example"><button class="btn btn-outline btn-sm" type="submit"><i class="i i-plus"></i>Add</button></form>
+</section>
+
+<section class="card" style="border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));">
+<div class="card-h"><h2 class="t-danger">Danger zone</h2></div>
+<div class="divide">
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Transfer ownership</p><p class="t-xs muted">Replace every uploader with one account.</p></div><button class="btn btn-outline btn-sm" type="button"><i class="i i-transfer"></i>Transfer…</button></div>
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Delete package</p><p class="t-xs muted">All 19 versions and archives. Cannot be undone.</p></div><button class="btn btn-destructive btn-sm" type="button"><i class="i i-trash"></i>Delete…</button></div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+<div class="variant">
+<p class="vlabel">Admin · Package moderation <span>· 390 · Dark</span></p>
+<div class="frame w390 dark">
+<div class="app">
+
+<header class="hdr">
+<div class="container hdr-in" style="max-width: none;">
+<a class="brand" href="PackageList.dc.html" aria-label="unpub home"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect class="mark-bg" width="24" height="24" rx="6"></rect><path class="mark-fg" d="M7.5 7.5v5a4.5 4.5 0 0 0 9 0v-5" fill="none" stroke-width="2.4" stroke-linecap="round"></path><rect class="mark-box" x="10.25" y="9" width="3.5" height="3.5" rx="0.8"></rect></svg><span>unpub</span></a>
+<nav class="nav" aria-label="Main"><a href="PackageList.dc.html"><i class="i i-package only-sm" aria-hidden="true"></i><span class="sr-sm">Packages</span></a></nav>
+<label class="search"><span class="sr-only">Search packages</span><i class="i i-search"></i><input type="search" placeholder="Search packages"><kbd>/</kbd></label>
+<div class="hdr-right">
+<button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Theme: system"><i class="i i-monitor"></i></button>
+<button class="usermenu" type="button" aria-label="Account menu for ada.lovelace@company.example"><span class="avatar">AL</span><span class="hide-sm">ada.lovelace@company.example</span><i class="i i-chevron-down i-sm muted hide-sm"></i></button>
+</div>
+</div>
+</header>
+
+<div class="admin">
+<aside class="side">
+<p class="side-h">Administration</p>
+<nav aria-label="Administration" class="col gap-1">
+<a href="AdminOverview.dc.html"><i class="i i-dashboard"></i>Overview</a>
+<a href="AdminUsers.dc.html"><i class="i i-users"></i>Users</a>
+<a href="AdminPackages.dc.html" aria-current="page"><i class="i i-package"></i>Packages</a>
+<a href="AuditLog.dc.html"><i class="i i-scroll"></i>Audit log</a>
+<a href="Webhooks.dc.html"><i class="i i-webhook"></i>Webhooks<span class="count" aria-label="3 failed deliveries">3</span></a>
+<a href="Settings.dc.html"><i class="i i-settings"></i>Settings</a>
+<div class="hr" style="margin: 8px 10px;"></div>
+<a href="#"><i class="i i-activity"></i>Metrics<i class="i i-external i-xs ml-auto"></i></a>
+</nav>
+</aside>
+
+<main class="admin-main col gap-5">
+<div class="col gap-2">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="AdminPackages.dc.html">Packages</a><i class="i i-chevron-right i-xs"></i><span class="fg">company_auth</span></nav>
+<div class="admin-head" style="margin-bottom: 0;">
+<div class="col gap-1"><h1 class="flex wrap items-center gap-2">company_auth <span class="ver" style="font-size: 15px;">3.1.0</span></h1><p>19 versions · 19 702 downloads · created 14 Feb 2025</p></div>
+<div class="flex wrap gap-2"><button class="btn btn-outline btn-sm drawer-btn" type="button"><i class="i i-menu"></i>Sections</button><a class="btn btn-outline btn-sm" href="Package.dc.html"><i class="i i-external"></i>Public page</a></div>
+</div>
+</div>
+
+<div class="grid gap-6 cols-1-sm items-start" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);">
+
+<section class="card">
+<div class="card-h"><h2>Versions</h2><span class="t-xs muted">Retracting is reversible; deleting is not.</span></div>
+<div style="overflow-x: auto;">
+<table class="tbl sticky-first">
+<thead><tr><th>Version</th><th>Published</th><th>By</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+<tbody>
+<tr><td class="mono">3.1.0</td><td>5 days ago</td><td class="muted">ci-bot</td><td><span class="badge primary"><i class="i i-star"></i>Latest</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.1.0-rc.1</td><td>2 weeks ago</td><td class="muted">jane.doe</td><td><span class="badge"><i class="i i-flask"></i>Prerelease</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.1.0-rc.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr class="muted-row"><td class="mono">3.0.2</td><td>1 month ago</td><td>jane.doe</td><td><span class="badge danger"><i class="i i-ban"></i>Retracted</span></td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-undo"></i>Restore</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.2"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.1</td><td>2 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.1"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">3.0.0</td><td>3 months ago</td><td class="muted">ada.lovelace</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 3.0.0"><i class="i i-trash"></i></button></div></td></tr>
+<tr><td class="mono">2.9.4</td><td>5 months ago</td><td class="muted">jane.doe</td><td class="muted t-sm">—</td><td class="text-right"><div class="iflex gap-1"><button class="btn btn-outline btn-xs" type="button"><i class="i i-ban"></i>Retract</button><button class="btn btn-ghost btn-icon btn-xs t-danger" type="button" aria-label="Delete version 2.9.4"><i class="i i-trash"></i></button></div></td></tr>
+</tbody>
+</table>
+</div>
+<div class="tbl-foot"><span>6 of 19</span><a class="link" href="#">Show all versions</a></div>
+</section>
+
+<div class="col gap-6">
+<section class="card">
+<div class="card-h"><h2>Discontinue</h2></div>
+<form class="card-b col gap-4">
+<label class="check"><input type="checkbox">Mark as discontinued</label>
+<div class="field"><label class="label" for="rb-d">Replaced by <span class="muted fw-4">(optional)</span></label><input class="input mono" id="rb-d" placeholder="package_name"><p class="hint">Shown as a link on the package page and in search.</p></div>
+<div class="flex justify-end"><button class="btn btn-outline btn-sm" type="submit">Save</button></div>
+</form>
+</section>
+
+<section class="card">
+<div class="card-h"><h2>Uploaders</h2><span class="t-xs muted">Can publish and retract</span></div>
+<ul class="divide">
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">JD</span><span class="grow t-sm truncate">jane.doe@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove jane.doe as uploader">Remove</button></li>
+<li class="flex items-center gap-3" style="padding: 10px 18px;"><span class="avatar" style="width: 24px; height: 24px; font-size: 10px;">CI</span><span class="grow t-sm truncate">ci-bot@company.example</span><button class="btn btn-ghost btn-xs" type="button" aria-label="Remove ci-bot as uploader">Remove</button></li>
+</ul>
+<form class="card-f" style="justify-content: stretch;"><label class="sr-only" for="add-up-d">Add an uploader by email</label><input class="input sm grow" id="add-up-d" type="email" placeholder="name@company.example"><button class="btn btn-outline btn-sm" type="submit"><i class="i i-plus"></i>Add</button></form>
+</section>
+
+<section class="card" style="border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));">
+<div class="card-h"><h2 class="t-danger">Danger zone</h2></div>
+<div class="divide">
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Transfer ownership</p><p class="t-xs muted">Replace every uploader with one account.</p></div><button class="btn btn-outline btn-sm" type="button"><i class="i i-transfer"></i>Transfer…</button></div>
+<div class="flex wrap items-center justify-between gap-3" style="padding: 14px 18px;"><div class="col"><p class="t-sm fw-5">Delete package</p><p class="t-xs muted">All 19 versions and archives. Cannot be undone.</p></div><button class="btn btn-destructive btn-sm" type="button"><i class="i i-trash"></i>Delete…</button></div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+
+<footer class="ftr"><div class="container ftr-in" style="max-width: none;"><span class="mono">unpub 3.0.0</span><a href="#">Source</a><a href="#">Classic version</a><a href="#">API docs</a></div></footer>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>
