@@ -16,7 +16,8 @@ class ConfigException implements Exception {
   const ConfigException(this.problems);
 
   @override
-  String toString() => 'Invalid configuration:\n'
+  String toString() =>
+      'Invalid configuration:\n'
       '${problems.map((problem) => '  - $problem').join('\n')}';
 }
 
@@ -48,6 +49,7 @@ const _schema = <String, _ValueKind>{
   'upstream.allowedArchiveHosts': _ValueKind.stringList,
   'upstream.requireSha256': _ValueKind.boolean,
   'upstream.allowPublishWhenUnavailable': _ValueKind.boolean,
+  'upstream.allowPrivateNetworks': _ValueKind.boolean,
   'upstream.maxArchiveBytes': _ValueKind.integer,
   'upstream.maxConcurrentFetches': _ValueKind.integer,
   'publish.allowedNamePrefixes': _ValueKind.stringList,
@@ -283,6 +285,10 @@ class UpstreamConfig {
   /// an outage would shadow the upstream package from then on.
   final bool allowPublishWhenUnavailable;
 
+  /// Let the proxy fetch from a name that resolves to a private address.
+  /// Off by default; same ranges as [WebhooksConfig.allowPrivateNetworks].
+  final bool allowPrivateNetworks;
+
   /// Largest archive fetched from the upstream.
   final int maxArchiveBytes;
 
@@ -298,6 +304,7 @@ class UpstreamConfig {
     this.allowedArchiveHosts = const [],
     this.requireSha256 = true,
     this.allowPublishWhenUnavailable = false,
+    this.allowPrivateNetworks = false,
     this.maxArchiveBytes = defaultMaxArchiveBytes,
     this.maxConcurrentFetches = defaultMaxConcurrentFetches,
   });
@@ -568,8 +575,9 @@ class Config {
       try {
         content = file.readAsStringSync();
       } on FileSystemException catch (error) {
-        throw ConfigException(
-            ['cannot read config file ${file.path}: ${error.message}']);
+        throw ConfigException([
+          'cannot read config file ${file.path}: ${error.message}',
+        ]);
       }
     } else if (path != null) {
       throw ConfigException(['config file not found: $path']);
@@ -616,8 +624,10 @@ class _ConfigReader {
     try {
       document = loadYaml(text, sourceUrl: Uri.file(sourceName));
     } on YamlException catch (error) {
-      _problems.add('cannot parse $sourceName: ${error.message} '
-          '(line ${(error.span?.start.line ?? 0) + 1})');
+      _problems.add(
+        'cannot parse $sourceName: ${error.message} '
+        '(line ${(error.span?.start.line ?? 0) + 1})',
+      );
       return;
     }
     if (document == null) return;
@@ -747,8 +757,9 @@ class _ConfigReader {
       case 'false':
         return false;
     }
-    _problems
-        .add('${_describe(key)} must be true or false, got ${_shown(key)}');
+    _problems.add(
+      '${_describe(key)} must be true or false, got ${_shown(key)}',
+    );
     return null;
   }
 
@@ -760,7 +771,8 @@ class _ConfigReader {
         !(uri.scheme == 'http' || uri.scheme == 'https') ||
         uri.host.isEmpty) {
       _problems.add(
-          '${_describe(key)} must be an absolute http(s) URL, got ${_shown(key)}');
+        '${_describe(key)} must be an absolute http(s) URL, got ${_shown(key)}',
+      );
       return null;
     }
     return uri;
@@ -772,8 +784,10 @@ class _ConfigReader {
     if (uri.hasQuery ||
         uri.hasFragment ||
         !(uri.path == '' || uri.path == '/')) {
-      _problems.add('${_describe('server.publicUrl')} must be an origin such '
-          'as https://pub.example.com, without a path, query or fragment');
+      _problems.add(
+        '${_describe('server.publicUrl')} must be an origin such '
+        'as https://pub.example.com, without a path, query or fragment',
+      );
       return null;
     }
     return uri;
@@ -821,8 +835,9 @@ class _ConfigReader {
   int _days(String key, int fallback) {
     final days = _integer(key);
     if (days != null && (days < 0 || days > maxRetentionDays)) {
-      _problems
-          .add('${_describe(key)} must be between 0 and $maxRetentionDays');
+      _problems.add(
+        '${_describe(key)} must be between 0 and $maxRetentionDays',
+      );
       return fallback;
     }
     return days ?? fallback;
@@ -834,13 +849,16 @@ class _ConfigReader {
   WebhooksConfig _webhooks() {
     final attempts = _integer('webhooks.maxAttempts');
     if (attempts != null && (attempts < 1 || attempts > 20)) {
-      _problems.add('${_describe('webhooks.maxAttempts')} must be between 1 '
-          'and 20');
+      _problems.add(
+        '${_describe('webhooks.maxAttempts')} must be between 1 '
+        'and 20',
+      );
     }
     final timeout = _duration('webhooks.timeout', allowZero: false);
     if (timeout != null && timeout > const Duration(minutes: 5)) {
-      _problems
-          .add('${_describe('webhooks.timeout')} must be at most 5 minutes');
+      _problems.add(
+        '${_describe('webhooks.timeout')} must be at most 5 minutes',
+      );
     }
     return WebhooksConfig(
       enabled: _boolean('webhooks.enabled') ?? true,
@@ -848,16 +866,20 @@ class _ConfigReader {
       maxAttempts: attempts ?? WebhooksConfig.defaultMaxAttempts,
       allowHttp: _boolean('webhooks.allowHttp') ?? false,
       allowPrivateNetworks: _boolean('webhooks.allowPrivateNetworks') ?? false,
-      retentionDays:
-          _days('webhooks.retentionDays', WebhooksConfig.defaultRetentionDays),
+      retentionDays: _days(
+        'webhooks.retentionDays',
+        WebhooksConfig.defaultRetentionDays,
+      ),
     );
   }
 
   MetricsConfig _metrics() {
     final token = _string('metrics.token');
     if (token != null && !_bearerTokenPattern.hasMatch(token)) {
-      _problems.add('${_describe('metrics.token')} may only contain '
-          'the characters a-z A-Z 0-9 . _ ~ + / = -');
+      _problems.add(
+        '${_describe('metrics.token')} may only contain '
+        'the characters a-z A-Z 0-9 . _ ~ + / = -',
+      );
     }
     return MetricsConfig(
       enabled: _boolean('metrics.enabled') ?? true,
@@ -869,8 +891,10 @@ class _ConfigReader {
     final modeName = _string('ui.mode');
     final mode = modeName == null ? null : UiMode.values.asNameMap()[modeName];
     if (modeName != null && mode == null) {
-      _problems.add('${_describe('ui.mode')} must be one of spa, ssr, '
-          'got ${_shown('ui.mode')}');
+      _problems.add(
+        '${_describe('ui.mode')} must be one of spa, ssr, '
+        'got ${_shown('ui.mode')}',
+      );
     }
     final configured = _string('ui.assetsDir');
     String? assetsDir;
@@ -878,8 +902,10 @@ class _ConfigReader {
       if (UiConfig.isClientDirectory(configured)) {
         assetsDir = configured;
       } else {
-        _problems.add('${_describe('ui.assetsDir')} must be a directory '
-            'holding index.html, got ${_shown('ui.assetsDir')}');
+        _problems.add(
+          '${_describe('ui.assetsDir')} must be a directory '
+          'holding index.html, got ${_shown('ui.assetsDir')}',
+        );
       }
     } else {
       assetsDir = UiConfig.defaultAssetDirs
@@ -887,9 +913,11 @@ class _ConfigReader {
           .firstOrNull;
     }
     if (mode == UiMode.spa && assetsDir == null && configured == null) {
-      _problems.add('${_describe('ui.mode')} is spa, but no web client was '
-          'found in ${UiConfig.defaultAssetDirs.join(' or ')}: build it in '
-          'ui/ or set ui.assetsDir');
+      _problems.add(
+        '${_describe('ui.mode')} is spa, but no web client was '
+        'found in ${UiConfig.defaultAssetDirs.join(' or ')}: build it in '
+        'ui/ or set ui.assetsDir',
+      );
     }
     return UiConfig(
       assetsDir: assetsDir,
@@ -904,8 +932,10 @@ class _ConfigReader {
     if (allowZero && text.trim() == '0') return Duration.zero;
     final parsed = parseDuration(text);
     if (parsed == null) {
-      _problems.add('${_describe(key)} must be a duration such as 30s, 10m, '
-          '12h or 7d${allowZero ? ', or 0' : ''}, got ${_shown(key)}');
+      _problems.add(
+        '${_describe(key)} must be a duration such as 30s, 10m, '
+        '12h or 7d${allowZero ? ', or 0' : ''}, got ${_shown(key)}',
+      );
     }
     return parsed;
   }
@@ -913,33 +943,43 @@ class _ConfigReader {
   UpstreamConfig _upstream() {
     final url = _httpUrl('upstream.url') ?? Uri.parse('https://pub.dev');
     final modeName = _string('upstream.mode') ?? UpstreamMode.redirect.name;
-    final mode =
-        UpstreamMode.values.where((m) => m.name == modeName).firstOrNull;
+    final mode = UpstreamMode.values
+        .where((m) => m.name == modeName)
+        .firstOrNull;
     if (mode == null) {
-      _problems.add('${_describe('upstream.mode')} must be one of redirect, '
-          'proxy, got ${_shown('upstream.mode')}');
+      _problems.add(
+        '${_describe('upstream.mode')} must be one of redirect, '
+        'proxy, got ${_shown('upstream.mode')}',
+      );
     }
     // A proxy logs what it fetches, and credentials in the URL would go too.
     if (mode == UpstreamMode.proxy && url.userInfo.isNotEmpty) {
-      _problems.add('${_describe('upstream.url')} must not contain credentials '
-          'when upstream.mode is proxy');
+      _problems.add(
+        '${_describe('upstream.url')} must not contain credentials '
+        'when upstream.mode is proxy',
+      );
     }
     final allowlist = _stringList('upstream.allowlist');
     final invalid = allowlist.where((name) => !isValidPackageName(name));
     if (invalid.isNotEmpty) {
-      _problems.add('${_describe('upstream.allowlist')} must contain package '
-          'names, got ${invalid.join(', ')}');
+      _problems.add(
+        '${_describe('upstream.allowlist')} must contain package '
+        'names, got ${invalid.join(', ')}',
+      );
     }
     final archiveHosts = _stringList('upstream.allowedArchiveHosts');
     final badHosts = archiveHosts.where(
-        (host) => Uri.tryParse('http://$host')?.host != host.toLowerCase());
+      (host) => Uri.tryParse('http://$host')?.host != host.toLowerCase(),
+    );
     if (badHosts.isNotEmpty) {
-      _problems.add('${_describe('upstream.allowedArchiveHosts')} must contain '
-          'host names, without a scheme or port, got ${badHosts.join(', ')}');
+      _problems.add(
+        '${_describe('upstream.allowedArchiveHosts')} must contain '
+        'host names, without a scheme or port, got ${badHosts.join(', ')}',
+      );
     }
     for (final key in [
       'upstream.maxArchiveBytes',
-      'upstream.maxConcurrentFetches'
+      'upstream.maxConcurrentFetches',
     ]) {
       final value = _integer(key);
       if (value != null && value <= 0) {
@@ -949,18 +989,23 @@ class _ConfigReader {
     return UpstreamConfig(
       url: url,
       mode: mode ?? UpstreamMode.redirect,
-      cacheTtl: _duration('upstream.cacheTtl', allowZero: true) ??
+      cacheTtl:
+          _duration('upstream.cacheTtl', allowZero: true) ??
           UpstreamConfig.defaultCacheTtl,
       allowlist: allowlist,
-      timeout: _duration('upstream.timeout', allowZero: false) ??
+      timeout:
+          _duration('upstream.timeout', allowZero: false) ??
           UpstreamConfig.defaultTimeout,
       allowedArchiveHosts: [for (final h in archiveHosts) h.toLowerCase()],
       requireSha256: _boolean('upstream.requireSha256') ?? true,
       allowPublishWhenUnavailable:
           _boolean('upstream.allowPublishWhenUnavailable') ?? false,
-      maxArchiveBytes: _integer('upstream.maxArchiveBytes') ??
+      allowPrivateNetworks: _boolean('upstream.allowPrivateNetworks') ?? false,
+      maxArchiveBytes:
+          _integer('upstream.maxArchiveBytes') ??
           UpstreamConfig.defaultMaxArchiveBytes,
-      maxConcurrentFetches: _integer('upstream.maxConcurrentFetches') ??
+      maxConcurrentFetches:
+          _integer('upstream.maxConcurrentFetches') ??
           UpstreamConfig.defaultMaxConcurrentFetches,
     );
   }
@@ -970,13 +1015,17 @@ class _ConfigReader {
     final prefixes = _stringList('publish.allowedNamePrefixes');
     final badPrefixes = prefixes.where((prefix) => !isValidPackageName(prefix));
     if (badPrefixes.isNotEmpty) {
-      _problems.add('${_describe('publish.allowedNamePrefixes')} must contain '
-          'the start of a package name, got ${badPrefixes.join(', ')}');
+      _problems.add(
+        '${_describe('publish.allowedNamePrefixes')} must contain '
+        'the start of a package name, got ${badPrefixes.join(', ')}',
+      );
     }
     final requiredFiles = _stringList('publish.requiredFiles');
     if (requiredFiles.any((file) => file.contains('/'))) {
-      _problems.add('${_describe('publish.requiredFiles')} must name files at '
-          'the archive root, without a directory');
+      _problems.add(
+        '${_describe('publish.requiredFiles')} must name files at '
+        'the archive root, without a directory',
+      );
     }
     final maxBytes = _integer('publish.maxArchiveBytes');
     if (maxBytes != null && maxBytes <= 0) {
@@ -984,15 +1033,18 @@ class _ConfigReader {
     }
     final maxUnpacked = _integer('publish.maxUnpackedBytes');
     if (maxUnpacked != null && maxUnpacked <= 0) {
-      _problems
-          .add('${_describe('publish.maxUnpackedBytes')} must be positive');
+      _problems.add(
+        '${_describe('publish.maxUnpackedBytes')} must be positive',
+      );
     }
     final window = _duration('publish.retractionWindow', allowZero: true);
     final uploadTimeout = _duration('publish.uploadTimeout', allowZero: false);
     if (uploadTimeout != null && uploadTimeout >= uploadReservationTtl) {
-      _problems.add('${_describe('publish.uploadTimeout')} must be shorter '
-          'than the ${uploadReservationTtl.inMinutes} minutes a publish keeps '
-          'its version reserved');
+      _problems.add(
+        '${_describe('publish.uploadTimeout')} must be shorter '
+        'than the ${uploadReservationTtl.inMinutes} minutes a publish keeps '
+        'its version reserved',
+      );
     }
     return PublishConfig(
       allowedNamePrefixes: prefixes,
@@ -1001,8 +1053,9 @@ class _ConfigReader {
       requiredFiles: requiredFiles,
       rejectOlderThanLatest: _boolean('publish.rejectOlderThanLatest') ?? false,
       requireVersionBump: _boolean('publish.requireVersionBump') ?? true,
-      retractionWindow:
-          window == Duration.zero ? null : window ?? defaults.retractionWindow,
+      retractionWindow: window == Duration.zero
+          ? null
+          : window ?? defaults.retractionWindow,
       uploadTimeout: uploadTimeout ?? defaults.uploadTimeout,
     );
   }
@@ -1020,19 +1073,24 @@ class _ConfigReader {
     final uri = _string('mongo.uri') ?? fallback;
     final problem = _mongoUriProblem(uri);
     if (problem != null) {
-      _problems.add('${_describe('mongo.uri')} must look like '
-          'mongodb://host:27017/database: $problem');
+      _problems.add(
+        '${_describe('mongo.uri')} must look like '
+        'mongodb://host:27017/database: $problem',
+      );
     }
     return uri;
   }
 
   StorageConfig _storage() {
     final typeName = _string('storage.type') ?? StorageType.file.name;
-    final type =
-        StorageType.values.where((type) => type.name == typeName).firstOrNull;
+    final type = StorageType.values
+        .where((type) => type.name == typeName)
+        .firstOrNull;
     if (type == null) {
-      _problems.add('${_describe('storage.type')} must be one of file, s3, '
-          'got ${_shown('storage.type')}');
+      _problems.add(
+        '${_describe('storage.type')} must be one of file, s3, '
+        'got ${_shown('storage.type')}',
+      );
     }
     return StorageConfig(
       type: type ?? StorageType.file,
@@ -1049,42 +1107,55 @@ class _ConfigReader {
       _problems.add('storage.s3.bucket is required when storage.type is s3');
     }
 
-    final region = _string('storage.s3.region') ??
+    final region =
+        _string('storage.s3.region') ??
         _nonEmptyEnv('AWS_DEFAULT_REGION') ??
         _nonEmptyEnv('AWS_REGION');
     if (region == null) {
-      _problems.add('storage.s3.region is required when storage.type is s3 '
-          '(or set AWS_DEFAULT_REGION)');
+      _problems.add(
+        'storage.s3.region is required when storage.type is s3 '
+        '(or set AWS_DEFAULT_REGION)',
+      );
     }
 
-    final endpoint = _string('storage.s3.endpoint') ??
+    final endpoint =
+        _string('storage.s3.endpoint') ??
         _nonEmptyEnv('AWS_S3_ENDPOINT') ??
         's3.amazonaws.com';
     if (endpoint.contains('://') || endpoint.contains('/')) {
-      _problems.add('${_describe('storage.s3.endpoint')} must be a host name; '
-          'use storage.s3.port and storage.s3.useSSL for the rest');
+      _problems.add(
+        '${_describe('storage.s3.endpoint')} must be a host name; '
+        'use storage.s3.port and storage.s3.useSSL for the rest',
+      );
     }
 
     final port = _integer('storage.s3.port');
     if (port != null && (port < 1 || port > 65535)) {
-      _problems
-          .add('${_describe('storage.s3.port')} must be between 1 and 65535');
+      _problems.add(
+        '${_describe('storage.s3.port')} must be between 1 and 65535',
+      );
     }
 
     final accessKey = _string('storage.s3.accessKey');
     final secretKey = _string('storage.s3.secretKey');
     final sessionToken = _string('storage.s3.sessionToken');
     if ((accessKey == null) != (secretKey == null)) {
-      _problems.add('storage.s3.accessKey and storage.s3.secretKey '
-          'must be set together');
+      _problems.add(
+        'storage.s3.accessKey and storage.s3.secretKey '
+        'must be set together',
+      );
     } else if (accessKey == null && !_hasAmbientAwsCredentials()) {
-      _problems.add('S3 credentials are missing: set storage.s3.accessKey and '
-          'storage.s3.secretKey, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, '
-          'or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI');
+      _problems.add(
+        'S3 credentials are missing: set storage.s3.accessKey and '
+        'storage.s3.secretKey, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, '
+        'or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
+      );
     }
     if (sessionToken != null && accessKey == null) {
-      _problems.add('storage.s3.sessionToken needs storage.s3.accessKey and '
-          'storage.s3.secretKey; AWS_SESSION_TOKEN goes with environment keys');
+      _problems.add(
+        'storage.s3.sessionToken needs storage.s3.accessKey and '
+        'storage.s3.secretKey; AWS_SESSION_TOKEN goes with environment keys',
+      );
     }
 
     return S3StorageConfig(
@@ -1113,25 +1184,34 @@ class _ConfigReader {
   AuthConfig _auth() {
     final token = _string('auth.bootstrapToken');
     if (token != null && !_bearerTokenPattern.hasMatch(token)) {
-      _problems.add('${_describe('auth.bootstrapToken')} may only contain '
-          'the characters a-z A-Z 0-9 . _ ~ + / = -');
+      _problems.add(
+        '${_describe('auth.bootstrapToken')} may only contain '
+        'the characters a-z A-Z 0-9 . _ ~ + / = -',
+      );
     }
     final email = _string('auth.bootstrapEmail') ?? 'admin@localhost';
     if (!email.contains('@')) {
-      _problems.add('${_describe('auth.bootstrapEmail')} must be an email '
-          'address, got ${_shown('auth.bootstrapEmail')}');
+      _problems.add(
+        '${_describe('auth.bootstrapEmail')} must be an email '
+        'address, got ${_shown('auth.bootstrapEmail')}',
+      );
     }
     final readAccessName = _string('auth.readAccess') ?? ReadAccess.public.name;
-    final readAccess =
-        ReadAccess.values.where((a) => a.name == readAccessName).firstOrNull;
+    final readAccess = ReadAccess.values
+        .where((a) => a.name == readAccessName)
+        .firstOrNull;
     if (readAccess == null) {
-      _problems.add('${_describe('auth.readAccess')} must be one of public, '
-          'authenticated, got ${_shown('auth.readAccess')}');
+      _problems.add(
+        '${_describe('auth.readAccess')} must be one of public, '
+        'authenticated, got ${_shown('auth.readAccess')}',
+      );
     }
     final readTokens = _stringList('auth.readTokens');
     if (readTokens.any((t) => !_bearerTokenPattern.hasMatch(t))) {
-      _problems.add('${_describe('auth.readTokens')} may only contain tokens '
-          'with the characters a-z A-Z 0-9 . _ ~ + / = -');
+      _problems.add(
+        '${_describe('auth.readTokens')} may only contain tokens '
+        'with the characters a-z A-Z 0-9 . _ ~ + / = -',
+      );
     }
     return AuthConfig(
       bootstrapToken: token,
@@ -1147,14 +1227,18 @@ class _ConfigReader {
     final password = _string('auth.admin.password');
     if (email == null && password == null) return null;
     if (email == null || password == null) {
-      _problems.add('auth.admin.email and auth.admin.password must be set '
-          'together');
+      _problems.add(
+        'auth.admin.email and auth.admin.password must be set '
+        'together',
+      );
       return null;
     }
     final normalized = normalizeEmail(email);
     if (!isValidEmail(normalized)) {
-      _problems.add('${_describe('auth.admin.email')} must be an email '
-          'address, got ${_shown('auth.admin.email')}');
+      _problems.add(
+        '${_describe('auth.admin.email')} must be an email '
+        'address, got ${_shown('auth.admin.email')}',
+      );
     }
     final problem = passwordProblem(password);
     if (problem != null) {
@@ -1167,15 +1251,20 @@ class _ConfigReader {
     final levelName = _string('logging.level') ?? 'info';
     final level = _logLevels[levelName.toLowerCase()];
     if (level == null) {
-      _problems.add('${_describe('logging.level')} must be one of '
-          '${_logLevels.keys.join(', ')}, got ${_shown('logging.level')}');
+      _problems.add(
+        '${_describe('logging.level')} must be one of '
+        '${_logLevels.keys.join(', ')}, got ${_shown('logging.level')}',
+      );
     }
     final formatName = _string('logging.format') ?? LogFormat.text.name;
-    final format =
-        LogFormat.values.where((f) => f.name == formatName).firstOrNull;
+    final format = LogFormat.values
+        .where((f) => f.name == formatName)
+        .firstOrNull;
     if (format == null) {
-      _problems.add('${_describe('logging.format')} must be one of text, json, '
-          'got ${_shown('logging.format')}');
+      _problems.add(
+        '${_describe('logging.format')} must be one of text, json, '
+        'got ${_shown('logging.format')}',
+      );
     }
     return LoggingConfig(
       level: level ?? Level.INFO,

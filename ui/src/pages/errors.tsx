@@ -239,7 +239,11 @@ export function ForbiddenPage() {
 export function RouteErrorPage() {
   const error = useRouteError()
   return (
-    <main className="mx-auto grid min-h-screen max-w-[560px] place-content-center justify-items-center gap-5 px-4 py-16 text-center">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="mx-auto grid min-h-screen max-w-[560px] place-content-center justify-items-center gap-5 px-4 py-16 text-center"
+    >
       <ErrorCode code={500} />
       <h1 className="text-2xl font-semibold tracking-[-0.015em]">Something went wrong</h1>
       <p className={cn('-mt-3 text-[0.9375rem] leading-6 text-muted-foreground')}>

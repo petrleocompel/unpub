@@ -21,7 +21,8 @@ const _name = 'remote_pkg';
 List<int> _archiveOf(String name, String version) {
   final archive = Archive()
     ..addFile(
-        ArchiveFile.string('pubspec.yaml', 'name: $name\nversion: $version\n'))
+      ArchiveFile.string('pubspec.yaml', 'name: $name\nversion: $version\n'),
+    )
     ..addFile(ArchiveFile.string('lib/$name.dart', 'void hello() {}\n'));
   return GZipEncoder().encodeBytes(TarEncoder().encodeBytes(archive));
 }
@@ -100,18 +101,21 @@ class FakeUpstream {
     final listing = RegExp(r'^/api/packages/(\w+)$').firstMatch(route);
     if (listing != null) return _listing(request, listing.group(1)!);
 
-    final advisories =
-        RegExp(r'^/api/packages/(\w+)/advisories$').firstMatch(route);
+    final advisories = RegExp(
+      r'^/api/packages/(\w+)/advisories$',
+    ).firstMatch(route);
     if (advisories != null) {
       if (!packages.containsKey(advisories.group(1))) {
         return shelf.Response.notFound('no');
       }
-      return shelf.Response.ok(json.encode({
-        'advisories': [
-          {'id': 'GHSA-1'},
-        ],
-        'advisoriesUpdated': '2026-01-01T00:00:00.000Z',
-      }));
+      return shelf.Response.ok(
+        json.encode({
+          'advisories': [
+            {'id': 'GHSA-1'},
+          ],
+          'advisoriesUpdated': '2026-01-01T00:00:00.000Z',
+        }),
+      );
     }
 
     final archive = RegExp(r'^/storage/(\w+)-(.+)\.tar\.gz$').firstMatch(route);
@@ -126,8 +130,10 @@ class FakeUpstream {
       }
       final pause = trickle;
       if (pause == null) return shelf.Response.ok(bytes);
-      return shelf.Response.ok(_trickled(bytes, pause),
-          context: const {'shelf.io.buffer_output': false});
+      return shelf.Response.ok(
+        _trickled(bytes, pause),
+        context: const {'shelf.io.buffer_output': false},
+      );
     }
     return shelf.Response.notFound('no');
   }
@@ -151,22 +157,22 @@ class FakeUpstream {
     }
 
     Map<String, Object?> item(String version) => {
-          'version': version,
-          'pubspec': {
-            'name': name,
-            'version': version,
-            'environment': {'sdk': '^3.5.0'},
-            'weird.key': {r'$odd': true},
-          },
-          'archive_url': archiveUrlOf?.call(name, version) ??
-              '$url/storage/$name-$version.tar.gz',
-          if (sendHashes)
-            'archive_sha256':
-                hashOverride['$name@$version'] ?? sha(name, version),
-          'published': '2026-01-02T03:04:05.000Z',
-          if (retracted.contains(version)) 'retracted': true,
-          'not_a_pub_field': 'dropped',
-        };
+      'version': version,
+      'pubspec': {
+        'name': name,
+        'version': version,
+        'environment': {'sdk': '^3.5.0'},
+        'weird.key': {r'$odd': true},
+      },
+      'archive_url':
+          archiveUrlOf?.call(name, version) ??
+          '$url/storage/$name-$version.tar.gz',
+      if (sendHashes)
+        'archive_sha256': hashOverride['$name@$version'] ?? sha(name, version),
+      'published': '2026-01-02T03:04:05.000Z',
+      if (retracted.contains(version)) 'retracted': true,
+      'not_a_pub_field': 'dropped',
+    };
 
     return shelf.Response.ok(
       json.encode({
@@ -200,9 +206,13 @@ class _FailingCommitStore extends FileStore {
   _FailingCommitStore(super.baseDir);
 
   @override
-  Future<bool> commitUpstream(String name, String version, String digest,
-          File temporary, int size) =>
-      throw const FileSystemException('disk full');
+  Future<bool> commitUpstream(
+    String name,
+    String version,
+    String digest,
+    File temporary,
+    int size,
+  ) => throw const FileSystemException('disk full');
 }
 
 /// Stops before writing an archive record, as a stalled instance would.
@@ -334,48 +344,54 @@ void main() {
     PackageStore? archives,
     List<String> allowedArchiveHosts = const [],
     bool requireSha256 = true,
+    bool allowPrivateNetworks = true,
     int maxArchiveBytes = UpstreamConfig.defaultMaxArchiveBytes,
     int maxConcurrentFetches = UpstreamConfig.defaultMaxConcurrentFetches,
     UpstreamCacheStore? cache,
-  }) =>
-      UpstreamProxy(
-        config: UpstreamConfig(
-          url: upstream.url,
-          mode: UpstreamMode.proxy,
-          cacheTtl: cacheTtl,
-          allowlist: allowlist,
-          timeout: timeout,
-          allowedArchiveHosts: allowedArchiveHosts,
-          requireSha256: requireSha256,
-          maxArchiveBytes: maxArchiveBytes,
-          maxConcurrentFetches: maxConcurrentFetches,
-        ),
-        cache: cache ?? MongoUpstreamCacheStore(db),
-        archives: archives ?? FileStore(storage.path),
-        clock: () => now,
-      );
+    Future<List<InternetAddress>> Function(String host)? lookup,
+  }) => UpstreamProxy(
+    config: UpstreamConfig(
+      url: upstream.url,
+      mode: UpstreamMode.proxy,
+      cacheTtl: cacheTtl,
+      allowlist: allowlist,
+      timeout: timeout,
+      allowedArchiveHosts: allowedArchiveHosts,
+      requireSha256: requireSha256,
+      allowPrivateNetworks: allowPrivateNetworks,
+      maxArchiveBytes: maxArchiveBytes,
+      maxConcurrentFetches: maxConcurrentFetches,
+    ),
+    cache: cache ?? MongoUpstreamCacheStore(db),
+    archives: archives ?? FileStore(storage.path),
+    clock: () => now,
+    lookup: lookup,
+  );
 
   App buildApp({
     UpstreamProxy? using,
     ReadAccess readAccess = ReadAccess.public,
     PackageStore? packageStore,
-  }) =>
-      App(
-        metaStore: MongoStore(db),
-        packageStore: packageStore ?? FileStore(storage.path),
-        authenticator: const FakeAuthenticator(token, 'dev@b.c'),
-        readAccess: readAccess,
-        upstreamProxy: using ?? proxy,
-        upstream: upstream.url.toString(),
-      );
+  }) => App(
+    metaStore: MongoStore(db),
+    packageStore: packageStore ?? FileStore(storage.path),
+    authenticator: const FakeAuthenticator(token, 'dev@b.c'),
+    readAccess: readAccess,
+    upstreamProxy: using ?? proxy,
+    upstream: upstream.url.toString(),
+  );
 
-  Future<shelf.Response> get(String route,
-          {Map<String, String> headers = const {}, App? using}) async =>
-      (using ?? app).handler(shelf.Request(
-        'GET',
-        Uri.parse('http://internal:4000$route'),
-        headers: headers,
-      ));
+  Future<shelf.Response> get(
+    String route, {
+    Map<String, String> headers = const {},
+    App? using,
+  }) async => (using ?? app).handler(
+    shelf.Request(
+      'GET',
+      Uri.parse('http://internal:4000$route'),
+      headers: headers,
+    ),
+  );
 
   Future<Map<String, dynamic>> getJson(String route, {App? using}) async =>
       json.decode(await (await get(route, using: using)).readAsString())
@@ -384,8 +400,14 @@ void main() {
   Future<List<int>> bytesOf(shelf.Response response) =>
       response.read().expand((chunk) => chunk).toList();
 
-  File objectFile(String version, String digest) => File(path.join(
-      storage.path, 'upstream', _name, '$_name-$version-$digest.tar.gz'));
+  File objectFile(String version, String digest) => File(
+    path.join(
+      storage.path,
+      'upstream',
+      _name,
+      '$_name-$version-$digest.tar.gz',
+    ),
+  );
 
   /// Where the bytes the fake upstream holds for [version] are kept.
   File cachedFile(String version) =>
@@ -394,42 +416,54 @@ void main() {
   /// The bytes of [response] must be the ones its `ETag` names.
   Future<String> expectMatchesValidator(shelf.Response response) async {
     expect(response.statusCode, 200);
-    final digest = RegExp(r'^(?:W/)?"([0-9a-f]{64})"$')
-        .firstMatch(response.headers['etag']!)!
-        .group(1)!;
+    final digest = RegExp(
+      r'^(?:W/)?"([0-9a-f]{64})"$',
+    ).firstMatch(response.headers['etag']!)!.group(1)!;
     expect(sha256Of(await bytesOf(response)), digest);
     return digest;
   }
 
   List<String> filesInStorage() => [
-        for (final entity in storage.listSync(recursive: true))
-          if (entity is File) entity.path,
-      ];
+    for (final entity in storage.listSync(recursive: true))
+      if (entity is File) entity.path,
+  ];
 
   Future<void> publishLocally(String name, String version, {App? using}) async {
-    final response = await (using ?? app)
-        .handler(uploadRequest('name: $name\nversion: $version\n', auth));
+    final response = await (using ?? app).handler(
+      uploadRequest('name: $name\nversion: $version\n', auth),
+    );
     return response.headers['location'] == null
         ? fail('no redirect')
-        : expect(response.headers['location'], isNot(contains('error=')),
-            reason: Uri.decodeFull(response.headers['location'] ?? ''));
+        : expect(
+            response.headers['location'],
+            isNot(contains('error=')),
+            reason: Uri.decodeFull(response.headers['location'] ?? ''),
+          );
   }
 
   Future<String> publishError(String name, String version, {App? using}) async {
-    final response = await (using ?? app)
-        .handler(uploadRequest('name: $name\nversion: $version\n', auth));
+    final response = await (using ?? app).handler(
+      uploadRequest('name: $name\nversion: $version\n', auth),
+    );
     final location = Uri.parse(response.headers['location']!);
     return location.queryParameters['error'] ?? '';
   }
 
   /// What `dart pub publish` is told when it follows the upload's redirect.
-  Future<shelf.Response> publishOutcome(String name, String version,
-      {App? using}) async {
-    final response = await (using ?? app)
-        .handler(uploadRequest('name: $name\nversion: $version\n', auth));
+  Future<shelf.Response> publishOutcome(
+    String name,
+    String version, {
+    App? using,
+  }) async {
+    final response = await (using ?? app).handler(
+      uploadRequest('name: $name\nversion: $version\n', auth),
+    );
     final location = Uri.parse(response.headers['location']!);
-    return get(location.toString().substring('http://internal:4000'.length),
-        headers: auth, using: using);
+    return get(
+      location.toString().substring('http://internal:4000'.length),
+      headers: auth,
+      using: using,
+    );
   }
 
   Future<Map<String, dynamic>?> localPackage(String name) =>
@@ -463,8 +497,9 @@ void main() {
     await store.ensureIndexes();
     await store.ensureIndexes();
     final indexes = await db.collection(upstreamCacheCollection).getIndexes();
-    final ttl =
-        indexes.singleWhere((index) => index['name'] == 'expires_at_ttl');
+    final ttl = indexes.singleWhere(
+      (index) => index['name'] == 'expires_at_ttl',
+    );
     expect(ttl['expireAfterSeconds'], 0);
   });
 
@@ -480,14 +515,18 @@ void main() {
       expect(body['isDiscontinued'], isTrue);
       expect(body['replacedBy'], 'something_else');
       final version = (body['versions'] as List).single as Map;
-      expect(version['archive_url'],
-          'http://internal:4000/packages/$_name/versions/1.0.0.tar.gz');
+      expect(
+        version['archive_url'],
+        'http://internal:4000/packages/$_name/versions/1.0.0.tar.gz',
+      );
       expect(version['archive_sha256'], upstream.sha(_name, '1.0.0'));
       expect(version['published'], '2026-01-02T03:04:05.000Z');
       expect(version['retracted'], isTrue);
       expect(version.containsKey('not_a_pub_field'), isFalse);
-      expect(body['latest']['archive_url'],
-          'http://internal:4000/packages/$_name/versions/1.0.0.tar.gz');
+      expect(
+        body['latest']['archive_url'],
+        'http://internal:4000/packages/$_name/versions/1.0.0.tar.gz',
+      );
       expect(upstream.userAgents.last, contains('unpub'));
       expect(upstream.accepts.last, 'application/vnd.pub.v2+json');
     });
@@ -504,8 +543,10 @@ void main() {
     });
 
     test('the cached form holds no absolute url of a client', () async {
-      await get('/api/packages/$_name',
-          headers: {'host': 'attacker.example.com'});
+      await get(
+        '/api/packages/$_name',
+        headers: {'host': 'attacker.example.com'},
+      );
 
       final stored = await db
           .collection(upstreamCacheCollection)
@@ -515,8 +556,10 @@ void main() {
       expect(stored['private'], isFalse);
 
       final body = await getJson('/api/packages/$_name');
-      expect((body['versions'] as List).single['archive_url'],
-          startsWith('http://internal:4000/'));
+      expect(
+        (body['versions'] as List).single['archive_url'],
+        startsWith('http://internal:4000/'),
+      );
     });
 
     test('a stale entry is revalidated and a 304 keeps it', () async {
@@ -539,13 +582,15 @@ void main() {
       upstream.listingVersion = 'b';
 
       expect(
-          ((await getJson('/api/packages/$_name'))['versions'] as List).length,
-          1);
+        ((await getJson('/api/packages/$_name'))['versions'] as List).length,
+        1,
+      );
 
       now = now.add(const Duration(minutes: 11));
       expect(
-          ((await getJson('/api/packages/$_name'))['versions'] as List).length,
-          2);
+        ((await getJson('/api/packages/$_name'))['versions'] as List).length,
+        2,
+      );
     });
 
     test('a package removed upstream is forgotten', () async {
@@ -555,17 +600,19 @@ void main() {
 
       expect((await get('/api/packages/$_name')).statusCode, 404);
       expect(
-          await db
-              .collection(upstreamCacheCollection)
-              .findOne(where.eq('_id', _name)),
-          isNull);
+        await db
+            .collection(upstreamCacheCollection)
+            .findOne(where.eq('_id', _name)),
+        isNull,
+      );
     });
 
     test('pubspec keys MongoDB would refuse are cached safely', () async {
       await getJson('/api/packages/$_name');
       final cached = await getJson('/api/packages/$_name');
-      expect((cached['versions'] as List).single['pubspec']['weird.key'],
-          {r'$odd': true});
+      expect((cached['versions'] as List).single['pubspec']['weird.key'], {
+        r'$odd': true,
+      });
     });
 
     test('supports revalidation by clients', () async {
@@ -573,8 +620,10 @@ void main() {
       final etag = first.headers['etag']!;
       expect(first.headers['cache-control'], 'public, max-age=60');
 
-      final second =
-          await get('/api/packages/$_name', headers: {'if-none-match': etag});
+      final second = await get(
+        '/api/packages/$_name',
+        headers: {'if-none-match': etag},
+      );
 
       expect(second.statusCode, 304);
     });
@@ -582,12 +631,16 @@ void main() {
     test('the version route is proxied the same way', () async {
       final body = await getJson('/api/packages/$_name/versions/1.0.0');
       expect(body['version'], '1.0.0');
-      expect(body['archive_url'],
-          'http://internal:4000/packages/$_name/versions/1.0.0.tar.gz');
+      expect(
+        body['archive_url'],
+        'http://internal:4000/packages/$_name/versions/1.0.0.tar.gz',
+      );
       expect(upstream.count('/api/packages/$_name'), 1);
 
       expect(
-          (await get('/api/packages/$_name/versions/9.9.9')).statusCode, 404);
+        (await get('/api/packages/$_name/versions/9.9.9')).statusCode,
+        404,
+      );
     });
 
     test('advisories pass through and are cached', () async {
@@ -603,7 +656,9 @@ void main() {
       expect((await get('/api/packages/absent')).statusCode, 404);
       expect((await get('/api/packages/absent/advisories')).statusCode, 404);
       expect(
-          (await get('/api/packages/absent/versions/1.0.0')).statusCode, 404);
+        (await get('/api/packages/absent/versions/1.0.0')).statusCode,
+        404,
+      );
     });
 
     test('a local package wins over the upstream', () async {
@@ -625,8 +680,10 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
-      expect(cachedFile('1.0.0').readAsBytesSync(),
-          upstream.packages[_name]!['1.0.0']);
+      expect(
+        cachedFile('1.0.0').readAsBytesSync(),
+        upstream.packages[_name]!['1.0.0'],
+      );
       expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
     });
 
@@ -651,8 +708,10 @@ void main() {
       final response = await get(route);
 
       expect(response.statusCode, 502);
-      expect(json.decode(await response.readAsString())['error']['message'],
-          contains('hash'));
+      expect(
+        json.decode(await response.readAsString())['error']['message'],
+        contains('hash'),
+      );
       expect(filesInStorage(), isEmpty);
     });
 
@@ -664,8 +723,9 @@ void main() {
       }
 
       test('in uppercase is verified, not skipped', () async {
-        upstream.hashOverride['$_name@1.0.0'] =
-            upstream.sha(_name, '1.0.0').toUpperCase();
+        upstream.hashOverride['$_name@1.0.0'] = upstream
+            .sha(_name, '1.0.0')
+            .toUpperCase();
 
         final response = await get(route);
 
@@ -675,11 +735,14 @@ void main() {
       });
 
       test('in uppercase is listed in lowercase', () async {
-        upstream.hashOverride['$_name@1.0.0'] =
-            upstream.sha(_name, '1.0.0').toUpperCase();
+        upstream.hashOverride['$_name@1.0.0'] = upstream
+            .sha(_name, '1.0.0')
+            .toUpperCase();
         final body = await getJson('/api/packages/$_name');
-        expect((body['versions'] as List).single['archive_sha256'],
-            upstream.sha(_name, '1.0.0'));
+        expect(
+          (body['versions'] as List).single['archive_sha256'],
+          upstream.sha(_name, '1.0.0'),
+        );
       });
 
       test('in uppercase that does not match is refused', () async {
@@ -694,7 +757,7 @@ void main() {
         'a' * 63,
         'a' * 65,
         'g' * 64,
-        ''
+        '',
       ]) {
         test('malformed as "$malformed" is a 502', () async {
           upstream.hashOverride['$_name@1.0.0'] = malformed;
@@ -702,8 +765,10 @@ void main() {
           final response = await get(route);
 
           expect(response.statusCode, 502);
-          expect(json.decode(await response.readAsString())['error']['message'],
-              'upstream provided an invalid archive_sha256');
+          expect(
+            json.decode(await response.readAsString())['error']['message'],
+            'upstream provided an invalid archive_sha256',
+          );
           expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 0);
           expect(cachedFile('1.0.0').existsSync(), isFalse);
         });
@@ -717,8 +782,10 @@ void main() {
       test('malformed leaves the listing usable, without the hash', () async {
         upstream.hashOverride['$_name@1.0.0'] = 'not-a-hash';
         final body = await getJson('/api/packages/$_name');
-        expect((body['versions'] as List).single.containsKey('archive_sha256'),
-            isFalse);
+        expect(
+          (body['versions'] as List).single.containsKey('archive_sha256'),
+          isFalse,
+        );
       });
 
       test('malformed stays a 502 from the cached listing', () async {
@@ -736,8 +803,10 @@ void main() {
         final response = await get(route);
 
         expect(response.statusCode, 502);
-        expect(json.decode(await response.readAsString())['error']['message'],
-            'upstream provides no archive_sha256 for $_name 1.0.0');
+        expect(
+          json.decode(await response.readAsString())['error']['message'],
+          'upstream provides no archive_sha256 for $_name 1.0.0',
+        );
         expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 0);
         expect(cachedFile('1.0.0').existsSync(), isFalse);
       });
@@ -758,8 +827,10 @@ void main() {
       final hash = upstream.sha(_name, '1.0.0');
       final first = await get(route);
       expect(first.headers['etag'], '"$hash"');
-      expect(first.headers['cache-control'],
-          'public, max-age=31536000, immutable');
+      expect(
+        first.headers['cache-control'],
+        'public, max-age=31536000, immutable',
+      );
       await bytesOf(first);
 
       final second = await get(route, headers: {'if-none-match': '"$hash"'});
@@ -767,8 +838,10 @@ void main() {
     });
 
     test('a version the upstream does not have is a 404', () async {
-      expect((await get('/packages/$_name/versions/9.9.9.tar.gz')).statusCode,
-          404);
+      expect(
+        (await get('/packages/$_name/versions/9.9.9.tar.gz')).statusCode,
+        404,
+      );
     });
 
     group('through a temporary file', () {
@@ -779,11 +852,15 @@ void main() {
         final response = await get(route, using: buildApp(using: capped));
 
         expect(response.statusCode, 502);
-        expect(json.decode(await response.readAsString())['error']['message'],
-            contains('maxArchiveBytes'));
+        expect(
+          json.decode(await response.readAsString())['error']['message'],
+          contains('maxArchiveBytes'),
+        );
         expect(filesInStorage(), isEmpty);
-        expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
-            isNull);
+        expect(
+          await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+          isNull,
+        );
       });
 
       test('the size cap holds without a declared length', () async {
@@ -804,18 +881,20 @@ void main() {
           if (request.uri.path.startsWith('/api/')) {
             request.response
               ..headers.contentType = ContentType.json
-              ..write(json.encode({
-                'name': _name,
-                'versions': [
-                  {
-                    'version': '1.0.0',
-                    'pubspec': {'name': _name, 'version': '1.0.0'},
-                    'archive_url':
-                        'http://localhost:${declaring.port}/a.tar.gz',
-                    'archive_sha256': 'a' * 64,
-                  },
-                ],
-              }));
+              ..write(
+                json.encode({
+                  'name': _name,
+                  'versions': [
+                    {
+                      'version': '1.0.0',
+                      'pubspec': {'name': _name, 'version': '1.0.0'},
+                      'archive_url':
+                          'http://localhost:${declaring.port}/a.tar.gz',
+                      'archive_sha256': 'a' * 64,
+                    },
+                  ],
+                }),
+              );
             await request.response.close();
             return;
           }
@@ -829,6 +908,7 @@ void main() {
             mode: UpstreamMode.proxy,
             maxArchiveBytes: 100,
             timeout: const Duration(seconds: 20),
+            allowPrivateNetworks: true,
           ),
           cache: MongoUpstreamCacheStore(db),
           archives: FileStore(storage.path),
@@ -845,7 +925,8 @@ void main() {
 
       test('an archive exactly at the size cap passes', () async {
         final capped = buildProxy(
-            maxArchiveBytes: upstream.packages[_name]!['1.0.0']!.length);
+          maxArchiveBytes: upstream.packages[_name]!['1.0.0']!.length,
+        );
         addTearDown(capped.close);
         final response = await get(route, using: buildApp(using: capped));
         expect(response.statusCode, 200);
@@ -865,31 +946,36 @@ void main() {
           if (request.uri.path.startsWith('/api/')) {
             request.response
               ..headers.contentType = ContentType.json
-              ..write(json.encode({
-                'name': _name,
-                'versions': [
-                  {
-                    'version': '1.0.0',
-                    'pubspec': {'name': _name, 'version': '1.0.0'},
-                    'archive_url': 'http://localhost:${broken.port}/a.tar.gz',
-                    'archive_sha256': 'a' * 64,
-                  },
-                ],
-              }));
+              ..write(
+                json.encode({
+                  'name': _name,
+                  'versions': [
+                    {
+                      'version': '1.0.0',
+                      'pubspec': {'name': _name, 'version': '1.0.0'},
+                      'archive_url': 'http://localhost:${broken.port}/a.tar.gz',
+                      'archive_sha256': 'a' * 64,
+                    },
+                  ],
+                }),
+              );
             await request.response.close();
             return;
           }
           request.response.contentLength = 1000;
-          final socket =
-              await request.response.detachSocket(writeHeaders: true);
+          final socket = await request.response.detachSocket(
+            writeHeaders: true,
+          );
           socket.write('partial');
           await socket.flush();
           socket.destroy();
         });
         final flaky = UpstreamProxy(
           config: UpstreamConfig(
-              url: Uri.parse('http://localhost:${broken.port}'),
-              mode: UpstreamMode.proxy),
+            url: Uri.parse('http://localhost:${broken.port}'),
+            mode: UpstreamMode.proxy,
+            allowPrivateNetworks: true,
+          ),
           cache: MongoUpstreamCacheStore(db),
           archives: FileStore(storage.path),
         );
@@ -901,33 +987,43 @@ void main() {
         expect(filesInStorage(), isEmpty);
       });
 
-      test('a store that caches nothing still gets the archive served',
-          () async {
-        final store = _NothingKeptStore();
-        final uncached = buildProxy(archives: store);
+      test(
+        'a store that caches nothing still gets the archive served',
+        () async {
+          final store = _NothingKeptStore();
+          final uncached = buildProxy(archives: store);
 
-        final replies = await Future.wait([
-          get(route, using: buildApp(using: uncached, packageStore: store)),
-          get(route, using: buildApp(using: uncached, packageStore: store)),
-        ]);
+          final replies = await Future.wait([
+            get(
+              route,
+              using: buildApp(using: uncached, packageStore: store),
+            ),
+            get(
+              route,
+              using: buildApp(using: uncached, packageStore: store),
+            ),
+          ]);
 
-        for (final reply in replies) {
-          expect(await bytesOf(reply), upstream.packages[_name]!['1.0.0']);
-        }
-        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
-        expect(store.temporary.single.existsSync(), isTrue);
+          for (final reply in replies) {
+            expect(await bytesOf(reply), upstream.packages[_name]!['1.0.0']);
+          }
+          expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+          expect(store.temporary.single.existsSync(), isTrue);
 
-        uncached.close();
-        expect(store.temporary.single.existsSync(), isFalse);
-      });
+          uncached.close();
+          expect(store.temporary.single.existsSync(), isFalse);
+        },
+      );
 
       test('a store that fails does not fail the download', () async {
         final store = _FailingCommitStore(storage.path);
         final failing = buildProxy(archives: store);
         addTearDown(failing.close);
 
-        final response = await get(route,
-            using: buildApp(using: failing, packageStore: store));
+        final response = await get(
+          route,
+          using: buildApp(using: failing, packageStore: store),
+        );
 
         expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
         expect(cachedFile('1.0.0').existsSync(), isFalse);
@@ -960,7 +1056,9 @@ void main() {
       test('a download that waits too long is a 503', () async {
         upstream.trickle = const Duration(milliseconds: 200);
         final limited = buildProxy(
-            maxConcurrentFetches: 1, timeout: const Duration(seconds: 1));
+          maxConcurrentFetches: 1,
+          timeout: const Duration(seconds: 1),
+        );
         addTearDown(limited.close);
         final limitedApp = buildApp(using: limited);
 
@@ -969,12 +1067,16 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
 
-        final refused = await get('/packages/$_name/versions/1.0.1.tar.gz',
-            using: limitedApp);
+        final refused = await get(
+          '/packages/$_name/versions/1.0.1.tar.gz',
+          using: limitedApp,
+        );
 
         expect(refused.statusCode, 503);
-        expect(json.decode(await refused.readAsString())['error']['message'],
-            contains('try again'));
+        expect(
+          json.decode(await refused.readAsString())['error']['message'],
+          contains('try again'),
+        );
         final first = await running;
         expect(first.statusCode, 200);
         await bytesOf(first);
@@ -991,8 +1093,9 @@ void main() {
       test('records its digest and size', () async {
         await bytesOf(await get(route));
 
-        final record =
-            await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0');
+        final record = await MongoUpstreamCacheStore(
+          db,
+        ).readArchive(_name, '1.0.0');
         expect(record!.sha256, upstream.sha(_name, '1.0.0'));
         expect(record.bytes, upstream.packages[_name]!['1.0.0']!.length);
         expect(record.verified, isTrue);
@@ -1025,24 +1128,30 @@ void main() {
         expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
         expect(sha256Of(cachedFile('1.0.0').readAsBytesSync()), replacement);
         expect(
-            (await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'))!
-                .sha256,
-            replacement);
+          (await MongoUpstreamCacheStore(
+            db,
+          ).readArchive(_name, '1.0.0'))!.sha256,
+          replacement,
+        );
       });
 
-      test('never goes out under the new hash when the refetch fails to verify',
-          () async {
-        await bytesOf(await get(route));
-        upstream.hashOverride['$_name@1.0.0'] = 'b' * 64;
-        await refreshListing();
+      test(
+        'never goes out under the new hash when the refetch fails to verify',
+        () async {
+          await bytesOf(await get(route));
+          upstream.hashOverride['$_name@1.0.0'] = 'b' * 64;
+          await refreshListing();
 
-        final response = await get(route);
+          final response = await get(route);
 
-        expect(response.statusCode, 502);
-        expect(cachedFile('1.0.0').existsSync(), isFalse);
-        expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
-            isNull);
-      });
+          expect(response.statusCode, 502);
+          expect(cachedFile('1.0.0').existsSync(), isFalse);
+          expect(
+            await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+            isNull,
+          );
+        },
+      );
 
       test('is a 502 when the hash changed and the upstream is down', () async {
         await bytesOf(await get(route));
@@ -1059,8 +1168,10 @@ void main() {
         upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
         await refreshListing();
 
-        final response =
-            await get(route, headers: {'if-none-match': '"$digest"'});
+        final response = await get(
+          route,
+          headers: {'if-none-match': '"$digest"'},
+        );
 
         expect(response.statusCode, 200);
         await bytesOf(response);
@@ -1075,8 +1186,10 @@ void main() {
 
         expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
         expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
-        expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
-            isNotNull);
+        expect(
+          await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+          isNotNull,
+        );
       });
 
       test('that was not verified gets a weak validator', () async {
@@ -1101,8 +1214,11 @@ void main() {
         final lenient = buildApp(using: relaxed);
         final etag = (await get(route, using: lenient)).headers['etag']!;
 
-        final second =
-            await get(route, using: lenient, headers: {'if-none-match': etag});
+        final second = await get(
+          route,
+          using: lenient,
+          headers: {'if-none-match': etag},
+        );
 
         expect(second.statusCode, 304);
         expect(second.headers['etag'], etag);
@@ -1120,59 +1236,83 @@ void main() {
         expect(cachedFile('1.0.0').existsSync(), isTrue);
       });
 
-      test('a file at the mutable path of earlier commits is ignored',
-          () async {
-        final legacy = File(
-            path.join(storage.path, 'upstream', _name, '$_name-1.0.0.tar.gz'))
-          ..createSync(recursive: true)
-          ..writeAsStringSync('stale bytes of an earlier development build');
+      test(
+        'a file at the mutable path of earlier commits is ignored',
+        () async {
+          final legacy =
+              File(
+                  path.join(
+                    storage.path,
+                    'upstream',
+                    _name,
+                    '$_name-1.0.0.tar.gz',
+                  ),
+                )
+                ..createSync(recursive: true)
+                ..writeAsStringSync(
+                  'stale bytes of an earlier development build',
+                );
 
-        final response = await get(route);
+          final response = await get(route);
 
-        expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
-        expect(legacy.existsSync(), isTrue);
-        expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
-      });
+          expect(await bytesOf(response), upstream.packages[_name]!['1.0.0']);
+          expect(legacy.existsSync(), isTrue);
+          expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), 1);
+        },
+      );
 
-      test('a failed record write never serves new bytes as the old ones',
-          () async {
-        final digestA = upstream.sha(_name, '1.0.0');
-        await bytesOf(await get(route));
-        await cachedFile('1.0.0').delete();
+      test(
+        'a failed record write never serves new bytes as the old ones',
+        () async {
+          final digestA = upstream.sha(_name, '1.0.0');
+          await bytesOf(await get(route));
+          await cachedFile('1.0.0').delete();
 
-        // The upstream now offers other bytes, and no hash to check them by.
-        upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
-        final digestB = upstream.sha(_name, '1.0.0');
-        upstream.sendHashes = false;
-        upstream.listingVersion = 'b';
-        now = now.add(const Duration(minutes: 11));
-        final failing = buildProxy(
+          // The upstream now offers other bytes, and no hash to check them by.
+          upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
+          final digestB = upstream.sha(_name, '1.0.0');
+          upstream.sendHashes = false;
+          upstream.listingVersion = 'b';
+          now = now.add(const Duration(minutes: 11));
+          final failing = buildProxy(
             requireSha256: false,
-            cache: _FailingRecords(MongoUpstreamCacheStore(db)));
-        addTearDown(failing.close);
-        final lenient = buildApp(using: failing);
-        upstream.requests.clear();
+            cache: _FailingRecords(MongoUpstreamCacheStore(db)),
+          );
+          addTearDown(failing.close);
+          final lenient = buildApp(using: failing);
+          upstream.requests.clear();
 
-        for (final attempt in [1, 2]) {
-          final response = await get(route, using: lenient);
-          expect(response.statusCode, 200);
-          expect(response.headers['etag'], 'W/"$digestB"');
-          expect(await expectMatchesValidator(response), digestB);
-          expect(upstream.count('/storage/$_name-1.0.0.tar.gz'), attempt,
-              reason: 'nothing usable is recorded, so it is fetched again');
-        }
+          for (final attempt in [1, 2]) {
+            final response = await get(route, using: lenient);
+            expect(response.statusCode, 200);
+            expect(response.headers['etag'], 'W/"$digestB"');
+            expect(await expectMatchesValidator(response), digestB);
+            expect(
+              upstream.count('/storage/$_name-1.0.0.tar.gz'),
+              attempt,
+              reason: 'nothing usable is recorded, so it is fetched again',
+            );
+          }
 
-        final record =
-            await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0');
-        expect(record!.sha256, digestA);
-        expect(objectFile('1.0.0', digestA).existsSync(), isFalse);
-        final revalidated = await get(route,
-            using: lenient, headers: {'if-none-match': '"$digestA"'});
-        expect(revalidated.statusCode, 200,
-            reason: 'the record names an object that is gone');
-        expect(revalidated.headers['etag'], 'W/"$digestB"');
-        await bytesOf(revalidated);
-      });
+          final record = await MongoUpstreamCacheStore(
+            db,
+          ).readArchive(_name, '1.0.0');
+          expect(record!.sha256, digestA);
+          expect(objectFile('1.0.0', digestA).existsSync(), isFalse);
+          final revalidated = await get(
+            route,
+            using: lenient,
+            headers: {'if-none-match': '"$digestA"'},
+          );
+          expect(
+            revalidated.statusCode,
+            200,
+            reason: 'the record names an object that is gone',
+          );
+          expect(revalidated.headers['etag'], 'W/"$digestB"');
+          await bytesOf(revalidated);
+        },
+      );
 
       group('the digest lock', () {
         test('is held from storing an archive to recording it', () async {
@@ -1183,10 +1323,10 @@ void main() {
           await stalled.reached.future;
           final digest = upstream.sha(_name, '1.0.0');
 
-          final reclaimed = await TemporaryReclaimer(FileStore(storage.path),
-                  references: MongoArchiveReferences(db))
-              .reclaimOrphans(
-                  now: DateTime.now().add(const Duration(hours: 2)));
+          final reclaimed = await TemporaryReclaimer(
+            FileStore(storage.path),
+            references: MongoArchiveReferences(db),
+          ).reclaimOrphans(now: DateTime.now().add(const Duration(hours: 2)));
 
           expect(reclaimed, 0);
           expect(objectFile('1.0.0', digest).existsSync(), isTrue);
@@ -1195,69 +1335,89 @@ void main() {
           expect(await db.collection(objectLocksCollection).findOne(), isNull);
         });
 
-        test('that is lost before the commit keeps neither object nor record',
-            () async {
-          final digest = upstream.sha(_name, '1.0.0');
-          final losing = buildProxy(
-              cache: _LosingLockRecords(MongoUpstreamCacheStore(db)));
-          addTearDown(losing.close);
+        test(
+          'that is lost before the commit keeps neither object nor record',
+          () async {
+            final digest = upstream.sha(_name, '1.0.0');
+            final losing = buildProxy(
+              cache: _LosingLockRecords(MongoUpstreamCacheStore(db)),
+            );
+            addTearDown(losing.close);
 
-          final response = await get(route, using: buildApp(using: losing));
+            final response = await get(route, using: buildApp(using: losing));
 
-          expect(response.statusCode, 200);
-          expect(await expectMatchesValidator(response), digest);
-          expect(objectFile('1.0.0', digest).existsSync(), isFalse);
-          expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
-              isNull);
-        });
+            expect(response.statusCode, 200);
+            expect(await expectMatchesValidator(response), digest);
+            expect(objectFile('1.0.0', digest).existsSync(), isFalse);
+            expect(
+              await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+              isNull,
+            );
+          },
+        );
 
-        test('that is lost after the commit serves the object, unrecorded',
-            () async {
-          final digest = upstream.sha(_name, '1.0.0');
-          final losing = buildProxy(
-              cache:
-                  _LosingLockRecords(MongoUpstreamCacheStore(db), renewals: 1));
-          addTearDown(losing.close);
+        test(
+          'that is lost after the commit serves the object, unrecorded',
+          () async {
+            final digest = upstream.sha(_name, '1.0.0');
+            final losing = buildProxy(
+              cache: _LosingLockRecords(
+                MongoUpstreamCacheStore(db),
+                renewals: 1,
+              ),
+            );
+            addTearDown(losing.close);
 
-          final response = await get(route, using: buildApp(using: losing));
+            final response = await get(route, using: buildApp(using: losing));
 
-          expect(response.statusCode, 200);
-          expect(await expectMatchesValidator(response), digest);
-          expect(objectFile('1.0.0', digest).existsSync(), isTrue);
-          expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
-              isNull);
-        });
+            expect(response.statusCode, 200);
+            expect(await expectMatchesValidator(response), digest);
+            expect(objectFile('1.0.0', digest).existsSync(), isTrue);
+            expect(
+              await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+              isNull,
+            );
+          },
+        );
 
-        test('storing an object that is already there makes it young again',
-            () async {
-          final digest = upstream.sha(_name, '1.0.0');
-          await bytesOf(await get(route));
-          final object = objectFile('1.0.0', digest);
-          final twoHoursAgo = DateTime.now().subtract(const Duration(hours: 2));
-          object.setLastModifiedSync(twoHoursAgo);
-          await MongoUpstreamCacheStore(db).deleteArchive(_name, '1.0.0');
+        test(
+          'storing an object that is already there makes it young again',
+          () async {
+            final digest = upstream.sha(_name, '1.0.0');
+            await bytesOf(await get(route));
+            final object = objectFile('1.0.0', digest);
+            final twoHoursAgo = DateTime.now().subtract(
+              const Duration(hours: 2),
+            );
+            object.setLastModifiedSync(twoHoursAgo);
+            await MongoUpstreamCacheStore(db).deleteArchive(_name, '1.0.0');
 
-          await bytesOf(await get(route));
+            await bytesOf(await get(route));
 
-          expect(object.lastModifiedSync().isAfter(twoHoursAgo), isTrue);
-        });
+            expect(object.lastModifiedSync().isAfter(twoHoursAgo), isTrue);
+          },
+        );
 
-        test('that stays busy leaves the archive served but not kept',
-            () async {
-          final digest = upstream.sha(_name, '1.0.0');
-          final held = await MongoObjectLocks(db).tryLock(digest);
-          final busy = buildProxy(timeout: const Duration(milliseconds: 200));
-          addTearDown(busy.close);
+        test(
+          'that stays busy leaves the archive served but not kept',
+          () async {
+            final digest = upstream.sha(_name, '1.0.0');
+            final held = await MongoObjectLocks(db).tryLock(digest);
+            final busy = buildProxy(timeout: const Duration(milliseconds: 200));
+            addTearDown(busy.close);
 
-          final response = await get(route, using: buildApp(using: busy));
+            final response = await get(route, using: buildApp(using: busy));
 
-          expect(response.statusCode, 200);
-          expect(await expectMatchesValidator(response), digest);
-          expect(objectFile('1.0.0', digest).existsSync(), isFalse);
-          expect(await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
-              isNull);
-          await held!.release();
-        });
+            expect(response.statusCode, 200);
+            expect(await expectMatchesValidator(response), digest);
+            expect(objectFile('1.0.0', digest).existsSync(), isFalse);
+            expect(
+              await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'),
+              isNull,
+            );
+            await held!.release();
+          },
+        );
 
         test('that is busy leaves a forgotten copy to reclamation', () async {
           await bytesOf(await get(route));
@@ -1270,8 +1430,9 @@ void main() {
           await bytesOf(await get(route));
 
           expect(objectFile('1.0.0', old).existsSync(), isTrue);
-          final record =
-              await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0');
+          final record = await MongoUpstreamCacheStore(
+            db,
+          ).readArchive(_name, '1.0.0');
           expect(record!.sha256, upstream.sha(_name, '1.0.0'));
           await held!.release();
         });
@@ -1284,8 +1445,10 @@ void main() {
 
         void startInstances({required bool requireSha256}) {
           stalled = _PausingRecords(MongoUpstreamCacheStore(db));
-          final proxyA =
-              buildProxy(cache: stalled, requireSha256: requireSha256);
+          final proxyA = buildProxy(
+            cache: stalled,
+            requireSha256: requireSha256,
+          );
           final proxyB = buildProxy(requireSha256: requireSha256);
           addTearDown(proxyA.close);
           addTearDown(proxyB.close);
@@ -1302,8 +1465,9 @@ void main() {
 
           upstream.packages[_name]!['1.0.0'] = _archiveOf(_name, '1.0.0+other');
           await MongoUpstreamCacheStore(db).delete(_name);
-          final digestB =
-              await expectMatchesValidator(await get(route, using: instanceB));
+          final digestB = await expectMatchesValidator(
+            await get(route, using: instanceB),
+          );
           expect(digestB, upstream.sha(_name, '1.0.0'));
           expect(digestB, isNot(digestA));
 
@@ -1320,47 +1484,58 @@ void main() {
           // again rather than A served under either name.
           for (final instance in [instanceA, instanceB, instanceA]) {
             expect(
-                await expectMatchesValidator(await get(route, using: instance)),
-                digestB);
+              await expectMatchesValidator(await get(route, using: instance)),
+              digestB,
+            );
           }
           expect(
-              (await MongoUpstreamCacheStore(db).readArchive(_name, '1.0.0'))!
-                  .sha256,
-              digestB);
-          expect(objectFile('1.0.0', digestA).existsSync(), isFalse,
-              reason: 'the listing rules it out, so it is forgotten');
+            (await MongoUpstreamCacheStore(
+              db,
+            ).readArchive(_name, '1.0.0'))!.sha256,
+            digestB,
+          );
+          expect(
+            objectFile('1.0.0', digestA).existsSync(),
+            isFalse,
+            reason: 'the listing rules it out, so it is forgotten',
+          );
         });
 
-        test('without hashes, the last record wins with its own bytes',
-            () async {
-          upstream.sendHashes = false;
-          startInstances(requireSha256: false);
-          final (digestA, digestB) = await interleave();
-
-          for (final instance in [instanceA, instanceB]) {
-            final response = await get(route, using: instance);
-            expect(response.headers['etag'], startsWith('W/'));
-            expect(await expectMatchesValidator(response), digestA);
-          }
-          expect(objectFile('1.0.0', digestA).existsSync(), isTrue);
-          expect(objectFile('1.0.0', digestB).existsSync(), isTrue);
-        });
-      });
-
-      test('that was not verified is refused once a hash is required',
+        test(
+          'without hashes, the last record wins with its own bytes',
           () async {
-        upstream.sendHashes = false;
-        final relaxed = buildProxy(requireSha256: false);
-        addTearDown(relaxed.close);
-        await bytesOf(await get(route, using: buildApp(using: relaxed)));
+            upstream.sendHashes = false;
+            startInstances(requireSha256: false);
+            final (digestA, digestB) = await interleave();
 
-        expect((await get(route)).statusCode, 502);
+            for (final instance in [instanceA, instanceB]) {
+              final response = await get(route, using: instance);
+              expect(response.headers['etag'], startsWith('W/'));
+              expect(await expectMatchesValidator(response), digestA);
+            }
+            expect(objectFile('1.0.0', digestA).existsSync(), isTrue);
+            expect(objectFile('1.0.0', digestB).existsSync(), isTrue);
+          },
+        );
       });
+
+      test(
+        'that was not verified is refused once a hash is required',
+        () async {
+          upstream.sendHashes = false;
+          final relaxed = buildProxy(requireSha256: false);
+          addTearDown(relaxed.close);
+          await bytesOf(await get(route, using: buildApp(using: relaxed)));
+
+          expect((await get(route)).statusCode, 502);
+        },
+      );
     });
 
     test('is not counted, because a proxied package has no record', () async {
       await bytesOf(
-          await get(route, headers: {'user-agent': 'Dart pub 3.12.0'}));
+        await get(route, headers: {'user-agent': 'Dart pub 3.12.0'}),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(await db.collection(versionStatsCollection).findOne(), isNull);
       expect(await db.collection(statsCollection).findOne(), isNull);
@@ -1370,9 +1545,11 @@ void main() {
       await bytesOf(await get(route));
       expect(await FileStore(storage.path).exists(_name, '1.0.0'), isFalse);
       expect(
-          await FileStore(storage.path)
-              .upstreamCached(_name, '1.0.0', upstream.sha(_name, '1.0.0')),
-          isTrue);
+        await FileStore(
+          storage.path,
+        ).upstreamCached(_name, '1.0.0', upstream.sha(_name, '1.0.0')),
+        isTrue,
+      );
     });
   });
 
@@ -1385,10 +1562,14 @@ void main() {
     /// archive.
     setUp(() async {
       elsewhereRequests = [];
-      elsewhere = await shelf_io.serve((shelf.Request request) {
-        elsewhereRequests.add('/${request.url.path}');
-        return shelf.Response.ok(upstream.packages[_name]!['1.0.0']);
-      }, InternetAddress.loopbackIPv4, 0);
+      elsewhere = await shelf_io.serve(
+        (shelf.Request request) {
+          elsewhereRequests.add('/${request.url.path}');
+          return shelf.Response.ok(upstream.packages[_name]!['1.0.0']);
+        },
+        InternetAddress.loopbackIPv4,
+        0,
+      );
       addTearDown(() => elsewhere.close(force: true));
     });
 
@@ -1430,6 +1611,17 @@ void main() {
       expect((await get('/api/packages/$_name')).statusCode, 200);
     });
 
+    test('a host that resolves to a private address is refused', () async {
+      final proxy = buildProxy(
+        allowPrivateNetworks: false,
+        lookup: (host) async => [InternetAddress('10.1.2.3')],
+      );
+      addTearDown(proxy.close);
+      final response = await get(route, using: buildApp(using: proxy));
+      expect(response.statusCode, 502);
+      expect(elsewhereRequests, isEmpty);
+    });
+
     test('a redirect to a host that is not allowed is refused', () async {
       upstream.redirects['/storage/$_name-1.0.0.tar.gz'] = elsewhereUrl();
       final response = await get(route);
@@ -1458,7 +1650,9 @@ void main() {
       upstream.redirects['/hop/3'] = '/storage/$_name-1.0.0.tar.gz';
 
       expect(
-          await bytesOf(await get(route)), upstream.packages[_name]!['1.0.0']);
+        await bytesOf(await get(route)),
+        upstream.packages[_name]!['1.0.0'],
+      );
     });
 
     test('a fourth redirect is refused', () async {
@@ -1478,27 +1672,33 @@ void main() {
         seen.add(request.url);
         if (request.url.path == '/api/packages/$_name') {
           return http.Response(
-              json.encode({
-                'name': _name,
-                'versions': [
-                  {
-                    'version': '1.0.0',
-                    'pubspec': {'name': _name, 'version': '1.0.0'},
-                    'archive_url': 'https://registry.test/a.tar.gz',
-                    'archive_sha256': 'a' * 64,
-                  },
-                ],
-              }),
-              200);
+            json.encode({
+              'name': _name,
+              'versions': [
+                {
+                  'version': '1.0.0',
+                  'pubspec': {'name': _name, 'version': '1.0.0'},
+                  'archive_url': 'https://registry.test/a.tar.gz',
+                  'archive_sha256': 'a' * 64,
+                },
+              ],
+            }),
+            200,
+          );
         }
-        return http.Response('', 302,
-            headers: {'location': 'http://registry.test/a.tar.gz'});
+        return http.Response(
+          '',
+          302,
+          headers: {'location': 'http://registry.test/a.tar.gz'},
+        );
       });
       final secure = UpstreamProxy(
         config: UpstreamConfig(
-            url: Uri.parse('https://registry.test'),
-            mode: UpstreamMode.proxy,
-            allowedArchiveHosts: const ['registry.test']),
+          url: Uri.parse('https://registry.test'),
+          mode: UpstreamMode.proxy,
+          allowedArchiveHosts: const ['registry.test'],
+          allowPrivateNetworks: true,
+        ),
         cache: MongoUpstreamCacheStore(db),
         archives: FileStore(storage.path),
         client: client,
@@ -1506,7 +1706,9 @@ void main() {
       addTearDown(secure.close);
 
       expect(
-          (await get(route, using: buildApp(using: secure))).statusCode, 502);
+        (await get(route, using: buildApp(using: secure))).statusCode,
+        502,
+      );
       expect(seen.map((uri) => uri.scheme), everyElement('https'));
     });
   });
@@ -1547,37 +1749,43 @@ void main() {
       upstream.requests.clear();
       upstream.failWith = 500;
 
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       expect(upstream.requests, isEmpty);
       expect(
-          await db
-              .collection(packageCollection)
-              .findOne(where.eq('name', _name)),
-          isNull);
+        await db.collection(packageCollection).findOne(where.eq('name', _name)),
+        isNull,
+      );
     });
 
     test('refuses a name that only exists upstream', () async {
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       expect(upstream.count('/api/packages/$_name'), 1);
     });
 
     test('accepts a name the upstream does not have', () async {
       await publishLocally('brand_new', '1.0.0');
       expect(
-          await db
-              .collection(packageCollection)
-              .findOne(where.eq('name', 'brand_new')),
-          isNotNull);
+        await db
+            .collection(packageCollection)
+            .findOne(where.eq('name', 'brand_new')),
+        isNotNull,
+      );
     });
 
     test('refuses a name in a fresh cache without asking', () async {
       await get('/api/packages/$_name');
       upstream.requests.clear();
 
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       expect(upstream.requests, isEmpty);
     });
 
@@ -1596,18 +1804,24 @@ void main() {
       await get('/api/packages/$_name');
       now = now.add(const Duration(minutes: 11));
 
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       expect(upstream.count('/api/packages/$_name'), 2);
     });
 
     test('a 200 is remembered as a fresh entry', () async {
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       upstream.requests.clear();
 
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       expect(upstream.requests, isEmpty);
     });
 
@@ -1618,9 +1832,10 @@ void main() {
 
       expect(outcome.statusCode, 503);
       expect(
-          json.decode(await outcome.readAsString())['error']['message'],
-          'upstream registry unavailable, cannot verify that brand_new is '
-          'free, try again');
+        json.decode(await outcome.readAsString())['error']['message'],
+        'upstream registry unavailable, cannot verify that brand_new is '
+        'free, try again',
+      );
       expect(await localPackage('brand_new'), isNull);
       expect(filesInStorage(), isEmpty);
 
@@ -1635,8 +1850,10 @@ void main() {
       expect(await localPackage(_name), isNull);
 
       upstream.failWith = null;
-      expect(await publishError(_name, '1.0.0'),
-          contains('exists on the upstream registry'));
+      expect(
+        await publishError(_name, '1.0.0'),
+        contains('exists on the upstream registry'),
+      );
       expect(await localPackage(_name), isNull);
     });
 
@@ -1658,22 +1875,30 @@ void main() {
 
     test('a listing that is not JSON does not accept', () async {
       final fake = await shelf_io.serve(
-          (_) => shelf.Response.ok('<html>maintenance</html>'), 'localhost', 0);
+        (_) => shelf.Response.ok('<html>maintenance</html>'),
+        'localhost',
+        0,
+      );
       addTearDown(() => fake.close(force: true));
       final broken = UpstreamProxy(
         config: UpstreamConfig(
-            url: Uri.parse('http://localhost:${fake.port}'),
-            mode: UpstreamMode.proxy),
+          url: Uri.parse('http://localhost:${fake.port}'),
+          mode: UpstreamMode.proxy,
+          allowPrivateNetworks: true,
+        ),
         cache: MongoUpstreamCacheStore(db),
         archives: FileStore(storage.path),
       );
       addTearDown(broken.close);
 
       expect(
-          (await publishOutcome('brand_new', '1.0.0',
-                  using: buildApp(using: broken)))
-              .statusCode,
-          503);
+        (await publishOutcome(
+          'brand_new',
+          '1.0.0',
+          using: buildApp(using: broken),
+        )).statusCode,
+        503,
+      );
       expect(await localPackage('brand_new'), isNull);
     });
 
@@ -1684,14 +1909,18 @@ void main() {
           url: upstream.url,
           mode: UpstreamMode.proxy,
           allowPublishWhenUnavailable: true,
+          allowPrivateNetworks: true,
         ),
         cache: MongoUpstreamCacheStore(db),
         archives: FileStore(storage.path),
       );
       addTearDown(lenient.close);
 
-      await publishLocally('brand_new', '1.0.0',
-          using: buildApp(using: lenient));
+      await publishLocally(
+        'brand_new',
+        '1.0.0',
+        using: buildApp(using: lenient),
+      );
 
       expect(await localPackage('brand_new'), isNotNull);
     });
@@ -1702,6 +1931,7 @@ void main() {
           url: upstream.url,
           mode: UpstreamMode.proxy,
           allowPublishWhenUnavailable: true,
+          allowPrivateNetworks: true,
         ),
         cache: MongoUpstreamCacheStore(db),
         archives: FileStore(storage.path),
@@ -1709,17 +1939,20 @@ void main() {
       addTearDown(lenient.close);
 
       expect(
-          await publishError(_name, '1.0.0', using: buildApp(using: lenient)),
-          contains('exists on the upstream registry'));
+        await publishError(_name, '1.0.0', using: buildApp(using: lenient)),
+        contains('exists on the upstream registry'),
+      );
     });
 
-    test('a new version of a local package does not ask the upstream',
-        () async {
-      await publishLocally('brand_new', '1.0.0');
-      upstream.requests.clear();
-      await publishLocally('brand_new', '1.1.0');
-      expect(upstream.requests, isEmpty);
-    });
+    test(
+      'a new version of a local package does not ask the upstream',
+      () async {
+        await publishLocally('brand_new', '1.0.0');
+        upstream.requests.clear();
+        await publishLocally('brand_new', '1.1.0');
+        expect(upstream.requests, isEmpty);
+      },
+    );
 
     test('redirect mode keeps its behaviour', () async {
       final redirect = App(
@@ -1731,11 +1964,17 @@ void main() {
       await publishLocally(_name, '1.0.0', using: redirect);
       expect(upstream.requests, isEmpty);
 
-      final other = await redirect.handler(shelf.Request(
-          'GET', Uri.parse('http://internal:4000/api/packages/elsewhere')));
+      final other = await redirect.handler(
+        shelf.Request(
+          'GET',
+          Uri.parse('http://internal:4000/api/packages/elsewhere'),
+        ),
+      );
       expect(other.statusCode, HttpStatus.found);
       expect(
-          other.headers['location'], '${upstream.url}/api/packages/elsewhere');
+        other.headers['location'],
+        '${upstream.url}/api/packages/elsewhere',
+      );
     });
   });
 
@@ -1748,39 +1987,46 @@ void main() {
       test('for a listing is a JSON 502', () async {
         final response = await get('/api/packages/$_name');
         expect(response.statusCode, 502);
-        expect(json.decode(await response.readAsString())['error']['message'],
-            contains('304'));
+        expect(
+          json.decode(await response.readAsString())['error']['message'],
+          contains('304'),
+        );
       });
 
       test('for advisories is a JSON 502', () async {
         upstream.failWith = 304;
         final response = await get('/api/packages/$_name/advisories');
         expect(response.statusCode, 502);
-        expect(json.decode(await response.readAsString())['error']['message'],
-            contains('304'));
+        expect(
+          json.decode(await response.readAsString())['error']['message'],
+          contains('304'),
+        );
       });
 
       test('when publishing is a retryable 503', () async {
         final outcome = await publishOutcome('brand_new', '1.0.0');
         expect(outcome.statusCode, 503);
         expect(
-            json.decode(await outcome.readAsString())['error']['message'],
-            'upstream registry unavailable, cannot verify that brand_new is '
-            'free, try again');
+          json.decode(await outcome.readAsString())['error']['message'],
+          'upstream registry unavailable, cannot verify that brand_new is '
+          'free, try again',
+        );
         expect(await localPackage('brand_new'), isNull);
       });
 
       test('is not trusted for an entry that has no validator', () async {
         await MongoUpstreamCacheStore(db).write(
-            UpstreamCacheEntry(
-                key: _name,
-                body: json.encode({
-                  'name': _name,
-                  'versions': <Object>[],
-                  'isDiscontinued': false,
-                }),
-                fetchedAt: now.subtract(const Duration(minutes: 11))),
-            now.add(const Duration(days: 1)));
+          UpstreamCacheEntry(
+            key: _name,
+            body: json.encode({
+              'name': _name,
+              'versions': <Object>[],
+              'isDiscontinued': false,
+            }),
+            fetchedAt: now.subtract(const Duration(minutes: 11)),
+          ),
+          now.add(const Duration(days: 1)),
+        );
 
         expect((await get('/api/packages/$_name')).statusCode, 502);
       });
@@ -1820,8 +2066,10 @@ void main() {
       upstream.hang = true;
       final slow = buildProxy(timeout: const Duration(milliseconds: 100));
       addTearDown(slow.close);
-      final response =
-          await get('/api/packages/$_name', using: buildApp(using: slow));
+      final response = await get(
+        '/api/packages/$_name',
+        using: buildApp(using: slow),
+      );
       expect(response.statusCode, 502);
     });
 
@@ -1842,6 +2090,7 @@ void main() {
             url: Uri.parse('http://localhost:${stalling.port}'),
             mode: UpstreamMode.proxy,
             timeout: const Duration(milliseconds: 200),
+            allowPrivateNetworks: true,
           ),
           cache: MongoUpstreamCacheStore(db),
           archives: FileStore(storage.path),
@@ -1849,8 +2098,10 @@ void main() {
         addTearDown(slow.close);
 
         final watch = Stopwatch()..start();
-        final response =
-            await get('/api/packages/$_name', using: buildApp(using: slow));
+        final response = await get(
+          '/api/packages/$_name',
+          using: buildApp(using: slow),
+        );
 
         expect(response.statusCode, 502);
         expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
@@ -1860,22 +2111,29 @@ void main() {
     for (final body in [
       'not json',
       '[1]',
-      '{"name": "other", "versions": []}'
+      '{"name": "other", "versions": []}',
     ]) {
       test('the listing "$body" is a 502', () async {
         final fake = await shelf_io.serve(
-            (_) => shelf.Response.ok(body), 'localhost', 0);
+          (_) => shelf.Response.ok(body),
+          'localhost',
+          0,
+        );
         addTearDown(() => fake.close(force: true));
         final broken = UpstreamProxy(
           config: UpstreamConfig(
-              url: Uri.parse('http://localhost:${fake.port}'),
-              mode: UpstreamMode.proxy),
+            url: Uri.parse('http://localhost:${fake.port}'),
+            mode: UpstreamMode.proxy,
+            allowPrivateNetworks: true,
+          ),
           cache: MongoUpstreamCacheStore(db),
           archives: FileStore(storage.path),
         );
         addTearDown(broken.close);
-        final response =
-            await get('/api/packages/$_name', using: buildApp(using: broken));
+        final response = await get(
+          '/api/packages/$_name',
+          using: buildApp(using: broken),
+        );
         expect(response.statusCode, 502);
       });
     }
@@ -1945,37 +2203,51 @@ void main() {
 
     // Without --skip-validation pub stops earlier, at its own listing request,
     // which is answered 502 during an outage and is not accepted either.
-    test('dart pub publish reports an upstream outage', () async {
-      final proxied = App(
-        metaStore: MongoStore(db),
-        packageStore: FileStore(storage.path),
-        authenticator: const FakeAuthenticator(testToken, 'dev@b.c'),
-        upstreamProxy: proxy,
-        upstream: upstream.url.toString(),
-      );
-      server = await proxied.serve('0.0.0.0', 4000);
-      upstream.failWith = 503;
+    test(
+      'dart pub publish reports an upstream outage',
+      () async {
+        final proxied = App(
+          metaStore: MongoStore(db),
+          packageStore: FileStore(storage.path),
+          authenticator: const FakeAuthenticator(testToken, 'dev@b.c'),
+          upstreamProxy: proxy,
+          upstream: upstream.url.toString(),
+        );
+        server = await proxied.serve('0.0.0.0', 4000);
+        upstream.failWith = 503;
 
-      final result = await pubPublishGenerated('brand_new', '1.0.0',
-          arguments: ['--skip-validation']);
+        final result = await pubPublishGenerated(
+          'brand_new',
+          '1.0.0',
+          arguments: ['--skip-validation'],
+        );
 
-      expect(result.exitCode, isNot(0), reason: '${result.stdout}');
-      expect(
+        expect(result.exitCode, isNot(0), reason: '${result.stdout}');
+        expect(
           result.stderr,
-          contains('upstream registry unavailable, cannot verify that '
-              'brand_new is free, try again'));
-      expect(await localPackage('brand_new'), isNull);
-    }, timeout: const Timeout(Duration(minutes: 5)));
+          contains(
+            'upstream registry unavailable, cannot verify that '
+            'brand_new is free, try again',
+          ),
+        );
+        expect(await localPackage('brand_new'), isNull);
+      },
+      timeout: const Timeout(Duration(minutes: 5)),
+    );
 
-    test('resolves and downloads a proxied package', () async {
-      server = await app.serve('0.0.0.0', 4000);
-      final consumer = await createConsumer(_name, '1.0.0');
+    test(
+      'resolves and downloads a proxied package',
+      () async {
+        server = await app.serve('0.0.0.0', 4000);
+        final consumer = await createConsumer(_name, '1.0.0');
 
-      final result = await pubGet(consumer);
+        final result = await pubGet(consumer);
 
-      expect(result.exitCode, 0, reason: '${result.stdout}${result.stderr}');
-      expect(lockedVersion(consumer, _name), '1.0.0');
-      expect(cachedFile('1.0.0').existsSync(), isTrue);
-    }, timeout: const Timeout(Duration(minutes: 3)));
+        expect(result.exitCode, 0, reason: '${result.stdout}${result.stderr}');
+        expect(lockedVersion(consumer, _name), '1.0.0');
+        expect(cachedFile('1.0.0').existsSync(), isTrue);
+      },
+      timeout: const Timeout(Duration(minutes: 3)),
+    );
   });
 }

@@ -36,13 +36,13 @@ const _flutterSelector = {
     r'$elemMatch': {
       r'$or': [
         {
-          'pubspec.flutter': {r'$exists': true}
+          'pubspec.flutter': {r'$exists': true},
         },
         {
-          'pubspec.environment.flutter': {r'$exists': true}
+          'pubspec.environment.flutter': {r'$exists': true},
         },
         {
-          'pubspec.dependencies.flutter': {r'$exists': true}
+          'pubspec.dependencies.flutter': {r'$exists': true},
         },
       ],
     },
@@ -112,8 +112,10 @@ class MongoStore extends MetaStore {
         },
       ]);
     } catch (error) {
-      _log.warning('cannot create the text index of the package search, '
-          'searching without it: $error');
+      _log.warning(
+        'cannot create the text index of the package search, '
+        'searching without it: $error',
+      );
     }
   }
 
@@ -129,7 +131,8 @@ class MongoStore extends MetaStore {
     } catch (error) {
       final duplicates = await _duplicatePackageNames();
       if (duplicates.isEmpty) rethrow;
-      final message = 'cannot start: the packages collection holds more than '
+      final message =
+          'cannot start: the packages collection holds more than '
           'one document for ${duplicates.join(', ')}. Merge or remove the extra '
           'documents, then start again.';
       _log.severe(message);
@@ -170,7 +173,8 @@ class MongoStore extends MetaStore {
   static SelectorBuilder _selectByName(String? name) => where.eq('name', name);
 
   Future<UnpubQueryResult> _queryPackagesBySelector(
-      SelectorBuilder selector) async {
+    SelectorBuilder selector,
+  ) async {
     final count = await db.collection(packageCollection).count(selector);
     final packages = await db
         .collection(packageCollection)
@@ -182,8 +186,9 @@ class MongoStore extends MetaStore {
 
   @override
   queryPackage(name) async {
-    var json =
-        await db.collection(packageCollection).findOne(_selectByName(name));
+    var json = await db
+        .collection(packageCollection)
+        .findOne(_selectByName(name));
     if (json == null) return null;
     return UnpubPackage.fromJson(json);
   }
@@ -191,8 +196,9 @@ class MongoStore extends MetaStore {
   @override
   addVersion(name, version) async {
     final packages = db.collection(packageCollection);
-    final existing =
-        await packages.findOne(_selectByName(name).fields(['_id']));
+    final existing = await packages.findOne(
+      _selectByName(name).fields(['_id']),
+    );
     if (existing == null) {
       final inserted = await packages.insertOne({
         'name': name,
@@ -215,10 +221,11 @@ class MongoStore extends MetaStore {
     // The condition keeps two concurrent publishes of one version from both
     // being added.
     final result = await packages.updateOne(
-        where.eq('name', name).ne('versions.version', version.version),
-        modify
-            .push('versions', version.toJson())
-            .set('updatedAt', version.createdAt));
+      where.eq('name', name).ne('versions.version', version.version),
+      modify
+          .push('versions', version.toJson())
+          .set('updatedAt', version.createdAt),
+    );
     _checkWrite(result, 'add version');
     if (result.nMatched == 0) {
       throw VersionExistsException(name, version.version);
@@ -226,69 +233,104 @@ class MongoStore extends MetaStore {
   }
 
   @override
-  Future<bool> replaceVersion(String name, UnpubVersion version,
-      {required String? expectedSha256}) async {
+  Future<bool> replaceVersion(
+    String name,
+    UnpubVersion version, {
+    required String? expectedSha256,
+  }) async {
     final result = await db.collection(packageCollection).updateOne(
-        {
-          'name': name,
-          'versions': {
-            r'$elemMatch': {
-              'version': version.version,
-              // A null also matches a version that has no hash at all.
-              'sha256': expectedSha256,
-            },
+      {
+        'name': name,
+        'versions': {
+          r'$elemMatch': {
+            'version': version.version,
+            // A null also matches a version that has no hash at all.
+            'sha256': expectedSha256,
           },
         },
-        modify
-            .set(r'versions.$', version.toJson())
-            .set('updatedAt', version.createdAt));
+      },
+      modify
+          .set(r'versions.$', version.toJson())
+          .set('updatedAt', version.createdAt),
+    );
     _checkWrite(result, 'replace version');
     return result.nMatched == 1;
   }
 
   static void _checkWrite(WriteResult result, String action) {
     if (result.hasWriteErrors || !result.operationSucceeded) {
-      throw StateError('cannot $action: '
-          '${result.writeError?.errmsg ?? result.errmsg}');
+      throw StateError(
+        'cannot $action: '
+        '${result.writeError?.errmsg ?? result.errmsg}',
+      );
     }
   }
 
   @override
   Future<String?> reserveUpload(String name, String version) async {
     final reservation = ObjectId().oid;
+    Future<String?> insert(DateTime now) async {
+      final result = await db
+          .collection(uploadReservationsCollection)
+          .insertOne({
+            'name': name,
+            'version': version,
+            'reservation': reservation,
+            'createdAt': now,
+            'expiresAt': now.add(uploadReservationTtl),
+          });
+      if (result.writeError?.code == _duplicateKeyCode) return null;
+      _checkWrite(result, 'reserve upload');
+      return reservation;
+    }
+
     final now = DateTime.now();
-    final result = await db.collection(uploadReservationsCollection).insertOne({
-      'name': name,
-      'version': version,
-      'reservation': reservation,
-      'createdAt': now,
-      'expiresAt': now.add(uploadReservationTtl),
-    });
-    if (result.writeError?.code == _duplicateKeyCode) return null;
-    _checkWrite(result, 'reserve upload');
-    return reservation;
+    final first = await insert(now);
+    if (first != null) return first;
+    // An expired reservation still occupies the unique key until the TTL
+    // index removes it; drop it and try once more, as object locks do.
+    final dropped = await db
+        .collection(uploadReservationsCollection)
+        .deleteOne(
+          where.eq('name', name).eq('version', version).lt('expiresAt', now),
+        );
+    if (dropped.nRemoved == 0) return null;
+    return insert(DateTime.now());
   }
 
   @override
   Future<bool> renewUpload(
-      String name, String version, String reservation) async {
-    final result = await db.collection(uploadReservationsCollection).updateOne(
-        where
-            .eq('name', name)
-            .eq('version', version)
-            .eq('reservation', reservation),
-        modify.set('expiresAt', DateTime.now().add(uploadReservationTtl)));
+    String name,
+    String version,
+    String reservation,
+  ) async {
+    final result = await db
+        .collection(uploadReservationsCollection)
+        .updateOne(
+          where
+              .eq('name', name)
+              .eq('version', version)
+              .eq('reservation', reservation),
+          modify.set('expiresAt', DateTime.now().add(uploadReservationTtl)),
+        );
     _checkWrite(result, 'renew upload');
     return result.nMatched == 1;
   }
 
   @override
   Future<void> releaseUpload(
-      String name, String version, String reservation) async {
-    await db.collection(uploadReservationsCollection).deleteOne(where
-        .eq('name', name)
-        .eq('version', version)
-        .eq('reservation', reservation));
+    String name,
+    String version,
+    String reservation,
+  ) async {
+    await db
+        .collection(uploadReservationsCollection)
+        .deleteOne(
+          where
+              .eq('name', name)
+              .eq('version', version)
+              .eq('reservation', reservation),
+        );
   }
 
   @override
@@ -296,16 +338,21 @@ class MongoStore extends MetaStore {
 
   @override
   Future<bool> removeVersion(String name, String version) async {
-    final result = await db.collection(packageCollection).updateOne({
-      'name': name,
-      'versions.version': version,
-      // Never the last one: a package document without versions is invalid.
-      'versions.1': {r'$exists': true},
-    }, {
-      r'$pull': {
-        'versions': {'version': version},
-      },
-    });
+    final result = await db
+        .collection(packageCollection)
+        .updateOne(
+          {
+            'name': name,
+            'versions.version': version,
+            // Never the last one: a package document without versions is invalid.
+            'versions.1': {r'$exists': true},
+          },
+          {
+            r'$pull': {
+              'versions': {'version': version},
+            },
+          },
+        );
     _checkWrite(result, 'delete version');
     return result.nModified == 1;
   }
@@ -373,23 +420,35 @@ class MongoStore extends MetaStore {
       db
           .collection(packageCollection)
           .update(_selectByName(name), modify.inc('download', 1)),
-      db.collection(statsCollection).update(_selectByName(name),
-          modify.inc('d$today', 1).setOnInsert('name', name),
-          upsert: true),
+      db
+          .collection(statsCollection)
+          .update(
+            _selectByName(name),
+            modify.inc('d$today', 1).setOnInsert('name', name),
+            upsert: true,
+          ),
       _countVersionDownload(name, version, today),
-    ]).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
-      // Counting is best effort and must not fail the download.
-      _log.warning('failed to count download of $name', error, stackTrace);
-    });
+    ]).then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        // Counting is best effort and must not fail the download.
+        _log.warning('failed to count download of $name', error, stackTrace);
+      },
+    );
   }
 
   Future<void> _countVersionDownload(
-      String name, String version, String today) async {
-    Future<WriteResult> count() =>
-        db.collection(versionStatsCollection).updateOne(
-            where.eq('name', name).eq('version', version),
-            modify.inc('count', 1).inc('d$today', 1),
-            upsert: true);
+    String name,
+    String version,
+    String today,
+  ) async {
+    Future<WriteResult> count() => db
+        .collection(versionStatsCollection)
+        .updateOne(
+          where.eq('name', name).eq('version', version),
+          modify.inc('count', 1).inc('d$today', 1),
+          upsert: true,
+        );
 
     var result = await count();
     // Losing the race to create the document leaves it there to increment.
@@ -401,7 +460,9 @@ class MongoStore extends MetaStore {
   /// which every counted download increments.
   @override
   Future<Map<String, int>> dailyDownloads(
-      String name, Iterable<String> days) async {
+    String name,
+    Iterable<String> days,
+  ) async {
     final fields = [for (final day in days) 'd$day'];
     if (fields.isEmpty) return const {};
     final stats = await db
@@ -424,7 +485,9 @@ class MongoStore extends MetaStore {
 
   @override
   Future<Map<String, int>> versionDownloadCounts(
-      String name, Iterable<String> versions) async {
+    String name,
+    Iterable<String> versions,
+  ) async {
     final stats = await db
         .collection(versionStatsCollection)
         .find(where.eq('name', name).fields(['version', 'count']))
@@ -439,16 +502,18 @@ class MongoStore extends MetaStore {
   /// Selects [version] of [name] only while it is not yet in the target state,
   /// so that the first of two concurrent calls is the one that changes it.
   static Map<String, Object> _retractionSelector(
-          String name, String version, bool retracted) =>
-      {
-        'name': name,
-        'versions': {
-          r'$elemMatch': {
-            'version': version,
-            'isRetracted': retracted ? {r'$ne': true} : true,
-          },
-        },
-      };
+    String name,
+    String version,
+    bool retracted,
+  ) => {
+    'name': name,
+    'versions': {
+      r'$elemMatch': {
+        'version': version,
+        'isRetracted': retracted ? {r'$ne': true} : true,
+      },
+    },
+  };
 
   @override
   Future<bool> setVersionRetracted(
@@ -458,23 +523,26 @@ class MongoStore extends MetaStore {
     DateTime? retractedAt,
     String? retractedBy,
   }) async {
-    final result = await db.collection(packageCollection).updateOne(
-        _retractionSelector(name, version, retracted),
-        retracted
-            ? {
-                r'$set': {
-                  r'versions.$.isRetracted': true,
-                  r'versions.$.retractedAt': retractedAt,
-                  r'versions.$.retractedBy': retractedBy,
+    final result = await db
+        .collection(packageCollection)
+        .updateOne(
+          _retractionSelector(name, version, retracted),
+          retracted
+              ? {
+                  r'$set': {
+                    r'versions.$.isRetracted': true,
+                    r'versions.$.retractedAt': retractedAt,
+                    r'versions.$.retractedBy': retractedBy,
+                  },
+                }
+              : {
+                  r'$unset': {
+                    r'versions.$.isRetracted': '',
+                    r'versions.$.retractedAt': '',
+                    r'versions.$.retractedBy': '',
+                  },
                 },
-              }
-            : {
-                r'$unset': {
-                  r'versions.$.isRetracted': '',
-                  r'versions.$.retractedAt': '',
-                  r'versions.$.retractedBy': '',
-                },
-              });
+        );
     _checkWrite(result, 'change retraction');
     return result.nModified == 1;
   }
@@ -496,11 +564,13 @@ class MongoStore extends MetaStore {
       if (!discontinued) 'discontinuedAt': '',
       if (!discontinued || replacedBy == null) 'replacedBy': '',
     };
-    final result =
-        await db.collection(packageCollection).updateOne(_selectByName(name), {
-      if (set.isNotEmpty) r'$set': set,
-      if (unset.isNotEmpty) r'$unset': unset,
-    });
+    final result = await db.collection(packageCollection).updateOne(
+      _selectByName(name),
+      {
+        if (set.isNotEmpty) r'$set': set,
+        if (unset.isNotEmpty) r'$unset': unset,
+      },
+    );
     _checkWrite(result, 'change discontinued state');
   }
 
@@ -514,12 +584,17 @@ class MongoStore extends MetaStore {
     dependency,
     includeDiscontinued = true,
   }) {
-    var selector =
-        where.sortBy(sort, descending: true).limit(size).skip(page * size);
+    var selector = where
+        .sortBy(sort, descending: true)
+        .limit(size)
+        .skip(page * size);
 
     if (keyword != null) {
-      selector =
-          selector.match('name', RegExp.escape(keyword), caseInsensitive: true);
+      selector = selector.match(
+        'name',
+        RegExp.escape(keyword),
+        caseInsensitive: true,
+      );
     }
     if (uploader != null) {
       selector = selector.eq('uploaders', uploader);
@@ -531,9 +606,9 @@ class MongoStore extends MetaStore {
       selector = selector.raw({
         'versions': {
           r'$elemMatch': {
-            'pubspec.dependencies.$dependency': {r'$exists': true}
-          }
-        }
+            'pubspec.dependencies.$dependency': {r'$exists': true},
+          },
+        },
       });
     }
 
@@ -560,42 +635,42 @@ class MongoStore extends MetaStore {
       };
 
   static List<Map<String, Object>> _filters(PackageSearch search) => [
-        if (!search.includeDiscontinued)
-          {
-            'isDiscontinued': {r'$ne': true}
-          },
-        if (search.sdk == SdkFilter.flutter) _flutterSelector,
-        if (search.sdk == SdkFilter.dart)
-          {
-            r'$nor': [_flutterSelector]
-          },
-      ];
+    if (!search.includeDiscontinued)
+      {
+        'isDiscontinued': {r'$ne': true},
+      },
+    if (search.sdk == SdkFilter.flutter) _flutterSelector,
+    if (search.sdk == SdkFilter.dart)
+      {
+        r'$nor': [_flutterSelector],
+      },
+  ];
 
   /// Requires every word in the name or a description, ignoring case.
   static List<Map<String, Object>> _patternClauses(PackageSearch search) => [
-        for (final word in search.words)
-          {
-            r'$or': [
-              for (final field in ['name', 'versions.pubspec.description'])
-                {
-                  field: {r'$regex': RegExp.escape(word), r'$options': 'i'}
-                },
-            ],
-          },
-      ];
+    for (final word in search.words)
+      {
+        r'$or': [
+          for (final field in ['name', 'versions.pubspec.description'])
+            {
+              field: {r'$regex': RegExp.escape(word), r'$options': 'i'},
+            },
+        ],
+      },
+  ];
 
   Future<UnpubQueryResult> _search(
-      PackageSearch search, Map<String, Object> filter) async {
+    PackageSearch search,
+    Map<String, Object> filter,
+  ) async {
     final collection = db.collection(packageCollection);
     final count = await collection.modernCount(filter: filter);
     final packages = await collection
         .modernFind(
           filter: filter,
           sort: switch (search.sort) {
-            PackageSort.relevance || PackageSort.downloads => {
-                'download': -1,
-                'name': 1
-              },
+            PackageSort.relevance ||
+            PackageSort.downloads => {'download': -1, 'name': 1},
             PackageSort.updated => {'updatedAt': -1, 'name': 1},
             PackageSort.name => {'name': 1},
           },
@@ -615,28 +690,34 @@ class MongoStore extends MetaStore {
   /// A package the index does not match, as one found by a part of a word,
   /// scores 0. Without the index every package does.
   Future<UnpubQueryResult> _searchByRelevance(
-      PackageSearch search, Map<String, Object> filter) async {
+    PackageSearch search,
+    Map<String, Object> filter,
+  ) async {
     final collection = db.collection(packageCollection);
     final scores = <Object?, num>{};
     // Quotes and a leading minus would make phrases and negations.
     final terms = search.words
         .map(
-            (word) => word.replaceAll('"', ' ').replaceFirst(RegExp('^-+'), ''))
+          (word) => word.replaceAll('"', ' ').replaceFirst(RegExp('^-+'), ''),
+        )
         .join(' ')
         .trim();
     if (terms.isNotEmpty) {
       try {
-        await for (final item in collection.modernFind(filter: {
-          r'$and': [
-            {
-              r'$text': {r'$search': terms}
-            },
-            filter,
-          ]
-        }, projection: {
-          'name': 1,
-          'score': {r'$meta': 'textScore'},
-        })) {
+        await for (final item in collection.modernFind(
+          filter: {
+            r'$and': [
+              {
+                r'$text': {r'$search': terms},
+              },
+              filter,
+            ],
+          },
+          projection: {
+            'name': 1,
+            'score': {r'$meta': 'textScore'},
+          },
+        )) {
           scores[item['_id']] = item['score'] as num? ?? 0;
         }
       } catch (error) {
@@ -645,8 +726,9 @@ class MongoStore extends MetaStore {
         scores.clear();
       }
     }
-    final candidates = await collection.modernFind(
-        filter: filter, projection: {'name': 1, 'download': 1}).toList();
+    final candidates = await collection
+        .modernFind(filter: filter, projection: {'name': 1, 'download': 1})
+        .toList();
     num score(Map<String, dynamic> item) => scores[item['_id']] ?? 0;
     num downloads(Map<String, dynamic> item) => item['download'] as num? ?? 0;
     candidates.sort((a, b) {
@@ -663,9 +745,12 @@ class MongoStore extends MetaStore {
     ];
     if (ids.isEmpty) return UnpubQueryResult(candidates.length, const []);
     final found = {
-      await for (final item in collection.modernFind(filter: {
-        '_id': {r'$in': ids}
-      }, projection: _listExcludedFields))
+      await for (final item in collection.modernFind(
+        filter: {
+          '_id': {r'$in': ids},
+        },
+        projection: _listExcludedFields,
+      ))
         item['_id']: UnpubPackage.fromJson(item),
     };
     return UnpubQueryResult(candidates.length, [
@@ -680,11 +765,12 @@ class MongoStore extends MetaStore {
     if (wanted.isEmpty) return {};
     final found = await db
         .collection(packageCollection)
-        .modernFind(filter: {
-          'name': {r'$in': wanted}
-        }, projection: {
-          'name': 1
-        })
+        .modernFind(
+          filter: {
+            'name': {r'$in': wanted},
+          },
+          projection: {'name': 1},
+        )
         .map((item) => item['name'] as String)
         .toList();
     return found.toSet();
@@ -702,9 +788,9 @@ class MongoStore extends MetaStore {
             'versions': {
               r'$sum': {
                 r'$size': {
-                  r'$ifNull': [r'$versions', []]
-                }
-              }
+                  r'$ifNull': [r'$versions', []],
+                },
+              },
             },
           },
         },

@@ -66,6 +66,10 @@ upstream:
   # Proxy mode only. Accept a new name when the upstream cannot say whether it
   # has it. Such a name shadows the upstream package from then on.
   # allowPublishWhenUnavailable: false
+  # Proxy mode only. Let fetches reach loopback, link-local, private and unique
+  # local addresses (for an internal mirror). Off by default; same ranges as
+  # webhooks.allowPrivateNetworks.
+  # allowPrivateNetworks: false
 
 publish:
   # Package names must start with one of these. Empty allows any name.

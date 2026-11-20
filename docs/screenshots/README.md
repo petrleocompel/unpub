@@ -1,6 +1,8 @@
 # Screenshots of the web client
 
-The client in `ui/` as implemented, on every screen of the [design](../design/README.md) that has a page, taken on 10 November 2026 from version 3.0.0-dev.6. They are named like the boards in `docs/design/screens`: `NN-<screen>-<width>-<theme>.png`, at 1440 px and 390 px wide, light and dark, full page. Board 02 is split by state (`02-states-no-results`, `02-states-offline`, `02-states-forbidden`); boards 00 and 01 (foundations, components) have no page of their own.
+The client in `ui/` as implemented, on every screen of the [design](../design/README.md) that has a page. They are named like the boards in `docs/design/screens`: `NN-<screen>-<width>-<theme>.png`, at 1440 px and 390 px wide, light and dark, full page. Board 02 is split by state (`02-states-no-results`, `02-states-offline`, `02-states-forbidden`); boards 00 and 01 (foundations, components) have no page of their own.
+
+The PNGs are **not committed** (they duplicate the design boards and regenerate cleanly). Run `npm run screenshots` and copy them here when you need a fresh matrix; keep [`assets/screenshot.png`](../../assets/screenshot.png) and the design sources in [`docs/design/screens`](../design/screens/) in the repo. The root README uses `assets/screenshot.png`.
 
 The registry is seeded through the API by `ui/e2e/seed.ts`, so every date reads "just now" and the download chart has a single day. The tokens and webhook secrets in the pictures belong to a throwaway server and database that are deleted after the run.
 

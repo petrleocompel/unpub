@@ -6,7 +6,7 @@ const openApiDocument = r'''
 openapi: 3.1.0
 info:
   title: unpub web API
-  version: 3.0.0-dev.6
+  version: 3.0.0-dev.7
   summary: The JSON API of the unpub web client.
   description: |
     The routes the single-page client of unpub uses: everything under
@@ -1420,7 +1420,7 @@ components:
       type: object
       required: [version, publicUrl, readAccess, accounts, upstream, features, ui]
       examples:
-        - version: 3.0.0-dev.6
+        - version: 3.0.0-dev.7
           publicUrl: https://pub.example.com
           readAccess: authenticated
           accounts: true
@@ -1440,7 +1440,7 @@ components:
         version:
           type: string
           description: The version of the server.
-          examples: [3.0.0-dev.6]
+          examples: [3.0.0-dev.7]
         publicUrl:
           type: [string, 'null']
           description: '`server.publicUrl`, null when URLs derive from the request.'

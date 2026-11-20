@@ -307,11 +307,14 @@ function Deliveries({ webhook, counts }: { webhook: Webhook; counts: Record<stri
     setOpen(null)
     document.getElementById(`delivery-${id}`)?.focus()
   }
-  // When the panel left with its delivery, the focus went to the body: it
-  // lands on the first delivery left, or on the Refresh button.
+  // When the panel left with its delivery, clear the selection so a later
+  // refetch that brings the id back does not reopen it, and move focus from
+  // the body to the first delivery left or the Refresh button.
   const dropped = openId !== null && deliveries.data !== undefined && selected === undefined
   useEffect(() => {
-    if (!dropped || document.activeElement !== document.body) return
+    if (!dropped) return
+    setOpen(null)
+    if (document.activeElement !== document.body) return
     const next =
       document.querySelector<HTMLElement>('button[id^="delivery-"]') ??
       document.getElementById('deliveries-refresh')

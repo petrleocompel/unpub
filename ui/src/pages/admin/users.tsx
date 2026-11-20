@@ -19,7 +19,7 @@ import { useSession } from '@/auth/session'
 import { DisabledBadge, RoleBadge } from '@/components/badges'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CompactTable } from '@/components/dashboard/compact-table'
-import { Field, FormError } from '@/components/form'
+import { Field, FormError, invalidField } from '@/components/form'
 import { NativeSelect } from '@/components/native-select'
 import { intParam, Pager } from '@/components/pager'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/states'
@@ -87,7 +87,7 @@ export function UsersPage() {
   const [toggling, setToggling] = useState<User | null>(null)
   const [roleFor, setRoleFor] = useState<User | null>(null)
   const update = useUpdateUser()
-  const { me } = useSession()
+  const { me, isSession } = useSession()
   const total = users.data && !q ? users.data.total : null
 
   return (
@@ -101,12 +101,20 @@ export function UsersPage() {
           </>
         }
         actions={
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <UserPlus aria-hidden />
-            Create user
-          </Button>
+          isSession ? (
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <UserPlus aria-hidden />
+              Create user
+            </Button>
+          ) : undefined
         }
       />
+      {!isSession && (
+        <p className="rounded-lg border border-warning/45 bg-[color-mix(in_oklab,var(--warning)_9%,var(--card))] px-3.5 py-3 text-[0.84375rem] leading-[1.3125rem] text-muted-foreground">
+          Log in with your password to create users, change roles, set passwords or enable and
+          disable accounts. A personal token can still list users.
+        </p>
+      )}
       <div className="grid gap-4">
         <div className="relative max-w-90 min-w-50">
           <label htmlFor="user-search" className="sr-only">
@@ -196,38 +204,40 @@ export function UsersPage() {
                       {user.lastLoginAt ? <RelativeTime value={user.lastLoginAt} /> : 'never'}
                     </TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`Actions for ${user.email}`}
-                          >
-                            <MoreHorizontal aria-hidden />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-57.5">
-                          <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-                            {user.email}
-                          </DropdownMenuLabel>
-                          <DropdownMenuItem onSelect={() => setRoleFor(user)}>
-                            <Shield aria-hidden />
-                            Change role…
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setPasswordFor(user)}>
-                            <KeyRound aria-hidden />
-                            Set password…
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant={user.disabled ? 'default' : 'destructive'}
-                            onSelect={() => setToggling(user)}
-                          >
-                            {user.disabled ? <UserCheck aria-hidden /> : <Ban aria-hidden />}
-                            {user.disabled ? 'Enable…' : 'Disable…'}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {isSession ? (
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Actions for ${user.email}`}
+                            >
+                              <MoreHorizontal aria-hidden />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-57.5">
+                            <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
+                              {user.email}
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => setRoleFor(user)}>
+                              <Shield aria-hidden />
+                              Change role…
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setPasswordFor(user)}>
+                              <KeyRound aria-hidden />
+                              Set password…
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant={user.disabled ? 'default' : 'destructive'}
+                              onSelect={() => setToggling(user)}
+                            >
+                              {user.disabled ? <UserCheck aria-hidden /> : <Ban aria-hidden />}
+                              {user.disabled ? 'Enable…' : 'Disable…'}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -333,6 +343,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           autoComplete="off"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          {...invalidField(`${id}-error`, !!create.error)}
         />
       </Field>
       <Field id={`${id}-name`} label="Display name (optional)">
@@ -369,6 +380,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           value={password}
           aria-describedby={`${id}-password-hint`}
           onChange={(event) => setPassword(event.target.value)}
+          {...invalidField(`${id}-error`, !!create.error, `${id}-password-hint`)}
         />
       </Field>
       <FormError id={`${id}-error`} message={create.error ? errorMessage(create.error) : null} />
@@ -432,6 +444,7 @@ function SetPasswordForm({ user, onDone }: { user: User; onDone: () => void }) {
           value={password}
           aria-describedby={`${id}-password-hint`}
           onChange={(event) => setPassword(event.target.value)}
+          {...invalidField(`${id}-error`, !!set.error, `${id}-password-hint`)}
         />
       </Field>
       <FormError id={`${id}-error`} message={set.error ? errorMessage(set.error) : null} />

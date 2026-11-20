@@ -155,4 +155,18 @@ describe('admin users', () => {
       'ascending',
     )
   })
+
+  it('hides create and row actions without a password session', async () => {
+    usersApi([f.admin, f.user()])
+    const tokenOnly = { ...f.me(), csrfToken: undefined }
+    renderApp('/admin/users', { me: tokenOnly })
+    await screen.findByRole('cell', { name: 'jane.doe@company.example' })
+    expect(screen.queryByRole('button', { name: 'Create user' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Actions for jane.doe@company.example' }),
+    ).toBeNull()
+    expect(
+      screen.getByText(/Log in with your password to create users/i),
+    ).toBeInTheDocument()
+  })
 })

@@ -80,8 +80,12 @@ export function useLogout() {
         await postLogout()
       } catch (error) {
         if (!(error instanceof ApiError && error.code === 'csrf_failed')) throw error
+        // A null me after a CSRF refresh means we still do not know whether the
+        // cookie session is alive; fail so the UI keeps the session, matching
+        // "keep the session when logging out fails".
         const me = await client.fetchQuery({ ...meQuery, staleTime: 0 })
-        if (me) await postLogout()
+        if (!me) throw error
+        await postLogout()
       }
     },
     onSuccess: () => {
