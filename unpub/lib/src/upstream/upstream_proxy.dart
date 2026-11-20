@@ -190,10 +190,6 @@ class UpstreamProxy {
   final int maxArchiveBytes;
   final http.Client _client;
 
-  /// When false, each hop resolves the host, refuses private addresses and
-  /// pins the socket; when true (an injected [client]), the caller owns the
-  /// connection and the checks are skipped.
-  final bool _pinHosts;
   final DateTime Function() clock;
 
   /// Resolves a host for a pinned upstream fetch. Tests replace it.
@@ -225,7 +221,6 @@ class UpstreamProxy {
         allowPrivateNetworks = config.allowPrivateNetworks,
         maxArchiveBytes = config.maxArchiveBytes,
         _slots = _FetchSlots(config.maxConcurrentFetches),
-        _pinHosts = client == null,
         _client = client ??
             _pinnedClient(
               allowPrivate: config.allowPrivateNetworks,
@@ -240,9 +235,10 @@ class UpstreamProxy {
     required bool allowPrivate,
     Future<List<InternetAddress>> Function(String host)? lookup,
   }) {
+    // Keep autoUncompress on (the HttpClient default): pub.dev and other
+    // registries may send gzip, and metadata must be decoded before JSON.
     final io = HttpClient()
       ..idleTimeout = Duration.zero
-      ..autoUncompress = false
       ..userAgent = null
       ..connectionFactory = (uri, proxyHost, proxyPort) async {
         final address = await resolvePinnedHost(uri.host,
@@ -978,21 +974,8 @@ class UpstreamProxy {
     var target = uri;
     for (var redirects = 0;; redirects++) {
       _checkTarget(origin, target);
-      // Injected clients skip connectionFactory; still refuse a private hop
-      // when we pin hosts so a custom [lookup] in tests keeps the check.
-      if (_pinHosts) {
-        try {
-          await resolvePinnedHost(
-            target.host,
-            allowPrivate: allowPrivateNetworks,
-            purpose: 'the upstream',
-            allowPrivateFlag: 'upstream.allowPrivateNetworks',
-            lookup: lookup,
-          );
-        } on RefusedAddressException catch (error) {
-          throw UpstreamException(error.message);
-        }
-      }
+      // DNS resolve + pin lives in connectionFactory (inside send), so it is
+      // covered by [timeout]. A preliminary lookup here would bypass it.
       final abort = Completer<void>();
       final request =
           http.AbortableRequest('GET', target, abortTrigger: abort.future)
@@ -1002,13 +985,18 @@ class UpstreamProxy {
               if (accept != null) 'accept': accept,
               if (etag != null) 'if-none-match': etag,
             });
-      final response = await _client.send(request).timeout(
-        timeout,
-        onTimeout: () {
-          abort.complete();
-          throw TimeoutException('no answer from the upstream', timeout);
-        },
-      );
+      final http.StreamedResponse response;
+      try {
+        response = await _client.send(request).timeout(
+          timeout,
+          onTimeout: () {
+            abort.complete();
+            throw TimeoutException('no answer from the upstream', timeout);
+          },
+        );
+      } on RefusedAddressException catch (error) {
+        throw UpstreamException(error.message);
+      }
       if (!const {301, 302, 303, 307, 308}.contains(response.statusCode)) {
         return response;
       }

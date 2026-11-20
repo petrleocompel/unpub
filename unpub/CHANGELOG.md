@@ -2,11 +2,11 @@
 
 Fixes from the stack review of phases 1–7 (PRs #1–#3).
 
-- Upstream proxy fetches resolve the host once, refuse private addresses unless `upstream.allowPrivateNetworks` is on, and pin the socket to the checked address (same policy as webhooks), so a custom `upstream.url` / `allowedArchiveHosts` cannot DNS-rebind into the local network.
+- Upstream proxy fetches resolve the host once, refuse private addresses unless `upstream.allowPrivateNetworks` is on, and pin the socket to the checked address (same policy as webhooks), so a custom `upstream.url` / `allowedArchiveHosts` cannot DNS-rebind into the local network. DNS is inside the request timeout. Gzipped upstream responses are still decoded (`autoUncompress` stays on).
 - `reserveUpload` deletes an expired reservation of the same `(name, version)` and retries once, so a crashed publish no longer waits for the Mongo TTL index.
 - With user accounts, `addUploader` requires the email to belong to an existing user, as `transferOwnership` already did.
 - SPA `ui.mode: ssr`: server path prefixes under `/app` (`webapi`, `api`, probes, …) are never claimed as the shell. Classic `wantsHtml` uses the same `Accept` `q` negotiation as the SPA (`text/html;q=0` is not HTML). Hashed SPA assets no longer repeat the document CSP header.
-- Client: logout after a CSRF refresh that returns no user fails instead of clearing the UI while the cookie may still be live; admin user mutations are gated on a password session; bootstrap and router error shells expose `#main`; create/set-password forms wire `aria-errormessage`; audit expansion keys include `details`; a dropped delivery selection is cleared so it cannot reopen on a later refetch.
+- Client: logout after a CSRF refresh that returns no user fails without writing a null session into the query cache; admin user mutations are gated on a password session; bootstrap and router error shells expose `#main`; create/set-password forms wire `aria-errormessage`; audit expansion keys include `details`; a dropped delivery selection is cleared so it cannot reopen on a later refetch.
 - Docs: Phase 7 ROADMAP wording matches the shipped `settings.source` and 404 suggestion; `docs/design/artboards/unpub.css` is a symlink to `html/unpub.css`; the regenerable `docs/screenshots` PNG matrix is no longer committed.
 
 ## 3.0.0-dev.6

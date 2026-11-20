@@ -157,22 +157,22 @@ class FakeUpstream {
     }
 
     Map<String, Object?> item(String version) => {
-      'version': version,
-      'pubspec': {
-        'name': name,
-        'version': version,
-        'environment': {'sdk': '^3.5.0'},
-        'weird.key': {r'$odd': true},
-      },
-      'archive_url':
-          archiveUrlOf?.call(name, version) ??
-          '$url/storage/$name-$version.tar.gz',
-      if (sendHashes)
-        'archive_sha256': hashOverride['$name@$version'] ?? sha(name, version),
-      'published': '2026-01-02T03:04:05.000Z',
-      if (retracted.contains(version)) 'retracted': true,
-      'not_a_pub_field': 'dropped',
-    };
+          'version': version,
+          'pubspec': {
+            'name': name,
+            'version': version,
+            'environment': {'sdk': '^3.5.0'},
+            'weird.key': {r'$odd': true},
+          },
+          'archive_url': archiveUrlOf?.call(name, version) ??
+              '$url/storage/$name-$version.tar.gz',
+          if (sendHashes)
+            'archive_sha256':
+                hashOverride['$name@$version'] ?? sha(name, version),
+          'published': '2026-01-02T03:04:05.000Z',
+          if (retracted.contains(version)) 'retracted': true,
+          'not_a_pub_field': 'dropped',
+        };
 
     return shelf.Response.ok(
       json.encode({
@@ -212,7 +212,8 @@ class _FailingCommitStore extends FileStore {
     String digest,
     File temporary,
     int size,
-  ) => throw const FileSystemException('disk full');
+  ) =>
+      throw const FileSystemException('disk full');
 }
 
 /// Stops before writing an archive record, as a stalled instance would.
@@ -349,49 +350,52 @@ void main() {
     int maxConcurrentFetches = UpstreamConfig.defaultMaxConcurrentFetches,
     UpstreamCacheStore? cache,
     Future<List<InternetAddress>> Function(String host)? lookup,
-  }) => UpstreamProxy(
-    config: UpstreamConfig(
-      url: upstream.url,
-      mode: UpstreamMode.proxy,
-      cacheTtl: cacheTtl,
-      allowlist: allowlist,
-      timeout: timeout,
-      allowedArchiveHosts: allowedArchiveHosts,
-      requireSha256: requireSha256,
-      allowPrivateNetworks: allowPrivateNetworks,
-      maxArchiveBytes: maxArchiveBytes,
-      maxConcurrentFetches: maxConcurrentFetches,
-    ),
-    cache: cache ?? MongoUpstreamCacheStore(db),
-    archives: archives ?? FileStore(storage.path),
-    clock: () => now,
-    lookup: lookup,
-  );
+  }) =>
+      UpstreamProxy(
+        config: UpstreamConfig(
+          url: upstream.url,
+          mode: UpstreamMode.proxy,
+          cacheTtl: cacheTtl,
+          allowlist: allowlist,
+          timeout: timeout,
+          allowedArchiveHosts: allowedArchiveHosts,
+          requireSha256: requireSha256,
+          allowPrivateNetworks: allowPrivateNetworks,
+          maxArchiveBytes: maxArchiveBytes,
+          maxConcurrentFetches: maxConcurrentFetches,
+        ),
+        cache: cache ?? MongoUpstreamCacheStore(db),
+        archives: archives ?? FileStore(storage.path),
+        clock: () => now,
+        lookup: lookup,
+      );
 
   App buildApp({
     UpstreamProxy? using,
     ReadAccess readAccess = ReadAccess.public,
     PackageStore? packageStore,
-  }) => App(
-    metaStore: MongoStore(db),
-    packageStore: packageStore ?? FileStore(storage.path),
-    authenticator: const FakeAuthenticator(token, 'dev@b.c'),
-    readAccess: readAccess,
-    upstreamProxy: using ?? proxy,
-    upstream: upstream.url.toString(),
-  );
+  }) =>
+      App(
+        metaStore: MongoStore(db),
+        packageStore: packageStore ?? FileStore(storage.path),
+        authenticator: const FakeAuthenticator(token, 'dev@b.c'),
+        readAccess: readAccess,
+        upstreamProxy: using ?? proxy,
+        upstream: upstream.url.toString(),
+      );
 
   Future<shelf.Response> get(
     String route, {
     Map<String, String> headers = const {},
     App? using,
-  }) async => (using ?? app).handler(
-    shelf.Request(
-      'GET',
-      Uri.parse('http://internal:4000$route'),
-      headers: headers,
-    ),
-  );
+  }) async =>
+      (using ?? app).handler(
+        shelf.Request(
+          'GET',
+          Uri.parse('http://internal:4000$route'),
+          headers: headers,
+        ),
+      );
 
   Future<Map<String, dynamic>> getJson(String route, {App? using}) async =>
       json.decode(await (await get(route, using: using)).readAsString())
@@ -401,13 +405,13 @@ void main() {
       response.read().expand((chunk) => chunk).toList();
 
   File objectFile(String version, String digest) => File(
-    path.join(
-      storage.path,
-      'upstream',
-      _name,
-      '$_name-$version-$digest.tar.gz',
-    ),
-  );
+        path.join(
+          storage.path,
+          'upstream',
+          _name,
+          '$_name-$version-$digest.tar.gz',
+        ),
+      );
 
   /// Where the bytes the fake upstream holds for [version] are kept.
   File cachedFile(String version) =>
@@ -424,9 +428,9 @@ void main() {
   }
 
   List<String> filesInStorage() => [
-    for (final entity in storage.listSync(recursive: true))
-      if (entity is File) entity.path,
-  ];
+        for (final entity in storage.listSync(recursive: true))
+          if (entity is File) entity.path,
+      ];
 
   Future<void> publishLocally(String name, String version, {App? using}) async {
     final response = await (using ?? app).handler(
@@ -723,9 +727,8 @@ void main() {
       }
 
       test('in uppercase is verified, not skipped', () async {
-        upstream.hashOverride['$_name@1.0.0'] = upstream
-            .sha(_name, '1.0.0')
-            .toUpperCase();
+        upstream.hashOverride['$_name@1.0.0'] =
+            upstream.sha(_name, '1.0.0').toUpperCase();
 
         final response = await get(route);
 
@@ -735,9 +738,8 @@ void main() {
       });
 
       test('in uppercase is listed in lowercase', () async {
-        upstream.hashOverride['$_name@1.0.0'] = upstream
-            .sha(_name, '1.0.0')
-            .toUpperCase();
+        upstream.hashOverride['$_name@1.0.0'] =
+            upstream.sha(_name, '1.0.0').toUpperCase();
         final body = await getJson('/api/packages/$_name');
         expect(
           (body['versions'] as List).single['archive_sha256'],
@@ -1130,7 +1132,8 @@ void main() {
         expect(
           (await MongoUpstreamCacheStore(
             db,
-          ).readArchive(_name, '1.0.0'))!.sha256,
+          ).readArchive(_name, '1.0.0'))!
+              .sha256,
           replacement,
         );
       });
@@ -1239,19 +1242,18 @@ void main() {
       test(
         'a file at the mutable path of earlier commits is ignored',
         () async {
-          final legacy =
-              File(
-                  path.join(
-                    storage.path,
-                    'upstream',
-                    _name,
-                    '$_name-1.0.0.tar.gz',
-                  ),
-                )
-                ..createSync(recursive: true)
-                ..writeAsStringSync(
-                  'stale bytes of an earlier development build',
-                );
+          final legacy = File(
+            path.join(
+              storage.path,
+              'upstream',
+              _name,
+              '$_name-1.0.0.tar.gz',
+            ),
+          )
+            ..createSync(recursive: true)
+            ..writeAsStringSync(
+              'stale bytes of an earlier development build',
+            );
 
           final response = await get(route);
 
@@ -1491,7 +1493,8 @@ void main() {
           expect(
             (await MongoUpstreamCacheStore(
               db,
-            ).readArchive(_name, '1.0.0'))!.sha256,
+            ).readArchive(_name, '1.0.0'))!
+                .sha256,
             digestB,
           );
           expect(
@@ -1620,6 +1623,19 @@ void main() {
       final response = await get(route, using: buildApp(using: proxy));
       expect(response.statusCode, 502);
       expect(elsewhereRequests, isEmpty);
+    });
+
+    test('a stalled DNS lookup respects the timeout', () async {
+      final proxy = buildProxy(
+        timeout: const Duration(milliseconds: 50),
+        lookup: (_) => Completer<List<InternetAddress>>().future,
+      );
+      addTearDown(proxy.close);
+      final watch = Stopwatch()..start();
+      final response = await get(route, using: buildApp(using: proxy));
+      expect(response.statusCode, 502);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(watch.elapsed, greaterThan(const Duration(milliseconds: 40)));
     });
 
     test('a redirect to a host that is not allowed is refused', () async {
@@ -1896,7 +1912,8 @@ void main() {
           'brand_new',
           '1.0.0',
           using: buildApp(using: broken),
-        )).statusCode,
+        ))
+            .statusCode,
         503,
       );
       expect(await localPackage('brand_new'), isNull);
@@ -1975,6 +1992,62 @@ void main() {
         other.headers['location'],
         '${upstream.url}/api/packages/elsewhere',
       );
+    });
+  });
+
+  group('gzipped upstream responses', () {
+    test('a gzipped listing is decoded', () async {
+      final sha = upstream.sha(_name, '1.0.0');
+      final fake = await HttpServer.bind('localhost', 0);
+      addTearDown(() => fake.close(force: true));
+      fake.listen((request) async {
+        if (request.uri.path == '/api/packages/$_name') {
+          final body = utf8.encode(
+            json.encode({
+              'name': _name,
+              'latest': {
+                'version': '1.0.0',
+                'pubspec': {'name': _name, 'version': '1.0.0'},
+                'archive_url':
+                    'http://localhost:${fake.port}/storage/$_name-1.0.0.tar.gz',
+                'archive_sha256': sha,
+              },
+              'versions': [
+                {
+                  'version': '1.0.0',
+                  'pubspec': {'name': _name, 'version': '1.0.0'},
+                  'archive_url':
+                      'http://localhost:${fake.port}/storage/$_name-1.0.0.tar.gz',
+                  'archive_sha256': sha,
+                },
+              ],
+            }),
+          );
+          request.response.headers
+            ..contentType = ContentType.json
+            ..set(HttpHeaders.contentEncodingHeader, 'gzip');
+          request.response.add(GZipCodec().encode(body));
+          await request.response.close();
+          return;
+        }
+        request.response.statusCode = HttpStatus.notFound;
+        await request.response.close();
+      });
+      final proxy = UpstreamProxy(
+        config: UpstreamConfig(
+          url: Uri.parse('http://localhost:${fake.port}'),
+          mode: UpstreamMode.proxy,
+          allowPrivateNetworks: true,
+        ),
+        cache: MongoUpstreamCacheStore(db),
+        archives: FileStore(storage.path),
+      );
+      addTearDown(proxy.close);
+
+      final response =
+          await get('/api/packages/$_name', using: buildApp(using: proxy));
+      expect(response.statusCode, 200);
+      expect(json.decode(await response.readAsString())['name'], _name);
     });
   });
 

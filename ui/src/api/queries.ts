@@ -9,6 +9,16 @@ import {
 import { api, ApiError, setCsrfToken, unwrap } from './client'
 import type { Anonymous, Me, Role, Scope, WebhookEvent, WebhookInput } from './types'
 
+/** Refreshes CSRF for a retry without writing a null session into the cache. */
+async function refreshSessionCsrf(): Promise<Me> {
+  const answer = (await unwrap(api.GET('/webapi/me'))) as Me | Anonymous
+  if (answer.user === null) {
+    throw new ApiError(401, 'unauthorized', 'Nobody is logged in.')
+  }
+  setCsrfToken(answer.csrfToken)
+  return answer
+}
+
 // ---------------------------------------------------------------- session
 
 export const configQuery = queryOptions({
@@ -80,12 +90,20 @@ export function useLogout() {
         await postLogout()
       } catch (error) {
         if (!(error instanceof ApiError && error.code === 'csrf_failed')) throw error
-        // A null me after a CSRF refresh means we still do not know whether the
-        // cookie session is alive; fail so the UI keeps the session, matching
-        // "keep the session when logging out fails".
-        const me = await client.fetchQuery({ ...meQuery, staleTime: 0 })
-        if (!me) throw error
-        await postLogout()
+        // Do not use meQuery / fetchQuery here: a null answer would write
+        // null into ['me'] and clear the CSRF token before we throw.
+        const previous = client.getQueryData<Me | null>(['me'])
+        try {
+          const me = await refreshSessionCsrf()
+          client.setQueryData(['me'], me)
+          await postLogout()
+        } catch {
+          if (previous) {
+            client.setQueryData(['me'], previous)
+            setCsrfToken(previous.csrfToken)
+          }
+          throw error
+        }
       }
     },
     onSuccess: () => {

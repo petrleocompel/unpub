@@ -189,14 +189,18 @@ describe('logout', () => {
       http.post(url('/webapi/logout'), () =>
         error(403, 'csrf_failed', 'CSRF token mismatch.'),
       ),
-      http.get(url('/webapi/me'), () => HttpResponse.json({ user: null })),
     )
     const { user } = renderApp('/', { me: f.me() })
+    // Install the null /me after bootstrap: renderApp seeds me, and a handler
+    // registered before that would be overridden by the seed.
+    await screen.findByRole('button', { name: 'Account menu for admin@company.example' })
+    server.use(http.get(url('/webapi/me'), () => HttpResponse.json({ user: null })))
     await logOut(user)
     expect(await screen.findByText('Logging out failed')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Account menu for admin@company.example' }),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Log in' })).toBeNull()
   })
 
   it('keeps the session when the logout fails', async () => {
