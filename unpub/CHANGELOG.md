@@ -2,7 +2,7 @@
 
 Fixes from the stack review of phases 1–7 (PRs #1–#3).
 
-- Upstream proxy fetches resolve the host once, refuse private addresses unless `upstream.allowPrivateNetworks` is on, and pin the socket to the checked address (same policy as webhooks), so a custom `upstream.url` / `allowedArchiveHosts` cannot DNS-rebind into the local network. DNS is inside the request timeout. Gzipped upstream responses are still decoded (`autoUncompress` stays on).
+- Upstream proxy fetches resolve the host once, refuse private addresses unless `upstream.allowPrivateNetworks` is on, and pin the socket to the checked address (same policy as webhooks), so a custom `upstream.url` / `allowedArchiveHosts` cannot DNS-rebind into the local network. DNS is inside the request timeout. Gzipped upstream responses are still decoded (`autoUncompress` stays on). Upstream and webhook HTTP clients force `DIRECT` (ignore `HTTP_PROXY` / `HTTPS_PROXY`): the pin connects to the validated address, and an env proxy would either skip that pin or send CONNECT to the upstream itself.
 - `reserveUpload` deletes an expired reservation of the same `(name, version)` and retries once, so a crashed publish no longer waits for the Mongo TTL index.
 - With user accounts, `addUploader` requires the email to belong to an existing user, as `transferOwnership` already did.
 - SPA `ui.mode: ssr`: server path prefixes under `/app` (`webapi`, `api`, probes, …) are never claimed as the shell. Classic `wantsHtml` uses the same `Accept` `q` negotiation as the SPA (`text/html;q=0` is not HTML). Hashed SPA assets no longer repeat the document CSP header.

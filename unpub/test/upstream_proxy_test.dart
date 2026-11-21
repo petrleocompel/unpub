@@ -1625,6 +1625,34 @@ void main() {
       expect(elsewhereRequests, isEmpty);
     });
 
+    test('HTTP_PROXY from the environment is ignored', () async {
+      final seen = <String>[];
+      final deadProxy = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => deadProxy.close(force: true));
+      deadProxy.listen((request) {
+        seen.add('${request.method} ${request.uri}');
+        request.response
+          ..statusCode = HttpStatus.badGateway
+          ..close();
+      });
+
+      // Default HttpClient.findProxy consults findProxyFromEnvironment. Without
+      // an explicit DIRECT override, this zone would send traffic to [deadProxy].
+      await HttpOverrides.runZoned(
+        () async {
+          final underProxy = buildProxy();
+          addTearDown(underProxy.close);
+          final response = await get('/api/packages/$_name',
+              using: buildApp(using: underProxy));
+          expect(response.statusCode, 200);
+          expect(json.decode(await response.readAsString())['name'], _name);
+        },
+        findProxyFromEnvironment: (_, __) =>
+            'PROXY 127.0.0.1:${deadProxy.port}',
+      );
+      expect(seen, isEmpty);
+    });
+
     test('a stalled DNS lookup respects the timeout', () async {
       final proxy = buildProxy(
         timeout: const Duration(milliseconds: 50),

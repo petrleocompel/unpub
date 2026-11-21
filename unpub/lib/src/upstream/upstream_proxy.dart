@@ -231,6 +231,11 @@ class UpstreamProxy {
   /// private addresses unless [allowPrivate] is on, and pins the socket to
   /// that address. Kept for the life of the proxy so streamed archive bodies
   /// are not closed under the reader.
+  ///
+  /// Connections are always direct: `HTTP_PROXY` / `HTTPS_PROXY` are ignored.
+  /// The pin connects to the validated address; dialing through an env proxy
+  /// would either skip that pin or send a CONNECT handshake to the upstream
+  /// itself.
   static http.Client _pinnedClient({
     required bool allowPrivate,
     Future<List<InternetAddress>> Function(String host)? lookup,
@@ -240,7 +245,13 @@ class UpstreamProxy {
     final io = HttpClient()
       ..idleTimeout = Duration.zero
       ..userAgent = null
+      ..findProxy = ((_) => 'DIRECT')
       ..connectionFactory = (uri, proxyHost, proxyPort) async {
+        if (proxyHost != null) {
+          throw const SocketException(
+            'upstream fetches do not use HTTP proxies',
+          );
+        }
         final address = await resolvePinnedHost(uri.host,
             allowPrivate: allowPrivate,
             purpose: 'the upstream',

@@ -500,9 +500,17 @@ class WebhookService {
       ..idleTimeout = Duration.zero
       ..autoUncompress = false
       ..userAgent = null
+      // Pin requires a direct socket to the checked address; env proxies would
+      // either skip the pin or handshake CONNECT against the target itself.
+      ..findProxy = ((_) => 'DIRECT')
       // Connect to the address checked above, never to a second lookup that
       // could answer differently. TLS still verifies the host name.
       ..connectionFactory = (uri, proxyHost, proxyPort) async {
+        if (proxyHost != null) {
+          throw const SocketException(
+            'webhook deliveries do not use HTTP proxies',
+          );
+        }
         final task = await Socket.startConnect(address, uri.port);
         if (uri.scheme != 'https') return task;
         return ConnectionTask.fromSocket(

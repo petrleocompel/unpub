@@ -286,6 +286,8 @@ class UpstreamConfig {
 
   /// Let the proxy fetch from a name that resolves to a private address.
   /// Off by default; same ranges as [WebhooksConfig.allowPrivateNetworks].
+  /// Fetches are always direct (`HTTP_PROXY` / `HTTPS_PROXY` are ignored) so
+  /// the socket can stay pinned to the address that was checked.
   final bool allowPrivateNetworks;
 
   /// Largest archive fetched from the upstream.
