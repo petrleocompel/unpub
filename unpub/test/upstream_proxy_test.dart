@@ -1636,8 +1636,9 @@ void main() {
           ..close();
       });
 
-      // Default HttpClient.findProxy consults findProxyFromEnvironment. Without
-      // an explicit DIRECT override, this zone would send traffic to [deadProxy].
+      // The connection factory dials the target itself, so an HTTP upstream
+      // never reaches [deadProxy] either way. DIRECT still matters for HTTPS
+      // (CONNECT against the origin); this case checks HTTP stays green.
       await HttpOverrides.runZoned(
         () async {
           final underProxy = buildProxy();
@@ -1650,6 +1651,74 @@ void main() {
         findProxyFromEnvironment: (_, __) =>
             'PROXY 127.0.0.1:${deadProxy.port}',
       );
+      expect(seen, isEmpty);
+    });
+
+    test('HTTPS fetches do not CONNECT through an env proxy to the origin',
+        () async {
+      final tls = SecurityContext()
+        ..useCertificateChainBytes(utf8.encode(_localhostTlsCert))
+        ..usePrivateKeyBytes(utf8.encode(_localhostTlsKey));
+      // Bind IPv4 so the pin to loopbackIPv4 matches the listener.
+      final server =
+          await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, tls);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) {
+        request.response
+          ..write('ok')
+          ..close();
+      });
+      final origin = Uri.parse('https://127.0.0.1:${server.port}/');
+
+      final seen = <String>[];
+      final deadProxy = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => deadProxy.close(force: true));
+      deadProxy.listen((request) {
+        seen.add('${request.method} ${request.uri}');
+        request.response
+          ..statusCode = HttpStatus.badGateway
+          ..close();
+      });
+
+      Future<ConnectionTask<Socket>> pin(
+        Uri uri,
+        String? proxyHost,
+        int? proxyPort,
+      ) async {
+        // Same shape as the upstream pin: dial the target, ignore [proxyHost].
+        final task =
+            await Socket.startConnect(InternetAddress.loopbackIPv4, uri.port);
+        return ConnectionTask.fromSocket(
+          task.socket.then((socket) => SecureSocket.secure(
+                socket,
+                host: 'localhost',
+                onBadCertificate: (_) => true,
+              )),
+          task.cancel,
+        );
+      }
+
+      // Pre-fix: findProxy still says PROXY while the factory dials the
+      // origin — HttpClient then sends CONNECT to the TLS server and fails.
+      final buggy = HttpClient()
+        ..findProxy = ((_) => 'PROXY 127.0.0.1:${deadProxy.port}')
+        ..connectionFactory = pin;
+      addTearDown(buggy.close);
+      await expectLater(
+        buggy.getUrl(origin),
+        throwsA(anyOf(isA<HandshakeException>(), isA<HttpException>(),
+            isA<SocketException>())),
+      );
+
+      // Fixed: force DIRECT so proxyHost stays null and the TLS handshake
+      // reaches the origin (self-signed accepted only in this test helper).
+      final fixed = HttpClient()
+        ..findProxy = ((_) => 'DIRECT')
+        ..connectionFactory = pin;
+      addTearDown(fixed.close);
+      final response = await fixed.getUrl(origin).then((r) => r.close());
+      expect(response.statusCode, 200);
+      expect(await response.transform(utf8.decoder).join(), 'ok');
       expect(seen, isEmpty);
     });
 
@@ -2352,3 +2421,59 @@ void main() {
     );
   });
 }
+
+/// Self-signed leaf for `localhost` / `127.0.0.1` (CN + SAN), used by the
+/// HTTPS proxy regression test. Trusted for the process via
+/// [SecurityContext.defaultContext.setTrustedCertificatesBytes].
+const _localhostTlsCert = '''
+-----BEGIN CERTIFICATE-----
+MIIDBDCCAeygAwIBAgIUeAPj9omsVpwvVEhSfwnU0UsW3ugwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MTEyMTE2MTkyM1oXDTM2MTEx
+ODE2MTkyM1owFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAm6yVy1IPqas4P6OtkHAqElLU8gH8l2u7GHn2OalEe9vX
+13cdvXcx3T+WBvGR5laOzMLGM5Wqy1I1z6cq/fORbRvjonbAjJ5rhQNz0Ag33R5V
+zn6Icxw82eRz/qR930P7wO5WyElGZbuJryMhrWcIRRjHQCVgZ1luhq84gOj8FiKa
+0iGKNZJhUYhJeELpyC72Sj+8OKv5+yo+VbJzi44JWic45QnT7ABeN4dAqw/i7Wxz
+tZFYRSIm/NvIrQ71kvZlmWFUkXZbNhAx9e3RvbzVRjm6S8U0d6uJ2TB9GjfcQlGm
+pqvW3exi4a7KuncartBJzGw5mJqfca1lM369PtGv4wIDAQABo04wTDAdBgNVHQ4E
+FgQUol/Fu2nypiL6vqr4mqqC2wg+MQ4wDwYDVR0TAQH/BAUwAwEB/zAaBgNVHREE
+EzARgglsb2NhbGhvc3SHBH8AAAEwDQYJKoZIhvcNAQELBQADggEBAGtSZbOTlzhu
+p0M9/eN4LUkbBbhVuJZ4ajrLUM78VsJEiwTZv6l7bKA07M3EcvXV+VBTP6W7ETgX
+/jZzvCUsS4/T+1+xVEHD3+qYBe20uzbHm0fVB5phnecOaol5AaqOz+D5aKNDXevm
+g32X5aOY70oOFpap++v4dClZbDJ5we7JQxMtLhrHS8xyxDqcyxcE8dtHgtQ1qMxl
+nilp/VGpMQeaI6kQhuI63v3X41p4HGHVRZvQMHAM3U76+Dj5qS0LE4hr8Ht2OM67
+V5ApCYNbz1jnGxbM9eurBHiHT81MAuifmPxETywu4QUmgNppQmrioPE91j/Jkcft
+KAW0SFH/6l0=
+-----END CERTIFICATE-----
+''';
+
+const _localhostTlsKey = '''
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCbrJXLUg+pqzg/
+o62QcCoSUtTyAfyXa7sYefY5qUR729fXdx29dzHdP5YG8ZHmVo7MwsYzlarLUjXP
+pyr985FtG+OidsCMnmuFA3PQCDfdHlXOfohzHDzZ5HP+pH3fQ/vA7lbISUZlu4mv
+IyGtZwhFGMdAJWBnWW6GrziA6PwWIprSIYo1kmFRiEl4QunILvZKP7w4q/n7Kj5V
+snOLjglaJzjlCdPsAF43h0CrD+LtbHO1kVhFIib828itDvWS9mWZYVSRdls2EDH1
+7dG9vNVGObpLxTR3q4nZMH0aN9xCUaamq9bd7GLhrsq6dxqu0EnMbDmYmp9xrWUz
+fr0+0a/jAgMBAAECggEAFoUGXFXAJ0q6Bda/LmRTabgqzuGDsUHn3FgUSu4WFpbM
+aAJ2vmhGQdvHb7S1Zu1BlhRdCKxPez8mwqXLndYExRRiPyfPnefy5NiFgeQWdLnF
+Lux1/7Tnhpu6Pe18ufYDLrsruaiD8waImdnKruN3Okul0z00725sAzbIxTku8mKQ
+WxGaSfsisYpbQZdwnFWahxCNyLAYMbj8L1FNq8X9Gc1XpBxKu4GvDwJiMXL+8D4/
+spDJK0glpH7xGMQK1bxp/bBQZrFJtXK3BrROWh/M+SpR2C/RgtjLqMM8jYeKoFyA
+5gwNsnH1xap88nL/acuFynu4SSjs5rcnw40YEhw6qQKBgQDN1Qx5Zfp6GTaR+s1K
+lCe4N7LAqGIDMt1wmbORzCCSvTYEq9oXZDPz0+0X5amwL1ZV2y7d+W4VVDgzTcR3
+Fzex/WAYFirjj3C668JmyuiZWRO8K7Pj0n7GAcGRiiecwhSE0318F5C9dZ79hNFC
+8HqVO+q7zYNRKPUOD2Fl0x01iwKBgQDBnel8q9tyK+/kIImcq8scaK/7fVYT80wQ
+RkpvmtkWHFfKBc1NT7dIvQYENr0D5lQ5gknbu8UcGt8+YIr5WiIbM+2Fk/hh6EFY
+8oGVCMc3UsP45mmKk0ODwygw+tEETMgN8xKaRZ4wTr5ABvKu04wWLe6MZD7Ey6e1
+DRywrEYqCQKBgQCdG3wdAWjRX4NWo2+k+DblFqZ7BUtik6WQN9FnfL50IrYjlKSv
+7Az3lJBJCESgNVGZ0OYSCjwrTZBkIHzQRcl+Mx7w46Ky9R6fnipRWZl2yxYUL+tr
+/pRDQL3l/+TCcyVESUVjvXz+D9ReP82WYYW/eO9vj6sm/LMnmzfFiAGohwKBgQCH
+Z7FnsCTLZvDhAORcfkSQvKH+ZnwxfaA/bXkXLhsN/IpkzcPzgoFyzEcN4V41APr8
+MSMIGfxSmHRyAkCO/DsH/TvqhD5b8nrpAsge+0GfbjGBu1oqQK0h0/Uis/ZDZJMw
+NkNXQsLLk/Y3fuRv4aCBzmObKWxAYxEJbH8ZC5ISSQKBgCWrkFbMLhibfwmI7msV
+z+oNXwSnujRciMMLBH5M9ykmVcJUqJJ4Od/3LMC6IWOqvhqAlndtj1dDIxDbb1Dc
+gtLIWIuFI4xaoAoYepXXXum5LqqMz6S9GL2ZcezZ536H2FFHxPfoclvQel7+qVh6
+bBgTJGfz8heWveZhMldvc4Qx
+-----END PRIVATE KEY-----
+''';
