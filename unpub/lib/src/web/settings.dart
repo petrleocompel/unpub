@@ -59,6 +59,7 @@ Map<String, Map<String, String>> settingsOverview(Config config) {
       'requireSha256': '${config.upstream.requireSha256}',
       'allowPublishWhenUnavailable':
           '${config.upstream.allowPublishWhenUnavailable}',
+      'allowPrivateNetworks': '${config.upstream.allowPrivateNetworks}',
       'maxArchiveBytes': '${config.upstream.maxArchiveBytes}',
       'maxConcurrentFetches': '${config.upstream.maxConcurrentFetches}',
     },

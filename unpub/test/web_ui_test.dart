@@ -1390,6 +1390,7 @@ void main() {}
 
     test('manages packages', () async {
       final browser = await logIn('admin@example.com');
+      await user('helper@example.com', Role.publisher);
       expect((await fetch('GET', '/admin/packages', as: browser)).body,
           contains('href="/admin/packages/alpha"'));
       final page = await fetch('GET', '/admin/packages/alpha', as: browser);

@@ -25,9 +25,12 @@ void main() {
     test('tells the client where it and the pages are', () {
       final shell = shellFor(index, basePath: '', classicPath: '/classic');
       expect(
-          shell,
-          contains('<head>\n<meta name="unpub-base" content="">\n'
-              '<meta name="unpub-classic" content="/classic">'));
+        shell,
+        contains(
+          '<head>\n<meta name="unpub-base" content="">\n'
+          '<meta name="unpub-classic" content="/classic">',
+        ),
+      );
       expect(shell, contains('src="/assets/a.js"'));
       expect(shell, contains('href="/assets/a.css"'));
     });
@@ -81,19 +84,23 @@ void main() {
   final harness = Harness(builder: (h) => h.buildApp(ui: _spa));
   harness.install();
 
-  Future<Reply> get(String path,
-          {bool html = true,
-          Map<String, String> headers = const {},
-          App? using,
-          String method = 'GET'}) =>
+  Future<Reply> get(
+    String path, {
+    bool html = true,
+    Map<String, String> headers = const {},
+    App? using,
+    String method = 'GET',
+  }) =>
       harness.send(method, path, html: html, headers: headers, using: using);
 
   void expectShell(Reply reply, {String base = ''}) {
     expect(reply.status, HttpStatus.ok, reason: reply.body);
     expect(reply.headers['content-type'], 'text/html; charset=utf-8');
     expect(reply.headers['cache-control'], 'no-store');
-    expect(reply.headers['content-security-policy'],
-        "$contentSecurityPolicy; font-src 'self'");
+    expect(
+      reply.headers['content-security-policy'],
+      "$contentSecurityPolicy; font-src 'self'",
+    );
     expect(reply.headers['x-content-type-options'], 'nosniff');
     expect(reply.headers['x-frame-options'], 'DENY');
     expect(reply.body, contains('<meta name="unpub-base" content="$base">'));
@@ -114,12 +121,14 @@ void main() {
       ]) {
         final reply = await get(path);
         expectShell(reply);
-        expect(reply.body,
-            contains('<meta name="unpub-classic" content="/classic">'));
         expect(
-            reply.body,
-            contains(
-                '<noscript><a href="/classic/">Use the classic pages</a>'));
+          reply.body,
+          contains('<meta name="unpub-classic" content="/classic">'),
+        );
+        expect(
+          reply.body,
+          contains('<noscript><a href="/classic/">Use the classic pages</a>'),
+        );
       }
     });
 
@@ -144,8 +153,11 @@ void main() {
         'TEXT/HTML',
         'application/json, */*;q=0.1',
       ]) {
-        final reply = await get('/packages/alpha',
-            html: false, headers: {'accept': accept});
+        final reply = await get(
+          '/packages/alpha',
+          html: false,
+          headers: {'accept': accept},
+        );
         expectShell(reply);
       }
       for (final accept in [
@@ -156,8 +168,11 @@ void main() {
         'text/*;q=0',
         'text/html;q=x',
       ]) {
-        final reply = await get('/packages/alpha',
-            html: false, headers: {'accept': accept});
+        final reply = await get(
+          '/packages/alpha',
+          html: false,
+          headers: {'accept': accept},
+        );
         expect(reply.status, HttpStatus.notFound, reason: accept);
         expect(reply.body, isNot(contains('unpub-base')), reason: accept);
       }
@@ -168,13 +183,18 @@ void main() {
       expect(js.status, HttpStatus.ok);
       expect(js.headers['content-type'], 'text/javascript; charset=utf-8');
       expect(
-          js.headers['cache-control'], 'public, max-age=31536000, immutable');
+        js.headers['cache-control'],
+        'public, max-age=31536000, immutable',
+      );
       expect(js.body, contains('unpub fixture'));
       final etag = js.headers['etag']!;
       expect(etag, matches(RegExp(r'^"[0-9a-f]{32}"$')));
 
-      final again =
-          await get(_script, html: false, headers: {'if-none-match': etag});
+      final again = await get(
+        _script,
+        html: false,
+        headers: {'if-none-match': etag},
+      );
       expect(again.status, HttpStatus.notModified);
       expect(again.body, isEmpty);
       expect(again.headers['etag'], etag);
@@ -241,9 +261,13 @@ void main() {
     });
 
     test('paths of the server never get the shell', () async {
-      await harness.publish('alpha', '1.0.0',
-          bearer: await harness
-              .token(await harness.user('pub@example.com', Role.publisher)));
+      await harness.publish(
+        'alpha',
+        '1.0.0',
+        bearer: await harness.token(
+          await harness.user('pub@example.com', Role.publisher),
+        ),
+      );
       for (final path in [
         '/api/packages/missing',
         '/api/nothing',
@@ -269,10 +293,9 @@ void main() {
       expect(page.body, contains('<title>Packages · unpub</title>'));
       expect(page.body, contains('action="/classic/packages"'));
       expect(page.body, contains('href="/classic/login"'));
-      final stylesheet =
-          RegExp(r'href="(/classic/static/app\.css\?v=[0-9a-f]+)"')
-              .firstMatch(page.body)!
-              .group(1)!;
+      final stylesheet = RegExp(
+        r'href="(/classic/static/app\.css\?v=[0-9a-f]+)"',
+      ).firstMatch(page.body)!.group(1)!;
       final css = await get(stylesheet, html: false);
       expect(css.status, HttpStatus.ok);
       expect(css.headers['content-type'], startsWith('text/css'));
@@ -289,19 +312,23 @@ void main() {
       final form = await get('/classic/login?next=%2Faccount');
       expect(form.status, HttpStatus.ok);
       expect(form.body, contains('action="/classic/login"'));
-      final cookie = form.headersAll['set-cookie']!
-          .firstWhere((value) => value.startsWith('$loginCookieName='));
+      final cookie = form.headersAll['set-cookie']!.firstWhere(
+        (value) => value.startsWith('$loginCookieName='),
+      );
       expect(cookie, contains('Path=/classic/login;'));
 
-      final reply =
-          await harness.send('POST', '/classic/login', html: true, headers: {
-        'cookie': '$loginCookieName=${form.cookie(loginCookieName)}'
-      }, form: {
-        'email': 'pub@example.com',
-        'password': harnessPassword,
-        'login_token': form.field('login_token'),
-        'next': '/account',
-      });
+      final reply = await harness.send(
+        'POST',
+        '/classic/login',
+        html: true,
+        headers: {'cookie': '$loginCookieName=${form.cookie(loginCookieName)}'},
+        form: {
+          'email': 'pub@example.com',
+          'password': harnessPassword,
+          'login_token': form.field('login_token'),
+          'next': '/account',
+        },
+      );
       expect(reply.status, HttpStatus.seeOther, reason: reply.body);
       expect(reply.location, '/classic/account');
       final browser = Browser(reply.cookie(sessionCookieName)!, '');
@@ -309,8 +336,10 @@ void main() {
       expect(account.status, HttpStatus.ok);
       expect(account.body, contains('action="/classic/account/tokens"'));
 
-      final out = await harness.post('/classic/logout',
-          as: Browser(browser.cookie, account.field('csrf_token')));
+      final out = await harness.post(
+        '/classic/logout',
+        as: Browser(browser.cookie, account.field('csrf_token')),
+      );
       expect(out.status, HttpStatus.seeOther);
       expect(out.location, '/classic/');
     });
@@ -326,17 +355,23 @@ void main() {
     late App private;
 
     setUp(() {
-      private =
-          harness.buildApp(ui: _spa, readAccess: ReadAccess.authenticated);
+      private = harness.buildApp(
+        ui: _spa,
+        readAccess: ReadAccess.authenticated,
+      );
     });
 
     test('keeps the shell and its files open', () async {
       expectShell(await get('/', using: private));
       expectShell(await get('/packages/alpha', using: private));
-      expect((await get(_script, html: false, using: private)).status,
-          HttpStatus.ok);
-      expect((await get('/favicon.svg', html: false, using: private)).status,
-          HttpStatus.ok);
+      expect(
+        (await get(_script, html: false, using: private)).status,
+        HttpStatus.ok,
+      );
+      expect(
+        (await get('/favicon.svg', html: false, using: private)).status,
+        HttpStatus.ok,
+      );
     });
 
     test('the API still answers 401', () async {
@@ -368,7 +403,9 @@ void main() {
       expect(reply.status, HttpStatus.seeOther);
       expect(reply.location, '/classic/login?next=%2Fpackages%2Falpha');
       expect(
-          (await get('/classic/login', using: private)).status, HttpStatus.ok);
+        (await get('/classic/login', using: private)).status,
+        HttpStatus.ok,
+      );
     });
   });
 
@@ -389,24 +426,44 @@ void main() {
         final reply = await get(path, using: ssr);
         expectShell(reply, base: '/app');
         expect(reply.body, contains('<meta name="unpub-classic" content="">'));
-        expect(reply.body,
-            contains('<noscript><a href="/">Use the classic pages</a>'));
+        expect(
+          reply.body,
+          contains('<noscript><a href="/">Use the classic pages</a>'),
+        );
         expect(reply.body, isNot(contains('/classic')));
       }
       final js = await get('/app$_script', html: false, using: ssr);
       expect(js.status, HttpStatus.ok);
       expect(js.headers['content-type'], startsWith('text/javascript'));
-      expect((await get(_script, html: false, using: ssr)).status,
-          HttpStatus.notFound);
+      expect(
+        (await get(_script, html: false, using: ssr)).status,
+        HttpStatus.notFound,
+      );
     });
 
     test('readAccess authenticated keeps /app open', () async {
-      final private =
-          harness.buildApp(ui: _ssr, readAccess: ReadAccess.authenticated);
+      final private = harness.buildApp(
+        ui: _ssr,
+        readAccess: ReadAccess.authenticated,
+      );
       expectShell(await get('/app/account', using: private), base: '/app');
       final home = await get('/', using: private);
       expect(home.status, HttpStatus.seeOther);
       expect(home.location, '/login');
+    });
+
+    test('server paths under /app are not claimed as the shell', () async {
+      for (final path in [
+        '/app/webapi/me',
+        '/app/api/packages/alpha',
+        '/app/healthz',
+        '/app/metrics',
+        '/app/badge/v/alpha',
+        '/app/static/app.css',
+      ]) {
+        final reply = await get(path, using: ssr);
+        expect(reply.body, isNot(contains('unpub-base')), reason: path);
+      }
     });
   });
 
@@ -424,8 +481,12 @@ void main() {
     tearDown(() => root.deleteSync(recursive: true));
 
     Future<shelf.Response?> shell(SpaClient client) => client.handle(
-        shelf.Request('GET', Uri.parse('http://internal/packages/alpha'),
-            headers: {'accept': 'text/html'}));
+          shelf.Request(
+            'GET',
+            Uri.parse('http://internal/packages/alpha'),
+            headers: {'accept': 'text/html'},
+          ),
+        );
 
     test('an index.html linked outside the build is refused at start', () {
       Link('${build.path}/index.html').createSync(secret.path);
@@ -448,8 +509,10 @@ void main() {
       final reply = await shell(client);
       expect(reply!.statusCode, HttpStatus.internalServerError);
       expect(await reply.readAsString(), isNot(contains('outside')));
-      expect(logs.map((record) => record.message),
-          contains(contains('resolves outside')));
+      expect(
+        logs.map((record) => record.message),
+        contains(contains('resolves outside')),
+      );
     });
 
     test('an index.html linked inside the build is served', () async {
@@ -462,20 +525,26 @@ void main() {
   });
 
   test('spa without a client cannot be built', () {
-    expect(() => harness.buildApp(ui: const UiConfig(mode: UiMode.spa)),
-        throwsArgumentError);
+    expect(
+      () => harness.buildApp(ui: const UiConfig(mode: UiMode.spa)),
+      throwsArgumentError,
+    );
   });
 
   group('session of the client', () {
     test('the login cookie works for the whole site', () async {
       await harness.user('pub@example.com', Role.publisher);
       final secure = harness.buildApp(ui: _spa, secureCookies: true);
-      final reply = await harness.send('POST', '/webapi/login',
-          using: secure,
-          json: {'email': 'pub@example.com', 'password': harnessPassword});
+      final reply = await harness.send(
+        'POST',
+        '/webapi/login',
+        using: secure,
+        json: {'email': 'pub@example.com', 'password': harnessPassword},
+      );
       expect(reply.status, HttpStatus.ok);
-      final cookie = reply.headersAll['set-cookie']!
-          .firstWhere((value) => value.startsWith('$sessionCookieName='));
+      final cookie = reply.headersAll['set-cookie']!.firstWhere(
+        (value) => value.startsWith('$sessionCookieName='),
+      );
       expect(cookie, contains('Path=/;'));
       expect(cookie, contains('HttpOnly'));
       expect(cookie, contains('SameSite=Lax'));
@@ -486,19 +555,29 @@ void main() {
     test('logout needs the CSRF header', () async {
       await harness.user('pub@example.com', Role.publisher);
       final browser = await harness.apiLogIn('pub@example.com');
-      final refused = await harness.send('POST', '/webapi/logout',
-          headers: {'cookie': '$sessionCookieName=${browser.cookie}'});
+      final refused = await harness.send(
+        'POST',
+        '/webapi/logout',
+        headers: {'cookie': '$sessionCookieName=${browser.cookie}'},
+      );
       expect(refused.status, HttpStatus.forbidden);
       expect(refused.json['error']['code'], 'csrf_failed');
 
-      final done = await harness.send('POST', '/webapi/logout', headers: {
-        'cookie': '$sessionCookieName=${browser.cookie}',
-        'x-csrf-token': browser.csrf,
-      });
+      final done = await harness.send(
+        'POST',
+        '/webapi/logout',
+        headers: {
+          'cookie': '$sessionCookieName=${browser.cookie}',
+          'x-csrf-token': browser.csrf,
+        },
+      );
       expect(done.status, HttpStatus.ok);
       expect(done.cookie(sessionCookieName), '');
-      final me = await harness.send('GET', '/webapi/me',
-          headers: {'cookie': '$sessionCookieName=${browser.cookie}'});
+      final me = await harness.send(
+        'GET',
+        '/webapi/me',
+        headers: {'cookie': '$sessionCookieName=${browser.cookie}'},
+      );
       expect(me.status, HttpStatus.ok);
       expect(me.json, {'user': null});
       expect(me.cookie(sessionCookieName), '');

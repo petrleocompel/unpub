@@ -1,3 +1,14 @@
+## 3.0.0-dev.7
+
+Fixes from the stack review of phases 1–7 (PRs #1–#3).
+
+- Upstream proxy fetches resolve the host once, refuse private addresses unless `upstream.allowPrivateNetworks` is on, and pin the socket to the checked address (same policy as webhooks), so a custom `upstream.url` / `allowedArchiveHosts` cannot DNS-rebind into the local network. DNS is inside the request timeout. Gzipped upstream responses are still decoded (`autoUncompress` stays on). Upstream and webhook HTTP clients force `DIRECT` (ignore `HTTP_PROXY` / `HTTPS_PROXY`): the pin connects to the validated address, and an env proxy would either skip that pin or send CONNECT to the upstream itself.
+- `reserveUpload` deletes an expired reservation of the same `(name, version)` and retries once, so a crashed publish no longer waits for the Mongo TTL index.
+- With user accounts, `addUploader` requires the email to belong to an existing user, as `transferOwnership` already did.
+- SPA `ui.mode: ssr`: server path prefixes under `/app` (`webapi`, `api`, probes, …) are never claimed as the shell. Classic `wantsHtml` uses the same `Accept` `q` negotiation as the SPA (`text/html;q=0` is not HTML). Hashed SPA assets no longer repeat the document CSP header.
+- Client: logout after a CSRF refresh that returns no user fails without writing a null session into the query cache; admin user mutations are gated on a password session; bootstrap and router error shells expose `#main`; create/set-password forms wire `aria-errormessage`; audit expansion keys include `details`; a dropped delivery selection is cleared so it cannot reopen on a later refetch.
+- Docs: Phase 7 ROADMAP wording matches the shipped `settings.source` and 404 suggestion; `docs/design/artboards/unpub.css` is a symlink to `html/unpub.css`; the regenerable `docs/screenshots` PNG matrix is no longer committed.
+
 ## 3.0.0-dev.6
 
 Prepares the server for the single-page web client of phase 6: the JSON API it needs, described in `docs/openapi.yaml`, serving its build next to the server-rendered pages, and building it into the image. See "Web client" and "HTTP API" in the README.
